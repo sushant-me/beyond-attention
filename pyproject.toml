@@ -1,0 +1,29 @@
+[project]
+name = "beyond-attention"
+version = "0.1.0"
+description = "A from-scratch selective state-space model (Mamba/S6) measured honestly against a parameter-matched Transformer"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+keywords = ["state-space-model", "mamba", "attention", "sequence-models", "deep-learning"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "License :: OSI Approved :: MIT License",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = ["numpy>=1.26"]
+
+[project.optional-dependencies]
+train = ["torch>=2.2"]
+dev = ["pytest>=8"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+packages = ["beyond_attention"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
