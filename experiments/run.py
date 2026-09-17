@@ -48,17 +48,20 @@ def mqar_sweep(
     n_layers: int,
     batch_size: int,
     lr: float,
+    n_queries: int = 1,
+    blocks: tuple[str, ...] = ("attention", "ssm"),
 ) -> dict:
     vocab = max(vocabulary_for(p) for p in pair_counts)
     print(f"\n## MQAR sweep — d_model={d_model}, layers={n_layers}, "
-          f"steps={steps}, batch={batch_size}, lr={lr}, seeds={seeds}")
+          f"steps={steps}, batch={batch_size}, lr={lr}, seeds={seeds}, "
+          f"scored queries per sequence={n_queries}")
     print(f"vocabulary={vocab}, key/value tokens disjoint, accuracy is exact match")
     print(f"{'task':<10} {'model':<12} {'params':>9} {'train acc':>10} "
           f"{'best off-size':>14} {'chance':>7}")
 
     results: dict[str, dict] = {}
     for n_pairs in pair_counts:
-        for block in ("attention", "ssm"):
+        for block in blocks:
             accs, params, off_by_size = [], 0, {}
             others = [p for p in pair_counts if p != n_pairs]
             for seed in seeds:
@@ -69,6 +72,7 @@ def mqar_sweep(
                 result = train(
                     model, block, n_pairs=n_pairs, steps=steps,
                     batch_size=batch_size, lr=lr, seed=seed,
+                    n_train_queries=n_queries,
                 )
                 accs.append(result.train_accuracy)
                 # Evaluate the trained model at pair counts it never saw. Fresh
@@ -139,10 +143,14 @@ def main() -> int:
     parser.add_argument("--d-model", type=int, default=64)
     parser.add_argument("--n-layers", type=int, default=2)
     parser.add_argument("--batch-size", type=int, default=32)
+    parser.add_argument("--queries", type=int, default=1,
+                        help="scored lookups per training sequence")
     parser.add_argument("--lr", type=float, default=5e-3)
     parser.add_argument("--lengths", type=int, nargs="+",
                         default=[64, 128, 256, 512, 1024])
     parser.add_argument("--scaling-batch", type=int, default=8)
+    parser.add_argument("--blocks", nargs="+", default=["attention", "ssm"],
+                        choices=["attention", "ssm"])
     parser.add_argument("--skip-sweep", action="store_true")
     parser.add_argument("--skip-scaling", action="store_true")
     parser.add_argument("--out", default="results.json")
@@ -165,7 +173,7 @@ def main() -> int:
     if not args.skip_sweep:
         payload["mqar"] = mqar_sweep(
             args.pairs, args.steps, args.seeds, args.d_model, args.n_layers,
-            args.batch_size, args.lr,
+            args.batch_size, args.lr, args.queries, tuple(args.blocks),
         )
     if not args.skip_scaling:
         payload["scaling"] = length_scaling(

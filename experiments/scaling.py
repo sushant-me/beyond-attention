@@ -31,6 +31,16 @@ def main() -> int:
     args = parser.parse_args()
 
     torch.set_num_threads(args.threads)
+
+    # `ru_maxrss` is the process's peak and never falls, and importing torch
+    # already costs several hundred megabytes. The attributable cost of this
+    # configuration is therefore the growth over the peak reached *before any of
+    # it existed* - so the baseline is taken here, before the model is built.
+    # Taken after the model, the peak is usually already higher than anything
+    # the forward pass adds and every configuration reports the same constant
+    # (or zero), which looks like a measurement and is not one.
+    baseline_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
+
     kwargs = (
         {"d_state": 16, "expand": 2, "conv_kernel": 4}
         if args.block == "ssm"
@@ -41,12 +51,6 @@ def main() -> int:
     )
     tokens = torch.randint(0, args.vocab, (args.batch, args.length))
 
-    # `ru_maxrss` is the process's *peak* and never falls, and importing torch
-    # already costs several hundred megabytes. So the peak alone says nothing:
-    # what is attributable to this model at this length is the growth over the
-    # peak reached before any of its forward pass ran. Without that baseline the
-    # number is a constant that looks identical for every configuration.
-    baseline_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
     start = time.perf_counter()
     logits = model(tokens)
     loss = logits.float().pow(2).mean()

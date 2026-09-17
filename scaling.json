@@ -1,0 +1,151 @@
+{
+  "config": {
+    "pairs": [
+      2,
+      4,
+      8,
+      16
+    ],
+    "steps": 3000,
+    "seeds": [
+      0
+    ],
+    "d_model": 64,
+    "n_layers": 2,
+    "batch_size": 32,
+    "queries": 1,
+    "lr": 0.005,
+    "lengths": [
+      128,
+      256,
+      512,
+      1024,
+      2048
+    ],
+    "scaling_batch": 4,
+    "blocks": [
+      "attention",
+      "ssm"
+    ],
+    "skip_sweep": true,
+    "skip_scaling": false,
+    "out": "scaling.json"
+  },
+  "parameter_check_vocab": {
+    "ssm": 67584,
+    "attention": 67968
+  },
+  "scaling": {
+    "attention@128": {
+      "block": "attention",
+      "length": 128,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 0.009,
+      "baseline_rss_kb": 234756,
+      "peak_rss_kb": 251452,
+      "activation_rss_kb": 16696,
+      "finite": true
+    },
+    "ssm@128": {
+      "block": "ssm",
+      "length": 128,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 0.2645,
+      "baseline_rss_kb": 234756,
+      "peak_rss_kb": 350168,
+      "activation_rss_kb": 115412,
+      "finite": true
+    },
+    "attention@256": {
+      "block": "attention",
+      "length": 256,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 0.0141,
+      "baseline_rss_kb": 234756,
+      "peak_rss_kb": 259764,
+      "activation_rss_kb": 25008,
+      "finite": true
+    },
+    "ssm@256": {
+      "block": "ssm",
+      "length": 256,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 0.7496,
+      "baseline_rss_kb": 234756,
+      "peak_rss_kb": 451532,
+      "activation_rss_kb": 216776,
+      "finite": true
+    },
+    "attention@512": {
+      "block": "attention",
+      "length": 512,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 0.0296,
+      "baseline_rss_kb": 234756,
+      "peak_rss_kb": 275808,
+      "activation_rss_kb": 41052,
+      "finite": true
+    },
+    "ssm@512": {
+      "block": "ssm",
+      "length": 512,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 1.9019,
+      "baseline_rss_kb": 234756,
+      "peak_rss_kb": 654036,
+      "activation_rss_kb": 419280,
+      "finite": true
+    },
+    "attention@1024": {
+      "block": "attention",
+      "length": 1024,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 0.0732,
+      "baseline_rss_kb": 234756,
+      "peak_rss_kb": 313840,
+      "activation_rss_kb": 79084,
+      "finite": true
+    },
+    "ssm@1024": {
+      "block": "ssm",
+      "length": 1024,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 4.6537,
+      "baseline_rss_kb": 234756,
+      "peak_rss_kb": 875332,
+      "activation_rss_kb": 640576,
+      "finite": true
+    },
+    "attention@2048": {
+      "block": "attention",
+      "length": 2048,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 0.2406,
+      "baseline_rss_kb": 234756,
+      "peak_rss_kb": 398352,
+      "activation_rss_kb": 163596,
+      "finite": true
+    },
+    "ssm@2048": {
+      "block": "ssm",
+      "length": 2048,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 9.1095,
+      "baseline_rss_kb": 234756,
+      "peak_rss_kb": 1503216,
+      "activation_rss_kb": 1268460,
+      "finite": true
+    }
+  },
+  "wall_seconds": 26.9
+}
