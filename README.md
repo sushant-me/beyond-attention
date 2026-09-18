@@ -115,6 +115,54 @@ The control below is the same architecture at the same size, with the step budge
 | 8 | attention | 67,968 | 1.000 | 0.125 | 0.000 (at 16) |
 | 16 | attention | 67,968 | 0.175 | 0.062 | 0.000 (at 8) |
 
+### Does either model read longer than it trained?
+
+The "unseen size" column above is not a clean measure of that, and it took
+building the experiment below to see why. `mqar_batch` sizes its vocabulary from
+the pair count, so a model trained at 2 pairs meets keys 1-8 and values 9-16,
+while a 16-pair batch hands it keys 1-16 and values 17-32 — token ids it has
+never seen, in roles it has never seen them in. Every `0.000` in that column is
+an evaluation at a *longer* length than training, which is precisely the case
+the column was meant to measure. Those zeros are a vocabulary mismatch, not a
+failure to generalise.
+
+Holding the key space fixed so the vocabulary is identical at every length
+changes the picture completely. Both models are trained at **2 pairs (6
+tokens)** — the longest length at which *both* solve the task outright — then
+evaluated with frozen weights at 4, 8 and 16 pairs (10, 18 and 34 tokens, up to
+**5.7x**):
+
+| pairs | tokens | x train | attention | ssm | chance | a model trained at that length: attention | ssm |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 2 | 6 | 1.0x | **1.000** | **1.000** | 1/16 | 1.000 | 1.000 |
+| 4 | 10 | 1.7x | 0.793 ±0.007 | 0.541 ±0.007 | 1/16 | — | — |
+| 8 | 18 | 3.0x | 0.459 ±0.005 | 0.297 ±0.010 | 1/16 | — | — |
+| 16 | 34 | 5.7x | 0.240 ±0.009 | 0.176 ±0.014 | 1/16 | 0.205 | 0.197 |
+
+Three seeds, spread shown, nothing retrained between rows.
+
+What this says, including the parts that are unflattering:
+
+* **Neither architecture extrapolates here.** Both are perfect at the length
+  they trained on and both decay monotonically as it grows.
+* **Attention decays more slowly than the SSM** at every step — 0.793 against
+  0.541 at 1.7x, 0.240 against 0.176 at 5.7x. On this task the state-space model
+  is the weaker of the two past its training length, which is the opposite of
+  what the architecture's reputation would predict.
+* **The decay is not an extrapolation failure.** At 16 pairs the extrapolated
+  models score about what a model *trained from scratch at 16 pairs* reaches
+  (0.240 against 0.205 for attention; 0.176 against 0.197 for the SSM). Reading
+  down that column is reading how hard MQAR is at that length for a 2-layer,
+  `d_model = 64` model — not how badly the model generalises. Without the
+  reference columns this curve looks like a generalisation result and is not one.
+* The SSM does fit *longer training lengths* better than attention: in the
+  table above it reaches 1.000 at 4 and 8 pairs where attention reaches 0.413
+  and 0.312. So "fits long sequences when trained on them" and "generalises to
+  longer ones when trained short" are separate properties, and the two
+  architectures sit on opposite sides of them.
+
+One training length, one task, one model size. This measures MQAR at 2 pairs.
+
 ### Length scaling
 
 Activation memory is the *rise in current RSS* sampled while the forward and backward pass runs, one fresh process per point. It is not a difference of `ru_maxrss` high-water marks: that value is reported out of `signal_struct`, which a forked child inherits from its parent, so a child of a large parent starts with the parent's peak already recorded and its own allocations are invisible. The first version of this probe measured that way and printed zero, or the same constant, for every configuration.
@@ -303,12 +351,17 @@ when only a label had changed.
 uv venv && uv pip install --index-url https://download.pytorch.org/whl/cpu torch
 uv pip install -e . pytest
 
-python -m pytest tests/ -q                     # 56 correctness tests
+python -m pytest tests/ -q                     # 103 correctness tests
 
 python experiments/run.py --pairs 2 4 8 16 --steps 3000 --seeds 0 \
     --out results.json                         # main sweep    (~30 min, CPU)
 python experiments/run.py --pairs 8 16 --steps 20000 --blocks attention \
     --out control-attention.json               # the control   (~5 min)
+
+# length extrapolation: train at 2 pairs, evaluate frozen weights out to 5.7x.
+# The reference models cost most of the runtime; --no-reference skips them, at
+# the price of no longer being able to attribute the decay to anything.
+python experiments/length_extrapolation.py --out length-extrapolation.json
 
 # both scaling baselines, same measurement method
 python experiments/run.py --skip-sweep --causal-mode sdpa \
@@ -422,10 +475,22 @@ python -u experiments/long_context.py --out long-context.json
   not learn it.
 * **One seed in the sweep.** The spread is therefore unreported; the runner
   supports `--seeds` and the table grows a ± column when it is used.
-* **One training task.** MQAR tests associative recall and says nothing about
-  length extrapolation or throughput on hardware with a real scan kernel.
-  Streaming inference is now covered (see above), but it is measured on CPU
-  with an unoptimised loop, so its numbers are about state size, not speed.
+* **One training task.** MQAR tests associative recall. Length extrapolation is
+  now measured on it (see above) and neither architecture extrapolates — but
+  that is one synthetic task at one model size, and the reference columns show
+  the decay is mostly task difficulty rather than a generalisation failure. It
+  is not a general statement about either architecture.
+* **The extrapolation reference is one seed.** The extrapolated rows are three
+  seeds with a spread column; the trained-at-that-length reference is a single
+  seed, so a difference between them smaller than the spread is not a
+  difference. At 16 pairs the two are within it.
+* **Training the reference at 16 pairs is expensive on CPU.** The SSM's inner
+  scan is a Python loop, and its step cost grew roughly as `L^1.9` in the range
+  measured here (51.6 ms/step at 6 tokens to 552.5 ms/step at 34), which is why
+  the reference is reported at the two lengths that bound the interpretation
+  rather than at all four.
+* **Streaming inference is measured, but on CPU with an unoptimised loop**, so
+  its numbers are about state size, not speed.
 * **CPU only.** No CUDA was available, so nothing reflects GPU throughput, where
   the memory-bandwidth contract is entirely different and where selective-scan
   kernels are designed to run. The streaming state figures are dtype- and
