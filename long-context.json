@@ -1,0 +1,83 @@
+{
+  "config": {
+    "d_model": 64,
+    "n_layers": 2,
+    "dtype": "float32",
+    "torch": "2.14.0+cpu",
+    "attention_budget_bytes": 4294967296
+  },
+  "attention_forward": [
+    {
+      "length": 4096,
+      "ok": true,
+      "note": "ok",
+      "peak_rss_bytes": 357597184,
+      "forward_seconds": 0.3083,
+      "seconds": 2.396,
+      "kv_cache_bytes": 4194304,
+      "one_head_score_matrix_bytes": 67108864,
+      "peak_over_one_head_matrix": 5.329
+    },
+    {
+      "length": 16384,
+      "ok": true,
+      "note": "ok",
+      "peak_rss_bytes": 1643311104,
+      "forward_seconds": 3.7014,
+      "seconds": 5.605,
+      "kv_cache_bytes": 16777216,
+      "one_head_score_matrix_bytes": 1073741824,
+      "peak_over_one_head_matrix": 1.53
+    },
+    {
+      "length": 65536,
+      "ok": false,
+      "note": "RuntimeError: [enforce fail at alloc_cpu.cpp:127] err == 0. DefaultCPUAllocator: can't allocate memory: you tried to allocate 4294967296 bytes. Error code 12 (Canno",
+      "peak_rss_bytes": 298700800,
+      "seconds": 1.84,
+      "kv_cache_bytes": 67108864,
+      "one_head_score_matrix_bytes": 17179869184,
+      "peak_over_one_head_matrix": 0.017
+    }
+  ],
+  "ssm_stream": [
+    {
+      "length": 16384,
+      "state_elements": 4864,
+      "state_bytes": 19456,
+      "state_constant": true,
+      "seconds": 6.732,
+      "us_per_token": 410.9
+    },
+    {
+      "length": 65536,
+      "state_elements": 4864,
+      "state_bytes": 19456,
+      "state_constant": true,
+      "seconds": 23.664,
+      "us_per_token": 361.1
+    },
+    {
+      "length": 262144,
+      "state_elements": 4864,
+      "state_bytes": 19456,
+      "state_constant": true,
+      "seconds": 95.291,
+      "us_per_token": 363.5
+    },
+    {
+      "length": 1048576,
+      "state_elements": 4864,
+      "state_bytes": 19456,
+      "state_constant": true,
+      "seconds": 402.869,
+      "us_per_token": 384.2
+    }
+  ],
+  "contrast": {
+    "longest_streamed": 1048576,
+    "ssm_state_bytes": 19456,
+    "attention_kv_cache_bytes": 1073741824
+  },
+  "per_token_spread": 1.14
+}

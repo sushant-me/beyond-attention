@@ -52,11 +52,22 @@ def mqar_batch(
     n_queries: int = 1,
     generator: torch.Generator | None = None,
     device: torch.device | str = "cpu",
+    n_keys: int | None = None,
 ) -> Batch:
     """Sample one batch of MQAR sequences.
 
     Layout: ``k1 v1 k2 v2 ... kN vN SEP q1 q2 ... qQ``, with the queries drawn
     (with replacement) from the keys that appeared. Length is ``2N + 1 + Q``.
+
+    ``n_keys`` fixes the size of the key space, and therefore the vocabulary,
+    independently of how many pairs a given sequence uses. It defaults to
+    ``max(n_pairs, 8)``, which is right when you only ever sample at one size.
+    It matters when you do not: a model trained at N pairs has an embedding
+    sized for N pairs' vocabulary, so evaluating it at 4N pairs through the
+    default would generate token ids its embedding cannot index -- a crash
+    rather than a measurement. Passing a fixed ``n_keys`` holds the token space
+    still and lets the *length* be the only thing that changes, which is the
+    whole point of a length-extrapolation test.
     """
     if n_pairs < 1:
         raise ValueError("n_pairs must be >= 1")
@@ -67,7 +78,12 @@ def mqar_batch(
         # lookups than there are pairs is a malformed request, not a hard one.
         raise ValueError("n_queries cannot exceed n_pairs")
 
-    n_keys = max(n_pairs, 8)
+    if n_keys is None:
+        n_keys = max(n_pairs, 8)
+    elif n_keys < n_pairs:
+        # Keys are drawn without replacement, so a sequence cannot have more
+        # distinct keys than the space contains.
+        raise ValueError("n_keys must be >= n_pairs")
     vocab = vocabulary_size(n_keys)
 
     # Distinct keys per sequence, so "the pair" is unambiguous.

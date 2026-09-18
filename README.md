@@ -343,35 +343,74 @@ approximation of it. Then:
 | 4,096 | 4,864 elts · 19 KiB | 1,048,576 elts · 4 MiB |
 | 16,384 | 4,864 elts · 19 KiB | 4,194,304 elts · 16 MiB |
 | 65,536 | 4,864 elts · 19 KiB | 16,777,216 elts · 64 MiB |
+| 262,144 | 4,864 elts · 19 KiB | 67,108,864 elts · 256 MiB |
+| 1,048,576 | 4,864 elts · 19 KiB | 268,435,456 elts · 1 GiB |
 
 The SSM column is not approximately constant, it is *identically* constant: the
-same 4,864 elements at 256 tokens and at 65,536. That is `2 layers x
+same 4,864 elements at 256 tokens and at 1,048,576. That is `2 layers x
 (d_inner x d_state + (kernel-1) x d_inner)` with nothing length-dependent in it,
 and a test asserts the count does not move.
 
-At 65,536 tokens that is a **3,449x** difference in carried state. It is also
-not a tuning gap: attention's cache is `2 x n_heads x head_dim x length` per
-layer, and the `length` is structural. No amount of kernel work removes it,
-because the model needs the keys and values it has already seen. This is the
-concrete sense in which the two are different tools rather than different
-speeds — a state-space model reads a stream in constant memory, and an
-attention model, by construction, cannot.
+The rows to 65,536 come from `experiments/stream_cost.py`. The last two come from
+`experiments/long_context.py`, which streams a million tokens and re-checks at
+every single step that the carried state has not moved. Across a **64x range of
+lengths** the per-token cost varies by **1.14x** — flat, as a fixed-size
+recurrence should be, and slow only because the loop is plain Python.
+
+At a million tokens the difference in carried state is **55,200x** (19,456 bytes
+against 1 GiB). It is also not a tuning gap: attention's cache is
+`2 x n_heads x head_dim x length` per layer, and the `length` is structural. No
+amount of kernel work removes it, because the model needs the keys and values it
+has already seen. This is the concrete sense in which the two are different tools
+rather than different speeds — a state-space model reads a stream in constant
+memory, and an attention model, by construction, cannot.
+
+### The other question: how long an input can each one read?
+
+Constant carried state is a claim about memory. The parallel forward pass is a
+different question, and on this CPU it has a hard wall, measured rather than
+extrapolated:
+
+| length | attention parallel forward | peak RSS |
+|---:|---|---:|
+| 4,096 | ok | 341 MB |
+| 16,384 | ok | 1,567 MB |
+| 65,536 | `RuntimeError: can't allocate memory` | — |
+
+Peak memory tracks `4 x L^2` — a materialised float32 score matrix — to within
+about 1.5x at 16,384 tokens. So the fused `scaled_dot_product_attention` call in
+`model.py` is **not** taking a fused path here: `torch` 2.14 accepts
+`SDPBackend.FLASH_ATTENTION` as a context manager on this machine without
+raising, and then materialises the quadratic matrix anyway. That gap between what
+the runtime advertises and what it does is why the measurement is reported and
+the advertisement is not.
+
+**An earlier version of this experiment took the machine down.** It answered the
+question by trying, and at 131,072 tokens the attempt did not raise — memory
+reached 15.6/16.0 GiB and swap 28.8/31.9 GiB, and `systemd-oomd` killed the
+entire process scope: seventeen processes, no traceback, nothing to catch. That
+is not a measurement, it is an outage. Attempts now run in a child with a hard
+`RLIMIT_AS` cap, which turns an unkillable system event into an ordinary
+catchable `RuntimeError` — the 65,536-token row above is that error, naming the
+exact allocation it was refused. Where the wall sits depends on the machine and
+on the cap; that the wall is **quadratic in length** does not.
 
 Two honest caveats:
 
 * **This is memory, not speed.** The streaming loop here is deliberately
   unoptimised, and the timings it prints are not a throughput result. The
   length-scaling section above remains the place to look for speed.
-* **Attention rows above 4,096 are predicted, not run.** The loop is `O(L^2)`,
-  so streaming it to 65k tokens is impractical on CPU. The cache size is a
-  closed form, and `experiments/stream_cost.py` asserts the formula against
-  measurement at every length where both exist — three lengths here. The
-  prediction is checked, not assumed.
+* **The attention *streaming* loop is still only measured to 4,096.** It is
+  `O(L^2)`, so streaming it further is impractical on CPU. The cache size is a
+  closed form, and `experiments/stream_cost.py` asserts that formula against
+  measurement at every length where both exist. The prediction is checked, not
+  assumed. (The parallel-forward wall above is a separate, measured result.)
 
 Reproduce with:
 
 ```bash
 python experiments/stream_cost.py --out stream-cost.json
+python -u experiments/long_context.py --out long-context.json
 ```
 
 ## Limitations, stated rather than discovered later

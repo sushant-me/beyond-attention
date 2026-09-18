@@ -55,11 +55,16 @@ def train(
     eval_batch_size: int = 256,
     log_every: int = 0,
     progress=None,
+    n_keys: int | None = None,
 ) -> Result:
     """Train one model on MQAR and measure it on the same task at several sizes.
 
     `eval_pairs` is evaluated with the weights frozen and a fresh sample every
     time, so it measures the task rather than the batch.
+
+    `n_keys` fixes the key space (and so the vocabulary) for both training and
+    evaluation. Leave it None unless you intend to evaluate at a length the
+    model did not train at; see `mqar_batch` for why that case needs it.
     """
     set_seed(seed)
     model.to(device)
@@ -76,7 +81,7 @@ def train(
     final_loss = float("nan")
     for step in range(steps):
         batch = mqar_batch(
-            batch_size, n_pairs, n_train_queries, generator, device
+            batch_size, n_pairs, n_train_queries, generator, device, n_keys
         )
         loss, acc = loss_and_accuracy(model, batch)
         optimiser.zero_grad(set_to_none=True)
@@ -91,12 +96,13 @@ def train(
                 progress(step, final_loss, acc)
 
     train_accuracy = _evaluate(
-        model, n_pairs, n_train_queries, eval_batch_size, generator, device
+        model, n_pairs, n_train_queries, eval_batch_size, generator, device, n_keys
     )
     test_accuracy = (
         max(
             _evaluate(
-                model, pairs, n_train_queries, eval_batch_size, generator, device
+                model, pairs, n_train_queries, eval_batch_size, generator,
+                device, n_keys,
             )
             for pairs in eval_pairs
         )
@@ -115,6 +121,28 @@ def train(
 
 
 @torch.no_grad()
+def evaluate_mqar(
+    model: nn.Module,
+    n_pairs: int,
+    n_queries: int = 1,
+    batch_size: int = 256,
+    seed: int = 0,
+    device: str = "cpu",
+    n_keys: int | None = None,
+) -> float:
+    """Exact-match accuracy of a trained model at one sequence length.
+
+    Public because measuring a model *beyond* the length it trained at is a
+    question about the architecture, and it needs the whole curve rather than
+    the single best number `train` reports.
+    """
+    generator = torch.Generator(device=device).manual_seed(seed + 1)
+    return _evaluate(
+        model, n_pairs, n_queries, batch_size, generator, device, n_keys
+    )
+
+
+@torch.no_grad()
 def _evaluate(
     model: nn.Module,
     n_pairs: int,
@@ -122,6 +150,7 @@ def _evaluate(
     batch_size: int,
     generator: torch.Generator,
     device: str,
+    n_keys: int | None = None,
 ) -> float:
     """Exact-match accuracy on freshly sampled batches of the given size."""
     from .tasks import accuracy
@@ -130,7 +159,9 @@ def _evaluate(
     batches = max(1, 2048 // batch_size)
     total = 0.0
     for _ in range(batches):
-        batch = mqar_batch(batch_size, n_pairs, n_queries, generator, device)
+        batch = mqar_batch(
+            batch_size, n_pairs, n_queries, generator, device, n_keys
+        )
         total += accuracy(model(batch.tokens), batch)
     model.train()
     return total / batches
