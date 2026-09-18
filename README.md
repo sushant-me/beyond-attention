@@ -242,6 +242,43 @@ Two corrections are worth recording, because both were mistakes of mine:
   an idle machine, a 7× error. The memory result survived; the time result
   reversed. Timings from a loaded machine are not measurements.
 
+### Does the answer change with length?
+
+The table above is one length. `scan_inner.py` now sweeps several, because a
+configuration that wins at 8,192 tokens need not win at 1,024 — and the chunk
+size is the setting most likely to behave that way.
+
+Cost is fitted as `length ** exponent` by least squares over 1,024 / 2,048 /
+4,096 / 8,192 (batch=4, d_inner=128, d_state=16):
+
+| configuration | exponent | at 8,192 | peak MB |
+|---|---:|---:|---:|
+| **loop @ chunk 64** | **0.61** | **3.58 s** | 449 |
+| vectorized @ chunk 64 | 0.69 | 4.33 s | 3,305 |
+| loop @ chunk 256 | 0.89 | 14.93 s | 489 |
+| vectorized @ chunk 256 | 0.81 | 8.91 s | 4,827 |
+
+`loop` at chunk 64 is the fastest configuration at **every** length measured
+(1,024: 0.99 s, 2,048: 1.21 s, 4,096: 1.79 s, 8,192: 3.58 s), so the default is
+not a compromise that happens to hold at one size.
+
+The more useful number is what actually moves the result. Changing the inner
+scan at a fixed chunk changes the time by about 20% (3.58 → 4.33 s at chunk 64).
+Changing the **chunk** at a fixed inner scan changes it by **4.2x** (3.58 →
+14.93 s at chunk 256). The chunk is the setting worth tuning — and it is the one
+the single-length table could not show, which is why the sweep exists.
+
+An exponent below 1.0 means cost is growing *slower* than the sequence, because
+fixed per-call overhead is still being amortised over this range. It is not
+evidence that the scan is sublinear; it should approach 1.0 for long enough
+inputs, which is what `O(L)` implies.
+
+**This corrects a claim I made in the Limitations below.** I reported the step
+cost as growing "roughly as `L^1.9`", fitted over four points between 6 and 34
+tokens. At those lengths per-step overhead dominates, and the ratio of two noisy
+small numbers is not an exponent. Measured properly over 1,024–8,192 the scan
+grows at **0.61** and is nowhere near quadratic. The old figure was wrong.
+
 ## The result, and why the obvious reading of it is wrong
 
 At the matched 3,000-step budget the state-space model is clearly ahead: it
@@ -365,6 +402,10 @@ python experiments/length_extrapolation.py --out length-extrapolation.json
 
 # streamed memory: real RSS over a million tokens, with a positive control
 python -u experiments/stream_memory.py --out stream-memory.json
+
+# inner scan and chunk size across lengths (each child address-space capped)
+python experiments/scan_inner.py --lengths 1024 2048 4096 8192 --chunks 64 256 \
+    --out scan-inner-scaling.json
 
 # both scaling baselines, same measurement method
 python experiments/run.py --skip-sweep --causal-mode sdpa \
@@ -522,10 +563,10 @@ python -u experiments/long_context.py --out long-context.json
   seed, so a difference between them smaller than the spread is not a
   difference. At 16 pairs the two are within it.
 * **Training the reference at 16 pairs is expensive on CPU.** The SSM's inner
-  scan is a Python loop, and its step cost grew roughly as `L^1.9` in the range
-  measured here (51.6 ms/step at 6 tokens to 552.5 ms/step at 34), which is why
-  the reference is reported at the two lengths that bound the interpretation
-  rather than at all four.
+  scan is a Python loop, and training at longer sequences costs real time — see
+  "Which inner scan to use" for the measured scaling. That cost is why the
+  reference is reported at the two lengths that bound the interpretation rather
+  than at all four.
 * **Streaming inference is measured, but on CPU with an unoptimised loop**, so
   its numbers are about state size, not speed. The state figures are now
   measured resident memory rather than arithmetic (see above), but still CPU
