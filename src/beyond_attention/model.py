@@ -18,7 +18,7 @@ import torch
 import torch.nn.functional as F
 from torch import Tensor, nn
 
-from .ssm import selective_scan
+from .ssm import selective_scan, selective_scan_vectorized
 
 
 class RMSNorm(nn.Module):
@@ -76,8 +76,33 @@ class SelectiveSSMBlock(nn.Module):
         expand: int = 2,
         conv_kernel: int = 4,
         dt_rank: int | None = None,
+        scan_inner: str = "loop",
+        scan_chunk: int = 64,
     ) -> None:
         super().__init__()
+        if scan_inner not in ("loop", "vectorized"):
+            raise ValueError(
+                f"scan_inner must be 'loop' or 'vectorized', got {scan_inner!r}"
+            )
+        # Default is the sequential loop at chunk=64, which the comparison in
+        # `experiments/scan_inner.py` found to be the only configuration that is
+        # best on *both* axes: 3.89 s and 451 MB, against the vectorised scan's
+        # 4.31 s / 3,303 MB at the same chunk and 8.56 s / 4,898 MB at chunk=256.
+        #
+        # The vectorised scan is not uniformly worse - at chunk=256 it is 1.9x
+        # *faster* than the loop - but it pays roughly ten times the memory to
+        # get there, because the Hillis-Steele scan holds several full
+        # `(B, chunk, D, N)` tensors at once. It never wins on both axes, so the
+        # loop is the default. It is kept because the tradeoff should invert on
+        # a GPU, where log2 depth is the whole point, and because deleting a
+        # measured negative result loses the evidence.
+        #
+        # An earlier version of this comment said the vectorised scan was slower
+        # outright. That came from timings taken while a `torch.compile` job was
+        # competing for CPU; re-measured on an idle machine, the time result
+        # reversed. The memory result held.
+        self.scan_inner = scan_inner
+        self.scan_chunk = scan_chunk
         self.d_model = d_model
         self.d_state = d_state
         self.d_inner = expand * d_model
@@ -124,7 +149,12 @@ class SelectiveSSMBlock(nn.Module):
         delta = F.softplus(self.dt_proj(delta))  # (B, L, d_inner), positive
         A = -torch.exp(self.A_log)  # (d_inner, d_state), negative
 
-        y = selective_scan(x_branch, delta, A, B, C)
+        if self.scan_inner == "vectorized":
+            y = selective_scan_vectorized(
+                x_branch, delta, A, B, C, chunk=self.scan_chunk
+            )
+        else:
+            y = selective_scan(x_branch, delta, A, B, C, chunk=self.scan_chunk)
         y = y + self.D * x_branch  # skip connection straight from the input
         y = y * F.silu(gate)
         return residual + self.out_proj(y)

@@ -179,6 +179,49 @@ def _scan_one_chunk(
     return torch.stack(outputs, dim=1), h
 
 
+def _within_chunk_scan(a: Tensor, b: Tensor) -> tuple[Tensor, Tensor]:
+    """Associative scan along the time axis of one chunk: log2(K) steps.
+
+    `a` and `b` are `(B, K, D, N)`; returns the inclusive prefix products of `a`
+    and the states reached from a zero initial state. This is Hillis-Steele over
+    the monoid `(a1,b1) then (a2,b2) = (a2*a1, a2*b1 + b2)`, vectorised along
+    the chunk axis.
+
+    It replaces a Python loop of `K` iterations per chunk with `log2(K)`
+    tensor operations, which is the difference between a model that is
+    competitive and one that is not: with `K = 64` the Python loop spent most of
+    its time in the interpreter rather than in the arithmetic.
+    """
+    steps = 1
+    length = a.shape[1]
+    while steps < length:
+        shifted_a = a.new_ones(a.shape)
+        shifted_b = b.new_zeros(b.shape)
+        shifted_a[:, steps:] = a[:, :-steps]
+        shifted_b[:, steps:] = b[:, :-steps]
+        # (a_{t-steps}, b_{t-steps}) composed before (a_t, b_t).
+        b = b + a * shifted_b
+        a = a * shifted_a
+        steps *= 2
+    return a, b
+
+
+def _scan_one_chunk_vectorized(
+    x_c: Tensor, delta_c: Tensor, A: Tensor, B_c: Tensor, C_c: Tensor, h_in: Tensor
+) -> tuple[Tensor, Tensor]:
+    """One chunk, with the recurrence over time done by a scan instead of a loop.
+
+    Same maths as `_scan_one_chunk`, arranged so the time axis is vectorised:
+    the state at `t` is the local state plus the prefix product of the decays
+    times the incoming state, `h_t = cum_t * h_in + local_t`.
+    """
+    a = torch.exp(delta_c.unsqueeze(-1) * A)
+    b = delta_c.unsqueeze(-1) * B_c.unsqueeze(2) * x_c.unsqueeze(-1)
+    cumulative, local = _within_chunk_scan(a, b)
+    h = local + cumulative * h_in.unsqueeze(1)
+    return (h * C_c.unsqueeze(2)).sum(-1), h[:, -1]
+
+
 def selective_scan_streaming(
     x: Tensor, delta: Tensor, A: Tensor, B: Tensor, C: Tensor, chunk: int = 64
 ) -> Tensor:
@@ -249,3 +292,38 @@ def selective_scan(
     if torch.is_grad_enabled():
         return selective_scan_checkpointed(x, delta, A, B, C, chunk=chunk)
     return selective_scan_streaming(x, delta, A, B, C, chunk=chunk)
+
+
+def selective_scan_vectorized(
+    x: Tensor, delta: Tensor, A: Tensor, B: Tensor, C: Tensor,
+    chunk: int = 64, use_checkpoint: bool | None = None,
+) -> Tensor:
+    """Streaming scan with a vectorised recurrence inside each chunk.
+
+    `use_checkpoint=None` picks checkpointing when grad is enabled, which is what
+    the model uses.
+    """
+    from torch.utils.checkpoint import checkpoint
+
+    if use_checkpoint is None:
+        use_checkpoint = torch.is_grad_enabled()
+
+    length = x.shape[1]
+    h = x.new_zeros(x.shape[0], x.shape[2], A.shape[-1])
+    pieces = []
+    for start in range(0, length, chunk):
+        end = min(start + chunk, length)
+        args = (
+            x[:, start:end], delta[:, start:end], A, B[:, start:end],
+            C[:, start:end],
+        )
+        if use_checkpoint and torch.is_grad_enabled() and any(
+            t.requires_grad for t in args
+        ):
+            y_c, h = checkpoint(
+                _scan_one_chunk_vectorized, *args, h, use_reentrant=False
+            )
+        else:
+            y_c, h = _scan_one_chunk_vectorized(*args, h)
+        pieces.append(y_c)
+    return torch.cat(pieces, dim=1)

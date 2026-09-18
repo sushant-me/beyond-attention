@@ -118,7 +118,51 @@ def scaling_table(payloads: list[dict]) -> str:
     return "\n\n".join(blocks)
 
 
-def render(mqar: dict, scaling: list[dict], control: dict | None) -> str:
+def scan_inner_table(payload: dict | None) -> str:
+    """The loop-versus-vectorised comparison, with the agreement column.
+
+    Both paths doing the same arithmetic to float32 resolution is part of the
+    result, not a footnote: a faster path that computes something else would not
+    be a faster path, and the first version of this experiment gave the two
+    paths different random inputs so its difference column was meaningless.
+    """
+    if payload is None:
+        return "_inner-scan comparison: missing_"
+    rows = payload.get("results", {})
+    if not rows:
+        return "_inner-scan comparison: no rows_"
+    config = payload.get("config", {})
+    lines = [
+        f"length={config.get('length')}, batch={config.get('batch')}, "
+        f"d_inner={config.get('dim')}, d_state={config.get('state')}, "
+        f"threads={config.get('threads')}",
+        "",
+        "| inner scan | chunk | chunks | seconds | peak MB | agrees with loop |",
+        "|---|---|---|---|---|---|",
+    ]
+    for chunk in sorted({v["chunk"] for v in rows.values()}):
+        for inner in ("loop", "vectorized"):
+            row = rows.get(f"{inner}@{chunk}")
+            if row is None:
+                continue
+            loop = rows.get(f"loop@{chunk}")
+            vec = rows.get(f"vectorized@{chunk}")
+            agree = "—"
+            if loop and vec:
+                worst = max(
+                    abs(loop[k] - vec[k]) / max(1.0, abs(loop[k]))
+                    for k in ("out_sum", "grad_sum")
+                )
+                agree = f"yes ({worst:.1e})"
+            lines.append(
+                f"| {inner} | {chunk} | {config.get('length', 0) // chunk} | "
+                f"{row['seconds']:.2f} | {row['peak_rss_kb'] / 1024:.1f} | {agree} |"
+            )
+    return "\n".join(lines)
+
+
+def render(mqar: dict, scaling: list[dict], control: dict | None,
+           scan_inner: dict | None = None) -> str:
     parts = [
         mqar_table(mqar, "Main sweep"),
         "",
@@ -141,6 +185,16 @@ def render(mqar: dict, scaling: list[dict], control: dict | None) -> str:
         "for every configuration.",
         "",
         scaling_table(scaling),
+        "",
+        "### Which inner scan to use",
+        "",
+        "The recurrence inside each chunk can be run as a sequential loop, or as "
+        "a Hillis-Steele scan vectorised along the chunk axis. The loop does "
+        "`O(chunk)` work and the scan does `O(chunk * log2(chunk))`, so on a CPU "
+        "the scan is doing more arithmetic to remove interpreter overhead that "
+        "is cheaper than the arithmetic it adds.",
+        "",
+        scan_inner_table(scan_inner),
     ]
     counts = mqar.get("parameter_check_vocab", {})
     config = mqar.get("config", {})
@@ -163,6 +217,7 @@ def main() -> int:
     parser.add_argument("--scaling", action="append", default=[],
                         help="repeatable: one table per baseline")
     parser.add_argument("--control")
+    parser.add_argument("--scan-inner")
     parser.add_argument("--readme", default="README.md")
     args = parser.parse_args()
 
@@ -171,6 +226,7 @@ def main() -> int:
         return 1
     scaling = [p for p in (_load(path, "a scaling run") for path in args.scaling) if p]
     control = _load(args.control, "the control run")
+    scan_inner = _load(args.scan_inner, "the inner-scan comparison")
 
     readme = pathlib.Path(args.readme)
     text = readme.read_text()
@@ -180,7 +236,7 @@ def main() -> int:
     head, rest = text.split(BEGIN, 1)
     _, tail = rest.split(END, 1)
 
-    rendered = render(mqar, scaling, control)
+    rendered = render(mqar, scaling, control, scan_inner)
     # Refuse to publish a table that lost its content: a broken renderer produces
     # an empty block, and a reader cannot tell an empty result from a bug.
     for marker in ("| pairs in context |", "| sequence length |"):

@@ -1,0 +1,62 @@
+{
+  "config": {
+    "inner": null,
+    "chunk": null,
+    "length": 8192,
+    "batch": 4,
+    "dim": 128,
+    "state": 16,
+    "chunks": [
+      64,
+      256
+    ],
+    "threads": 4,
+    "out": "scan-inner.json"
+  },
+  "results": {
+    "loop@64": {
+      "inner": "loop",
+      "chunk": 64,
+      "length": 8192,
+      "batch": 4,
+      "seconds": 3.886,
+      "peak_rss_kb": 461452,
+      "out_sum": -4950.484390154408,
+      "grad_sum": 0.03008936345832411,
+      "finite": true
+    },
+    "vectorized@64": {
+      "inner": "vectorized",
+      "chunk": 64,
+      "length": 8192,
+      "batch": 4,
+      "seconds": 4.312,
+      "peak_rss_kb": 3382084,
+      "out_sum": -4950.483685875239,
+      "grad_sum": 0.030089364309520972,
+      "finite": true
+    },
+    "loop@256": {
+      "inner": "loop",
+      "chunk": 256,
+      "length": 8192,
+      "batch": 4,
+      "seconds": 16.088,
+      "peak_rss_kb": 495520,
+      "out_sum": -4950.484390154408,
+      "grad_sum": 0.03008936345832411,
+      "finite": true
+    },
+    "vectorized@256": {
+      "inner": "vectorized",
+      "chunk": 256,
+      "length": 8192,
+      "batch": 4,
+      "seconds": 8.562,
+      "peak_rss_kb": 5015600,
+      "out_sum": -4950.484452761171,
+      "grad_sum": 0.0300893702568793,
+      "finite": true
+    }
+  }
+}

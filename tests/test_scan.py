@@ -21,11 +21,13 @@ from beyond_attention.ssm import (
     selective_scan_chunked,
     selective_scan_reference,
     selective_scan_streaming,
+    selective_scan_vectorized,
 )
 
 IMPLEMENTATIONS = {
     "reference": selective_scan_reference,
     "associative": selective_scan_associative,
+    "vectorized": selective_scan_vectorized,
 }
 
 #: Every path, named, for the tests that must exercise all three. `chunked` is
@@ -34,7 +36,7 @@ IMPLEMENTATIONS = {
 #: altogether, so a reversed chunk scan (a genuine future leak across chunk
 #: boundaries) passed it. A parametrize list is a claim about coverage, and this
 #: one was false.
-ALL_PATHS = ["reference", "associative", "chunked", "checkpointed"]
+ALL_PATHS = ["reference", "associative", "chunked", "checkpointed", "vectorized"]
 
 
 def _run(name, chunk, x, delta, A, B, C):
@@ -44,6 +46,8 @@ def _run(name, chunk, x, delta, A, B, C):
         return selective_scan_associative(x, delta, A, B, C)
     if name == "checkpointed":
         return selective_scan_checkpointed(x, delta, A, B, C, chunk=chunk)
+    if name == "vectorized":
+        return selective_scan_vectorized(x, delta, A, B, C, chunk=chunk)
     return selective_scan_chunked(x, delta, A, B, C, chunk=chunk)
 
 
@@ -311,3 +315,25 @@ def test_the_streaming_path_does_not_materialise_the_whole_sequence():
         f"streaming used {streaming['growth_kb'] / 1024:.1f} MB against the "
         f"whole-sequence path's {chunked['growth_kb'] / 1024:.1f} MB"
     )
+
+
+@pytest.mark.parametrize("chunk", [1, 4, 64])
+def test_the_vectorised_path_has_the_same_gradients_as_the_definition(chunk):
+    """The vectorised inner scan is a different arrangement of the same maths, so
+    it must differentiate to the same thing. A scan that is right in the forward
+    pass and wrong in the backward is invisible until training stalls."""
+    tensors = _random_inputs(length=20)
+    names = ["x", "delta", "A", "B", "C"]
+
+    def grads(fn, **kwargs):
+        leaves = [t.clone().requires_grad_(True) for t in tensors]
+        fn(*leaves, **kwargs).sum().backward()
+        return [leaf.grad for leaf in leaves]
+
+    expected = grads(selective_scan_reference)
+    got = grads(selective_scan_vectorized, chunk=chunk)
+    for name, want, have in zip(names, expected, got):
+        assert torch.allclose(have, want, atol=1e-10, rtol=1e-8), (
+            f"gradient w.r.t. {name} differs on the vectorised path "
+            f"(max abs error {(have - want).abs().max().item():.3e})"
+        )

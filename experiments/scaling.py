@@ -31,12 +31,18 @@ def main() -> int:
     parser.add_argument("--threads", type=int, default=4)
     parser.add_argument("--causal-mode", choices=["mask", "sdpa"],
                         default="mask")
+    parser.add_argument("--scan-inner", choices=["loop", "vectorized"],
+                        default="loop")
+    parser.add_argument("--scan-chunk", type=int, default=64)
+    parser.add_argument("--compile", action="store_true",
+                        help="wrap the model in torch.compile")
     args = parser.parse_args()
 
     torch.set_num_threads(args.threads)
 
     kwargs = (
-        {"d_state": 16, "expand": 2, "conv_kernel": 4}
+        {"d_state": 16, "expand": 2, "conv_kernel": 4,
+         "scan_inner": args.scan_inner, "scan_chunk": args.scan_chunk}
         if args.block == "ssm"
         else {"n_heads": 4, "mlp_ratio": 2.0,
               "causal_mode": args.causal_mode}
@@ -45,6 +51,12 @@ def main() -> int:
         args.vocab, args.d_model, args.n_layers, args.block, **kwargs
     )
     tokens = torch.randint(0, args.vocab, (args.batch, args.length))
+    if args.compile:
+        model = torch.compile(model, dynamic=False)
+        # A compiled model's first call is a compile, not a measurement, so it
+        # is warmed up outside the timed region.
+        model(tokens).float().pow(2).mean().backward()
+        model.zero_grad(set_to_none=True)
 
     def run():
         logits = model(tokens)
@@ -66,6 +78,9 @@ def main() -> int:
     print(json.dumps({
         "block": args.block,
         "causal_mode": args.causal_mode,
+        "scan_inner": args.scan_inner,
+        "scan_chunk": args.scan_chunk,
+        "compiled": args.compile,
         "length": args.length,
         "batch": args.batch,
         "parameters": count_parameters(model),
