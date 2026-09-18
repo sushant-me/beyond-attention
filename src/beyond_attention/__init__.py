@@ -8,6 +8,15 @@ from .model import (
     build_pair,
     count_parameters,
 )
+from .streaming import (
+    BlockState,
+    StreamState,
+    init_stream,
+    kv_cache_bytes,
+    ssm_state_bytes,
+    stream_sequence,
+    stream_step,
+)
 from .ssm import (
     selective_scan,
     selective_scan_associative,
@@ -24,6 +33,8 @@ __all__ = [
     "build_pair", "count_parameters",
     "selective_scan", "selective_scan_associative", "selective_scan_chunked",
     "selective_scan_reference",
+    "BlockState", "StreamState", "init_stream", "stream_step", "stream_sequence",
+    "kv_cache_bytes", "ssm_state_bytes",
     "Batch", "accuracy", "mqar_batch", "vocabulary_for",
     "Result", "train",
     "__version__",

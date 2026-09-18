@@ -1,0 +1,108 @@
+{
+  "config": {
+    "d_model": 64,
+    "n_layers": 2,
+    "lengths": [
+      256,
+      1024,
+      4096,
+      16384,
+      65536
+    ],
+    "batch": 1,
+    "dtype": "float32"
+  },
+  "ssm": [
+    {
+      "length": 256,
+      "state_elements": 4864,
+      "peak_state_elements": 4864,
+      "state_bytes": 19456,
+      "seconds": 0.089,
+      "ms_per_token": 0.349
+    },
+    {
+      "length": 1024,
+      "state_elements": 4864,
+      "peak_state_elements": 4864,
+      "state_bytes": 19456,
+      "seconds": 0.436,
+      "ms_per_token": 0.425
+    },
+    {
+      "length": 4096,
+      "state_elements": 4864,
+      "peak_state_elements": 4864,
+      "state_bytes": 19456,
+      "seconds": 1.236,
+      "ms_per_token": 0.302
+    },
+    {
+      "length": 16384,
+      "state_elements": 4864,
+      "peak_state_elements": 4864,
+      "state_bytes": 19456,
+      "seconds": 5.108,
+      "ms_per_token": 0.312
+    },
+    {
+      "length": 65536,
+      "state_elements": 4864,
+      "peak_state_elements": 4864,
+      "state_bytes": 19456,
+      "seconds": 21.125,
+      "ms_per_token": 0.322
+    }
+  ],
+  "attention": [
+    {
+      "length": 256,
+      "state_elements": 65536,
+      "peak_state_elements": 65536,
+      "state_bytes": 262144,
+      "seconds": 3.366,
+      "ms_per_token": 13.148,
+      "measured": true
+    },
+    {
+      "length": 1024,
+      "state_elements": 262144,
+      "peak_state_elements": 262144,
+      "state_bytes": 1048576,
+      "seconds": 10.377,
+      "ms_per_token": 10.134,
+      "measured": true
+    },
+    {
+      "length": 4096,
+      "state_elements": 1048576,
+      "peak_state_elements": 1048576,
+      "state_bytes": 4194304,
+      "seconds": 61.69,
+      "ms_per_token": 15.061,
+      "measured": true
+    },
+    {
+      "length": 16384,
+      "state_elements": 4194304,
+      "peak_state_elements": 4194304,
+      "state_bytes": 16777216,
+      "seconds": null,
+      "ms_per_token": null,
+      "measured": false
+    },
+    {
+      "length": 65536,
+      "state_elements": 16777216,
+      "peak_state_elements": 16777216,
+      "state_bytes": 67108864,
+      "seconds": null,
+      "ms_per_token": null,
+      "measured": false
+    }
+  ],
+  "fixed_state_bytes": {
+    "ssm": 19456,
+    "attention": 0
+  }
+}

@@ -324,6 +324,56 @@ python experiments/render_readme.py --mqar results.json \
 `experiments/run.py --help` lists the knobs; `--steps`, `--seeds`, `--pairs`,
 `--queries` and `--blocks` are the ones that cost time.
 
+## Streaming: what it costs to keep reading
+
+Everything above compares the two models on a fixed-length sequence, where both
+see the whole input. Real use is a stream: the model must emit token `t` before
+it has seen `t+1`, and the resource that decides what you can build is the state
+carried between tokens.
+
+`src/beyond_attention/streaming.py` implements that for both. Token-by-token
+output is asserted to match the parallel forward pass for each model (max
+absolute difference under `1e-4`), so this is the same model, not an
+approximation of it. Then:
+
+| context length | SSM state | attention KV cache |
+|---:|---:|---:|
+| 256 | 4,864 elts · 19 KiB | 65,536 elts · 256 KiB |
+| 1,024 | 4,864 elts · 19 KiB | 262,144 elts · 1 MiB |
+| 4,096 | 4,864 elts · 19 KiB | 1,048,576 elts · 4 MiB |
+| 16,384 | 4,864 elts · 19 KiB | 4,194,304 elts · 16 MiB |
+| 65,536 | 4,864 elts · 19 KiB | 16,777,216 elts · 64 MiB |
+
+The SSM column is not approximately constant, it is *identically* constant: the
+same 4,864 elements at 256 tokens and at 65,536. That is `2 layers x
+(d_inner x d_state + (kernel-1) x d_inner)` with nothing length-dependent in it,
+and a test asserts the count does not move.
+
+At 65,536 tokens that is a **3,449x** difference in carried state. It is also
+not a tuning gap: attention's cache is `2 x n_heads x head_dim x length` per
+layer, and the `length` is structural. No amount of kernel work removes it,
+because the model needs the keys and values it has already seen. This is the
+concrete sense in which the two are different tools rather than different
+speeds — a state-space model reads a stream in constant memory, and an
+attention model, by construction, cannot.
+
+Two honest caveats:
+
+* **This is memory, not speed.** The streaming loop here is deliberately
+  unoptimised, and the timings it prints are not a throughput result. The
+  length-scaling section above remains the place to look for speed.
+* **Attention rows above 4,096 are predicted, not run.** The loop is `O(L^2)`,
+  so streaming it to 65k tokens is impractical on CPU. The cache size is a
+  closed form, and `experiments/stream_cost.py` asserts the formula against
+  measurement at every length where both exist — three lengths here. The
+  prediction is checked, not assumed.
+
+Reproduce with:
+
+```bash
+python experiments/stream_cost.py --out stream-cost.json
+```
+
 ## Limitations, stated rather than discovered later
 
 * **This is not a language model.** The task is synthetic, the vocabulary is 33
@@ -333,12 +383,14 @@ python experiments/render_readme.py --mqar results.json \
   not learn it.
 * **One seed in the sweep.** The spread is therefore unreported; the runner
   supports `--seeds` and the table grows a ± column when it is used.
-* **One task.** MQAR tests associative recall and says nothing about length
-  extrapolation, streaming inference, or throughput on hardware with a real
-  scan kernel.
+* **One training task.** MQAR tests associative recall and says nothing about
+  length extrapolation or throughput on hardware with a real scan kernel.
+  Streaming inference is now covered (see above), but it is measured on CPU
+  with an unoptimised loop, so its numbers are about state size, not speed.
 * **CPU only.** No CUDA was available, so nothing reflects GPU throughput, where
   the memory-bandwidth contract is entirely different and where selective-scan
-  kernels are designed to run.
+  kernels are designed to run. The streaming state figures are dtype- and
+  device-independent arithmetic, but they were produced on CPU.
 * **The scaling numbers come from `scaling-final.json` (fused baseline) and
   `scaling-mask.json` (mask baseline)**, not from the sweep run, and both were
   taken after the memory probe was fixed. The earlier `scaling.json`,
