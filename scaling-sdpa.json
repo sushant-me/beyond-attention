@@ -1,0 +1,111 @@
+{
+  "config": {
+    "pairs": [
+      2,
+      4,
+      8,
+      16
+    ],
+    "steps": 3000,
+    "seeds": [
+      0
+    ],
+    "d_model": 64,
+    "n_layers": 2,
+    "batch_size": 32,
+    "queries": 1,
+    "lr": 0.005,
+    "lengths": [
+      8192,
+      16384,
+      32768
+    ],
+    "scaling_batch": 4,
+    "blocks": [
+      "attention",
+      "ssm"
+    ],
+    "skip_sweep": true,
+    "skip_scaling": false,
+    "out": "scaling-sdpa.json"
+  },
+  "parameter_check_vocab": {
+    "ssm": 67584,
+    "attention": 67968
+  },
+  "scaling": {
+    "attention@8192": {
+      "block": "attention",
+      "causal_mode": "mask",
+      "length": 8192,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 3.5964,
+      "baseline_rss_kb": 234720,
+      "peak_rss_kb": 1238432,
+      "activation_rss_kb": 1003712,
+      "finite": true
+    },
+    "ssm@8192": {
+      "block": "ssm",
+      "causal_mode": "mask",
+      "length": 8192,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 7.7675,
+      "baseline_rss_kb": 234848,
+      "peak_rss_kb": 1237724,
+      "activation_rss_kb": 1002876,
+      "finite": true
+    },
+    "attention@16384": {
+      "block": "attention",
+      "causal_mode": "mask",
+      "length": 16384,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 15.7743,
+      "baseline_rss_kb": 234848,
+      "peak_rss_kb": 3279380,
+      "activation_rss_kb": 3044532,
+      "finite": true
+    },
+    "ssm@16384": {
+      "block": "ssm",
+      "causal_mode": "mask",
+      "length": 16384,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 21.2932,
+      "baseline_rss_kb": 234848,
+      "peak_rss_kb": 2588040,
+      "activation_rss_kb": 2353192,
+      "finite": true
+    },
+    "attention@32768": {
+      "block": "attention",
+      "causal_mode": "mask",
+      "length": 32768,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 65.0349,
+      "baseline_rss_kb": 234848,
+      "peak_rss_kb": 10129080,
+      "activation_rss_kb": 9894232,
+      "finite": true
+    },
+    "ssm@32768": {
+      "block": "ssm",
+      "causal_mode": "mask",
+      "length": 32768,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 58.7303,
+      "baseline_rss_kb": 234848,
+      "peak_rss_kb": 4997984,
+      "activation_rss_kb": 4763136,
+      "finite": true
+    }
+  },
+  "wall_seconds": 180.0
+}

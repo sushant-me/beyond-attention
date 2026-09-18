@@ -232,3 +232,66 @@ def test_attention_block_output_is_finite_with_a_single_token():
     block = AttentionBlock(d_model=8, n_heads=2, mlp_ratio=1.0)
     out = block(torch.randn(1, 1, 8))
     assert torch.isfinite(out).all()
+
+
+# --- the fused-SDPA baseline, which exists so the comparison is not against a
+# --- straw man -------------------------------------------------------------
+
+
+def test_the_two_attention_modes_have_identical_parameter_counts():
+    """The fused baseline must be the same size as the wrapper, or the scaling
+    comparison would silently become a comparison of two different models."""
+    wrapped = AttentionBlock(32, n_heads=4, mlp_ratio=2.0, causal_mode="mask")
+    fused = AttentionBlock(32, n_heads=4, mlp_ratio=2.0, causal_mode="sdpa")
+    assert count_parameters(wrapped) == count_parameters(fused)
+
+
+def test_fused_attention_matches_a_manual_reference():
+    """`CausalSelfAttention` is a reimplementation of a fused kernel path, so it
+    gets checked against the definition written out longhand rather than against
+    a loss curve."""
+    from beyond_attention.model import CausalSelfAttention
+
+    torch.manual_seed(0)
+    attn = CausalSelfAttention(d_model=8, n_heads=2).double().eval()
+    x = torch.randn(1, 6, 8, dtype=torch.float64)
+
+    with torch.no_grad():
+        got = attn(x)
+
+        # Longhand: project, split into heads, causal softmax, weighted sum.
+        qkv = attn.qkv(x).reshape(1, 6, 3, 2, 4).permute(2, 0, 3, 1, 4)
+        q, k, v = qkv[0], qkv[1], qkv[2]
+        scores = q @ k.transpose(-1, -2) / (4 ** 0.5)
+        mask = torch.triu(torch.ones(6, 6, dtype=torch.bool), diagonal=1)
+        scores = scores.masked_fill(mask, float("-inf"))
+        weights = torch.softmax(scores, dim=-1)
+        expected = attn.out((weights @ v).transpose(1, 2).reshape(1, 6, 8))
+
+    assert torch.allclose(got, expected, atol=1e-10), (
+        f"fused attention diverged from the longhand definition "
+        f"(max abs error {(got - expected).abs().max().item():.3e})"
+    )
+
+
+@pytest.mark.parametrize("causal_mode", ["mask", "sdpa"])
+def test_both_attention_modes_are_causal(causal_mode):
+    """Each way of being causal has to be causal on its own. The explicit mask
+    and the fused kernel are different code paths, and the scaling result
+    depends on both being correct."""
+    torch.manual_seed(0)
+    model = LanguageModel(
+        16, 32, 2, "attention", n_heads=4, mlp_ratio=2.0, causal_mode=causal_mode
+    ).eval()
+    tokens = torch.randint(0, 16, (2, 12))
+    with torch.no_grad():
+        base = model(tokens)
+        late = tokens.clone()
+        late[:, 5:] = (tokens[:, 5:] + 3) % 16
+        changed = model(late)
+    assert torch.allclose(changed[:, :5], base[:, :5], atol=1e-6)
+
+
+def test_an_unknown_causal_mode_is_rejected():
+    with pytest.raises(ValueError, match="causal_mode"):
+        AttentionBlock(32, n_heads=4, causal_mode="nonsense")

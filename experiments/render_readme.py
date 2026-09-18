@@ -75,32 +75,50 @@ def mqar_table(payload: dict, caption: str) -> str:
     return "\n".join(lines)
 
 
-def scaling_table(payload: dict | None) -> str:
-    if payload is None:
+def scaling_table(payloads: list[dict]) -> str:
+    """One table per baseline run, so the reader sees which one is which.
+
+    Which baseline attention is measured against decides the headline: against
+    an explicit causal mask the state-space model crosses over, and against the
+    fused kernel it does not. Reporting one and not the other would be choosing
+    the answer, so both are rendered.
+    """
+    if not payloads:
         return "_scaling: missing_"
-    rows = payload.get("scaling", {})
-    if not rows:
-        return "_scaling: no rows_"
-    lines = [
-        "| sequence length | model | forward+backward (s) | "
-        "peak activation memory (MB) | MB per token |",
-        "|---|---|---|---|---|",
-    ]
-    for length in sorted({v["length"] for v in rows.values()}):
-        for block in ("attention", "ssm"):
-            row = rows.get(f"{block}@{length}")
-            if row is None:
-                continue
-            mb = row["activation_rss_kb"] / 1024
-            per_token = row["activation_rss_kb"] / 1024 / (length * row["batch"])
-            lines.append(
-                f"| {length} | {block} | {row['seconds']:.3f} | {mb:.1f} | "
-                f"{per_token:.4f} |"
-            )
-    return "\n".join(lines)
+
+    blocks: list[str] = []
+    for payload in payloads:
+        rows = payload.get("scaling", {})
+        if not rows:
+            blocks.append("_scaling: no rows_")
+            continue
+        config = payload.get("config", {})
+        mode = config.get("causal_mode", "unknown")
+        lines = [
+            f"**attention baseline: causal_mode={mode}** "
+            f"(batch={config.get('scaling_batch')}, d_model={config.get('d_model')}, "
+            f"layers={config.get('n_layers')})",
+            "",
+            "| sequence length | model | forward+backward (s) | "
+            "peak activation memory (MB) | MB per token |",
+            "|---|---|---|---|---|",
+        ]
+        for length in sorted({v["length"] for v in rows.values()}):
+            for block in ("attention", "ssm"):
+                row = rows.get(f"{block}@{length}")
+                if row is None:
+                    continue
+                mb = row["activation_rss_kb"] / 1024
+                per_token = row["activation_rss_kb"] / 1024 / (length * row["batch"])
+                lines.append(
+                    f"| {length} | {block} | {row['seconds']:.3f} | {mb:.1f} | "
+                    f"{per_token:.4f} |"
+                )
+        blocks.append("\n".join(lines))
+    return "\n\n".join(blocks)
 
 
-def render(mqar: dict, scaling: dict | None, control: dict | None) -> str:
+def render(mqar: dict, scaling: list[dict], control: dict | None) -> str:
     parts = [
         mqar_table(mqar, "Main sweep"),
         "",
@@ -113,8 +131,14 @@ def render(mqar: dict, scaling: dict | None, control: dict | None) -> str:
         "",
         "### Length scaling",
         "",
-        "Activation memory is the growth in peak RSS over the post-import "
-        "baseline, one fresh process per point, forward and backward pass.",
+        "Activation memory is the *rise in current RSS* sampled while the "
+        "forward and backward pass runs, one fresh process per point. It is not "
+        "a difference of `ru_maxrss` high-water marks: that value is reported "
+        "out of `signal_struct`, which a forked child inherits from its parent, "
+        "so a child of a large parent starts with the parent's peak already "
+        "recorded and its own allocations are invisible. The first version of "
+        "this probe measured that way and printed zero, or the same constant, "
+        "for every configuration.",
         "",
         scaling_table(scaling),
     ]
@@ -136,7 +160,8 @@ def render(mqar: dict, scaling: dict | None, control: dict | None) -> str:
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mqar", required=True)
-    parser.add_argument("--scaling")
+    parser.add_argument("--scaling", action="append", default=[],
+                        help="repeatable: one table per baseline")
     parser.add_argument("--control")
     parser.add_argument("--readme", default="README.md")
     args = parser.parse_args()
@@ -144,7 +169,7 @@ def main() -> int:
     mqar = _load(args.mqar, "the main sweep")
     if mqar is None:
         return 1
-    scaling = _load(args.scaling, "the scaling run")
+    scaling = [p for p in (_load(path, "a scaling run") for path in args.scaling) if p]
     control = _load(args.control, "the control run")
 
     readme = pathlib.Path(args.readme)

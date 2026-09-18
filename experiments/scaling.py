@@ -16,6 +16,7 @@ import time
 
 import torch
 
+from beyond_attention.measurement import peak_rss_during
 from beyond_attention.model import LanguageModel, count_parameters
 
 
@@ -28,45 +29,48 @@ def main() -> int:
     parser.add_argument("--batch", type=int, default=8)
     parser.add_argument("--vocab", type=int, default=256)
     parser.add_argument("--threads", type=int, default=4)
+    parser.add_argument("--causal-mode", choices=["mask", "sdpa"],
+                        default="mask")
     args = parser.parse_args()
 
     torch.set_num_threads(args.threads)
 
-    # `ru_maxrss` is the process's peak and never falls, and importing torch
-    # already costs several hundred megabytes. The attributable cost of this
-    # configuration is therefore the growth over the peak reached *before any of
-    # it existed* - so the baseline is taken here, before the model is built.
-    # Taken after the model, the peak is usually already higher than anything
-    # the forward pass adds and every configuration reports the same constant
-    # (or zero), which looks like a measurement and is not one.
-    baseline_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-
     kwargs = (
         {"d_state": 16, "expand": 2, "conv_kernel": 4}
         if args.block == "ssm"
-        else {"n_heads": 4, "mlp_ratio": 2.0}
+        else {"n_heads": 4, "mlp_ratio": 2.0,
+              "causal_mode": args.causal_mode}
     )
     model = LanguageModel(
         args.vocab, args.d_model, args.n_layers, args.block, **kwargs
     )
     tokens = torch.randint(0, args.vocab, (args.batch, args.length))
 
+    def run():
+        logits = model(tokens)
+        loss = logits.float().pow(2).mean()
+        loss.backward()
+        return loss
+
+    # Memory is measured by sampling *current* RSS while the call runs, not by
+    # subtracting `ru_maxrss` marks. `ru_maxrss` is reported out of
+    # `signal_struct`, which a forked child inherits from its parent: a child of
+    # this driver starts with the driver's own peak already recorded, so
+    # anything smaller is invisible and the measurement reads zero. The first
+    # version of this probe did exactly that and printed the same constant for
+    # every configuration, which looks like a result and is not one.
     start = time.perf_counter()
-    logits = model(tokens)
-    loss = logits.float().pow(2).mean()
-    loss.backward()
+    loss, activation_kb = peak_rss_during(run)
     elapsed = time.perf_counter() - start
-    peak_kb = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
 
     print(json.dumps({
         "block": args.block,
+        "causal_mode": args.causal_mode,
         "length": args.length,
         "batch": args.batch,
         "parameters": count_parameters(model),
         "seconds": round(elapsed, 4),
-        "baseline_rss_kb": baseline_kb,
-        "peak_rss_kb": peak_kb,
-        "activation_rss_kb": max(0, peak_kb - baseline_kb),
+        "activation_rss_kb": activation_kb,
         "finite": bool(torch.isfinite(loss).item()),
     }))
     return 0

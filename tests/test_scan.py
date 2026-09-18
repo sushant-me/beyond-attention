@@ -17,8 +17,10 @@ import torch
 
 from beyond_attention.ssm import (
     selective_scan_associative,
+    selective_scan_checkpointed,
     selective_scan_chunked,
     selective_scan_reference,
+    selective_scan_streaming,
 )
 
 IMPLEMENTATIONS = {
@@ -32,7 +34,7 @@ IMPLEMENTATIONS = {
 #: altogether, so a reversed chunk scan (a genuine future leak across chunk
 #: boundaries) passed it. A parametrize list is a claim about coverage, and this
 #: one was false.
-ALL_PATHS = ["reference", "associative", "chunked"]
+ALL_PATHS = ["reference", "associative", "chunked", "checkpointed"]
 
 
 def _run(name, chunk, x, delta, A, B, C):
@@ -40,6 +42,8 @@ def _run(name, chunk, x, delta, A, B, C):
         return selective_scan_reference(x, delta, A, B, C)
     if name == "associative":
         return selective_scan_associative(x, delta, A, B, C)
+    if name == "checkpointed":
+        return selective_scan_checkpointed(x, delta, A, B, C, chunk=chunk)
     return selective_scan_chunked(x, delta, A, B, C, chunk=chunk)
 
 
@@ -200,3 +204,110 @@ def test_the_state_stays_bounded_over_a_long_sequence():
     out = selective_scan_chunked(x, delta, A, B, C, chunk=64)
     assert torch.isfinite(out).all()
     assert out.abs().max() < 1e4
+
+
+def test_the_streaming_path_matches_the_definition():
+    """The constant-memory path is a different loop order over the same maths,
+    so it has to give the same answer — under no_grad, which is how a user
+    running inference hits it."""
+    x, delta, A, B, C = _random_inputs(length=101)
+    expected = selective_scan_reference(x, delta, A, B, C)
+    with torch.no_grad():
+        for chunk in (1, 2, 7, 64, 200):
+            got = selective_scan_streaming(x, delta, A, B, C, chunk=chunk)
+            assert torch.allclose(got, expected, atol=1e-12, rtol=1e-10), chunk
+
+
+@pytest.mark.parametrize("chunk", [1, 4, 64])
+def test_checkpointing_does_not_change_the_gradients(chunk):
+    """Recomputing a chunk in the backward pass must reproduce the same
+    gradients as not recomputing it. A checkpointing bug yields gradients that
+    are wrong but plausible, and training absorbs them without complaining.
+    """
+    tensors = _random_inputs(length=20)
+    names = ["x", "delta", "A", "B", "C"]
+
+    def grads(fn, **kwargs):
+        leaves = [t.clone().requires_grad_(True) for t in tensors]
+        fn(*leaves, **kwargs).sum().backward()
+        return [leaf.grad for leaf in leaves]
+
+    expected = grads(selective_scan_reference)
+    got = grads(selective_scan_checkpointed, chunk=chunk)
+    for name, want, have in zip(names, expected, got):
+        assert torch.allclose(have, want, atol=1e-10, rtol=1e-8), (
+            f"gradient w.r.t. {name} differs under checkpointing "
+            f"(max abs error {(have - want).abs().max().item():.3e})"
+        )
+
+
+_MEASURE_PEAK = """
+import json, sys, torch
+from beyond_attention.measurement import peak_rss_during
+from beyond_attention.ssm import selective_scan_chunked, selective_scan_streaming
+
+torch.set_num_threads(1)
+path = sys.argv[1]
+batch, length, dim, state = 2, 4096, 32, 16
+torch.manual_seed(0)
+x = torch.randn(batch, length, dim)
+delta = torch.rand(batch, length, dim) + 1e-3
+A = -torch.rand(dim, state) - 0.05
+B = torch.randn(batch, length, state)
+C = torch.randn(batch, length, state)
+
+fn = selective_scan_streaming if path == "streaming" else selective_scan_chunked
+if path == "streaming":
+    fn = selective_scan_streaming
+else:
+    fn = selective_scan_chunked
+
+with torch.no_grad():
+    out, rise_kb = peak_rss_during(fn, x, delta, A, B, C, chunk=64)
+print(json.dumps({"growth_kb": rise_kb, "finite": bool(torch.isfinite(out).all())}))
+"""
+
+
+def test_the_streaming_path_does_not_materialise_the_whole_sequence():
+    """The central claim of this round, asserted instead of described.
+
+    The old path builds `a` and `b` at `(B, L, D, N)` for the whole sequence, so
+    its footprint scales with length; the streaming path holds one chunk at a
+    time. Each path is measured in its own process.
+
+    The measurement samples *current* RSS while the call runs, rather than
+    subtracting `ru_maxrss` high-water marks. `ru_maxrss` is reported out of
+    `signal_struct`, which a forked child inherits, so a child of a large parent
+    starts with the parent's peak already on the clock and its own allocations
+    are invisible — this test read 0.0 MB against both paths, which is exactly
+    the kind of measurement that cannot fail and would have "proved" the claim
+    while measuring nothing.
+    """
+    import json
+    import subprocess
+    import sys
+
+    def measure(path: str) -> dict:
+        proc = subprocess.run(
+            [sys.executable, "-c", _MEASURE_PEAK, path],
+            capture_output=True, text=True,
+        )
+        assert proc.returncode == 0, proc.stderr[-500:]
+        return json.loads(proc.stdout.strip().splitlines()[-1])
+
+    chunked = measure("chunked")
+    streaming = measure("streaming")
+    assert chunked["finite"] and streaming["finite"]
+
+    # At this size the materialised terms are tens of megabytes and the streaming
+    # footprint is a fraction of one, so the gap must be unambiguous rather than
+    # a close call a noisy allocator could flip.
+    assert chunked["growth_kb"] > 8 * 1024, (
+        f"expected the whole-sequence path to allocate tens of MB, saw "
+        f"{chunked['growth_kb'] / 1024:.1f} MB — the measurement is not "
+        f"discriminating and cannot support the claim"
+    )
+    assert streaming["growth_kb"] < chunked["growth_kb"] / 4, (
+        f"streaming used {streaming['growth_kb'] / 1024:.1f} MB against the "
+        f"whole-sequence path's {chunked['growth_kb'] / 1024:.1f} MB"
+    )

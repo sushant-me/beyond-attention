@@ -17,10 +17,12 @@ claims that would be easy to make from the main table, and are all false:
 
 * *"The state-space model recalls associations better than the Transformer."*
   The main table says exactly that — and the control falsifies it.
-* *"It is faster because it is linear."* Asymptotically yes; **as implemented
-  here, no.** This implementation is 20–40× slower and ~8× hungrier per token
-  than the Transformer at every length measured. The reason is not the
-  architecture, and the section below explains it.
+* *"It is faster because it is linear."* Asymptotically yes, and **not against a
+  good baseline.** Against attention written with the fused kernel this
+  implementation is ~2.6× slower and ~2.8× lighter-is-worse at every length up to
+  32,768 tokens. Against attention written with an explicit causal mask it does
+  cross over. Both are measured and both are in [Results](#results), because
+  reporting one of them would be choosing the answer.
 * *"It is a new model."* It is S6, written out longhand so it can be tested.
 
 ## The recurrence
@@ -115,20 +117,35 @@ The control below is the same architecture at the same size, with the step budge
 
 ### Length scaling
 
-Activation memory is the growth in peak RSS over the post-import baseline, one fresh process per point, forward and backward pass.
+Activation memory is the *rise in current RSS* sampled while the forward and backward pass runs, one fresh process per point. It is not a difference of `ru_maxrss` high-water marks: that value is reported out of `signal_struct`, which a forked child inherits from its parent, so a child of a large parent starts with the parent's peak already recorded and its own allocations are invisible. The first version of this probe measured that way and printed zero, or the same constant, for every configuration.
+
+**attention baseline: causal_mode=sdpa** (batch=4, d_model=64, layers=2)
 
 | sequence length | model | forward+backward (s) | peak activation memory (MB) | MB per token |
 |---|---|---|---|---|
-| 128 | attention | 0.009 | 16.3 | 0.0318 |
-| 128 | ssm | 0.265 | 112.7 | 0.2201 |
-| 256 | attention | 0.014 | 24.4 | 0.0238 |
-| 256 | ssm | 0.750 | 211.7 | 0.2067 |
-| 512 | attention | 0.030 | 40.1 | 0.0196 |
-| 512 | ssm | 1.902 | 409.5 | 0.1999 |
-| 1024 | attention | 0.073 | 77.2 | 0.0189 |
-| 1024 | ssm | 4.654 | 625.6 | 0.1527 |
-| 2048 | attention | 0.241 | 159.8 | 0.0195 |
-| 2048 | ssm | 9.110 | 1238.7 | 0.1512 |
+| 256 | attention | 0.014 | 26.6 | 0.0260 |
+| 256 | ssm | 0.821 | 125.8 | 0.1228 |
+| 1024 | attention | 0.057 | 68.7 | 0.0168 |
+| 1024 | ssm | 1.394 | 189.6 | 0.0463 |
+| 4096 | attention | 0.486 | 236.0 | 0.0144 |
+| 4096 | ssm | 3.514 | 660.2 | 0.0403 |
+| 8192 | attention | 1.708 | 455.9 | 0.0139 |
+| 8192 | ssm | 7.835 | 1234.2 | 0.0377 |
+| 16384 | attention | 6.163 | 896.3 | 0.0137 |
+| 16384 | ssm | 21.101 | 2378.6 | 0.0363 |
+| 32768 | attention | 23.526 | 1653.1 | 0.0126 |
+| 32768 | ssm | 61.683 | 4650.1 | 0.0355 |
+
+**attention baseline: causal_mode=mask** (batch=4, d_model=64, layers=2)
+
+| sequence length | model | forward+backward (s) | peak activation memory (MB) | MB per token |
+|---|---|---|---|---|
+| 8192 | attention | 3.600 | 983.4 | 0.0300 |
+| 8192 | ssm | 8.106 | 1227.3 | 0.0375 |
+| 16384 | attention | 15.085 | 2977.7 | 0.0454 |
+| 16384 | ssm | 20.669 | 1747.5 | 0.0267 |
+| 32768 | attention | 57.554 | 9121.7 | 0.0696 |
+| 32768 | ssm | 55.857 | 4652.3 | 0.0355 |
 
 ```
 parameter check at the sweep vocabulary: ssm=67,584 vs attention=67,968
@@ -168,36 +185,77 @@ a training-budget artefact as an architectural result. The honest summary is:
   pairs, given enough steps, either can do it.
 * **Neither solves 16 pairs** at this model size, on any budget tried.
 
-## Why the linear-time model is not faster here
+## Which baseline you choose decides the answer
 
-Attention is O(L²) in sequence length and this is O(L), so the textbook
-expectation is that the state-space model pulls ahead at long sequences.
-Measured on this implementation, the opposite happens at every length, and the
-reasons are specific:
+Two comparisons, both measured the same way, and they disagree.
 
-1. **The scan materialises its terms.** The chunked path builds `a` and `b` at
-   shape `(B, L, D, N)` — with `d_inner = 128` and `N = 16` that is 2048 floats
-   per token per layer before autograd bookkeeping, and autograd saves several
-   such tensors for the backward pass. A production kernel never materialises
-   them; it streams through the chunks holding only the running state. The memory
-   advantage of a state-space model is a property of a *fused kernel*, not of the
-   recurrence.
-2. **The chunk loop is Python.** That is what makes it readable and what makes it
-   slow.
-3. **The baseline is already fused.** PyTorch's `nn.MultiheadAttention`
-   dispatches to `scaled_dot_product_attention`, which is memory-efficient and
-   does not materialise the `L × L` score matrix. So the usual "attention costs
-   quadratic memory" comparison does not hold against this baseline: measured
-   over 128 → 2048 tokens, attention's peak memory grows 16.3 → 159.8 MB, which
-   is **linear**, while the SSM's grows 112.7 → 1238.7 MB. At 2048 tokens the
-   state-space model uses 7.8× the memory and takes 38× the time.
+**Against attention written with an explicit causal mask** (a perfectly ordinary
+way to write it, and what `nn.MultiheadAttention` needs for a causal mask), the
+state-space model **crosses over**. At 32,768 tokens it is marginally faster
+(55.9 s vs 57.6 s) and about **2× lighter** (4,652 MB vs 9,122 MB). The explicit
+mask materialises the `L × L` score matrix, and its memory per token climbs from
+0.030 to 0.070 MB across the range while the SSM's stays flat at 0.036.
 
-So both architectural advantages are absent, for two different reasons: the SSM
-is missing a kernel, and the attention it is being compared against already has
-one. Closing the gap means writing a fused selective-scan implementation
-(`mamba-ssm`'s CUDA kernel, or a chunked C++/TorchScript version) — not tuning
-the model. Until that exists, any claim that this code is faster than attention
-would be false, and the asymptotic argument alone would be misleading.
+**Against attention written with the fused kernel** — `F.scaled_dot_product_attention`
+with `is_causal=True`, which never materialises that matrix — **there is no
+crossover up to 32,768 tokens.** Attention is ~2.6× faster (23.5 s vs 61.7 s) and
+~2.8× lighter (1,653 MB vs 4,650 MB), and its memory per token is *flat* at
+0.013–0.026 MB. The quadratic-memory story does not apply to a fused
+implementation, so the asymptotic argument buys nothing at these lengths.
+
+The honest summary is therefore narrow, and it is the one I am willing to defend:
+
+> A from-scratch selective state-space model, in pure PyTorch on CPU, beats a
+> Transformer whose attention is written with an explicit causal mask beyond
+> roughly 16k–32k tokens on memory and marginally on time — and loses to the same
+> Transformer when attention uses the fused kernel, at every length measured.
+
+The interesting part is not the SSM. It is that **the same architecture wins or
+loses depending on how the baseline is written**, and that both numbers are
+needed to say anything true.
+
+## What it took to get even that far
+
+The first version of this scan was 20–40× slower than attention and 8× hungrier,
+which is what a literal reading of the recurrence produces: it built `a` and `b`
+at `(B, L, D, N)` for the whole sequence at once, so a linear-time algorithm cost
+*more* memory than the quadratic one it was meant to beat.
+
+The rewrite streams one chunk at a time and wraps each chunk in
+`torch.utils.checkpoint`, so the backward pass recomputes chunks instead of
+retaining them. Measured by the same method, on the same inputs, at `L = 4096`:
+
+| path | peak rise in RSS |
+|---|---|
+| whole-sequence (materialising) | 131 MB |
+| streaming (one chunk) | 6.6 MB |
+
+a **20× reduction**, and the test that asserts it was mutation-checked — pointing
+the streaming path back at the materialising implementation makes it fail. The
+per-token memory of the model then falls to 0.036 MB and stays flat as length
+grows, which is the property the architecture is supposed to have.
+
+Two mistakes of my own are worth recording, because both produced results I
+nearly published:
+
+1. **The memory probe measured the wrong thing.** It subtracted `ru_maxrss`
+   high-water marks. That value is reported out of `signal_struct`, which a
+   forked child *inherits*: a child spawned by a large parent starts with the
+   parent's peak already recorded, so its own allocations are invisible and the
+   growth reads as zero. Writing `5` to `/proc/self/clear_refs` does not fix it
+   — it lowers `mm->hiwater_rss` while `getrusage` reports the larger of that and
+   the inherited `signal->maxrss`. Sampling *current* RSS during the call does
+   fix it. The old probe reported the same constant for every configuration, and
+   a constant prints as a table.
+2. **The "fused baseline" run was not fused.** `run.py` did not pass
+   `--causal-mode` down to the measurement subprocess, so a run labelled `sdpa`
+   silently measured `mask`. That is where the crossover I first reported came
+   from: it was a comparison against the slower baseline, mislabelled as the
+   faster one. Fixing the flag reversed the conclusion.
+
+Both were caught by controls, not by reading the code: the first by running the
+probe where the parent was fat, the second by asking why one number moved by 2.8×
+when only a label had changed.
 
 ## Reproducing this
 
@@ -208,13 +266,19 @@ uv pip install -e . pytest
 python -m pytest tests/ -q                     # 56 correctness tests
 
 python experiments/run.py --pairs 2 4 8 16 --steps 3000 --seeds 0 \
-    --out results.json                         # main sweep   (~30 min, CPU)
-python experiments/run.py --skip-sweep --out scaling.json       # (~30 s)
+    --out results.json                         # main sweep    (~30 min, CPU)
 python experiments/run.py --pairs 8 16 --steps 20000 --blocks attention \
-    --out control-attention.json               # the control (~5 min)
+    --out control-attention.json               # the control   (~5 min)
+
+# both scaling baselines, same measurement method
+python experiments/run.py --skip-sweep --causal-mode sdpa \
+    --lengths 256 1024 4096 8192 16384 32768 --out scaling-final.json
+python experiments/run.py --skip-sweep --causal-mode mask \
+    --lengths 8192 16384 32768 --out scaling-mask.json
 
 python experiments/render_readme.py --mqar results.json \
-    --scaling scaling.json --control control-attention.json --readme README.md
+    --scaling scaling-final.json --scaling scaling-mask.json \
+    --control control-attention.json --readme README.md
 ```
 
 `experiments/run.py --help` lists the knobs; `--steps`, `--seeds`, `--pairs`,
@@ -235,11 +299,15 @@ python experiments/render_readme.py --mqar results.json \
 * **CPU only.** No CUDA was available, so nothing reflects GPU throughput, where
   the memory-bandwidth contract is entirely different and where selective-scan
   kernels are designed to run.
-* **The scaling numbers come from `scaling.json`, not the sweep run**, because
-  the first version of the memory measurement took its baseline *after* building
-  the model and so reported the same constant for every configuration. That was
-  a measurement that could not fail; it is fixed, and the fix is why the numbers
-  above are the ones shown.
+* **The scaling numbers come from `scaling-final.json` (fused baseline) and
+  `scaling-mask.json` (mask baseline)**, not from the sweep run, and both were
+  taken after the memory probe was fixed. The earlier `scaling.json`,
+  `scaling-fused.json`, `scaling-sdpa.json` and `scaling-crossover.json` are kept
+  in the repository as the record of the two broken measurements described above
+  — `scaling-sdpa.json` is the run that was labelled fused and measured mask.
+* **Run-to-run variance is a few percent.** The SSM at 8,192 tokens measured
+  8.106 s in one run and 7.835 s in another with identical settings, so
+  differences below ~5% in these tables are noise, not signal.
 
 ## References
 

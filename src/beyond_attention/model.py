@@ -130,14 +130,60 @@ class SelectiveSSMBlock(nn.Module):
         return residual + self.out_proj(y)
 
 
+class CausalSelfAttention(nn.Module):
+    """Causal attention written the modern way: the fused SDPA kernel directly.
+
+    `nn.MultiheadAttention` is a convenient wrapper, but asking it for a causal
+    mask means handing it an explicit `L x L` boolean tensor, and that can take
+    it off the fused `scaled_dot_product_attention` path. Comparing a
+    state-space model against attention-crippled-by-its-wrapper would be a
+    comparison against a straw man, so this exists to give the baseline its best
+    shot.
+
+    Parameter count is identical to the wrapper with `bias=False`:
+    `qkv` is `3 * d_model^2` and `out` is `d_model^2`, the same as
+    `in_proj_weight` plus `out_proj.weight`.
+    """
+
+    def __init__(self, d_model: int, n_heads: int) -> None:
+        super().__init__()
+        if d_model % n_heads:
+            raise ValueError(f"{d_model} is not divisible by {n_heads} heads")
+        self.n_heads = n_heads
+        self.head_dim = d_model // n_heads
+        self.qkv = nn.Linear(d_model, 3 * d_model, bias=False)
+        self.out = nn.Linear(d_model, d_model, bias=False)
+
+    def forward(self, x: Tensor) -> Tensor:
+        batch, length, dim = x.shape
+        qkv = self.qkv(x).reshape(batch, length, 3, self.n_heads, self.head_dim)
+        query, key, value = qkv.permute(2, 0, 3, 1, 4)
+        attended = F.scaled_dot_product_attention(query, key, value, is_causal=True)
+        attended = attended.transpose(1, 2).reshape(batch, length, dim)
+        return self.out(attended)
+
+
 class AttentionBlock(nn.Module):
     """A pre-norm Transformer block: causal attention, then a small MLP."""
 
-    def __init__(self, d_model: int, n_heads: int = 4, mlp_ratio: float = 2.0) -> None:
+    def __init__(
+        self,
+        d_model: int,
+        n_heads: int = 4,
+        mlp_ratio: float = 2.0,
+        causal_mode: str = "mask",
+    ) -> None:
         super().__init__()
+        if causal_mode not in ("mask", "sdpa"):
+            raise ValueError(
+                f"causal_mode must be 'mask' or 'sdpa', got {causal_mode!r}"
+            )
+        self.causal_mode = causal_mode
         self.norm1 = RMSNorm(d_model)
-        self.attn = nn.MultiheadAttention(
-            d_model, n_heads, batch_first=True, bias=False
+        self.attn = (
+            CausalSelfAttention(d_model, n_heads)
+            if causal_mode == "sdpa"
+            else nn.MultiheadAttention(d_model, n_heads, batch_first=True, bias=False)
         )
         self.norm2 = RMSNorm(d_model)
         hidden = int(mlp_ratio * d_model)
@@ -149,12 +195,18 @@ class AttentionBlock(nn.Module):
 
     def forward(self, x: Tensor) -> Tensor:
         h = self.norm1(x)
-        # Explicit causal mask: position t attends to positions <= t only.
-        length = h.shape[1]
-        mask = torch.triu(
-            torch.ones(length, length, dtype=torch.bool, device=h.device), diagonal=1
-        )
-        attended, _ = self.attn(h, h, h, attn_mask=mask, need_weights=False)
+        if self.causal_mode == "sdpa":
+            # The fused kernel builds the causal mask itself and never
+            # materialises the L x L matrix.
+            attended = self.attn(h)
+        else:
+            # Explicit causal mask: position t attends to positions <= t only.
+            length = h.shape[1]
+            mask = torch.triu(
+                torch.ones(length, length, dtype=torch.bool, device=h.device),
+                diagonal=1,
+            )
+            attended, _ = self.attn(h, h, h, attn_mask=mask, need_weights=False)
         x = x + attended
         return x + self.mlp(self.norm2(x))
 

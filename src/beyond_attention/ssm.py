@@ -159,8 +159,93 @@ def selective_scan_associative(
     return _readout(b, C)
 
 
-#: The chunked path is the default; the other two exist to check it.
+def _scan_one_chunk(
+    x_c: Tensor, delta_c: Tensor, A: Tensor, B_c: Tensor, C_c: Tensor, h_in: Tensor
+) -> tuple[Tensor, Tensor]:
+    """Run the recurrence over one chunk, from a given incoming state.
+
+    Only `(B, chunk, D, N)` temporaries exist at any moment. That is the point:
+    the previous implementation built `a` and `b` for the *entire* sequence at
+    once, which made a linear-time algorithm cost more memory than the quadratic
+    one it was supposed to beat.
+    """
+    a = torch.exp(delta_c.unsqueeze(-1) * A)  # (B, K, D, N)
+    b = delta_c.unsqueeze(-1) * B_c.unsqueeze(2) * x_c.unsqueeze(-1)
+    h = h_in
+    outputs = []
+    for i in range(x_c.shape[1]):
+        h = a[:, i] * h + b[:, i]
+        outputs.append((h * C_c[:, i].unsqueeze(1)).sum(-1))
+    return torch.stack(outputs, dim=1), h
+
+
+def selective_scan_streaming(
+    x: Tensor, delta: Tensor, A: Tensor, B: Tensor, C: Tensor, chunk: int = 64
+) -> Tensor:
+    """Constant-memory scan: the peak working set is one chunk, not the sequence.
+
+    Memory is `O(B * chunk * D * N)` regardless of length, so the state a model
+    carries while reading a long context genuinely does not grow with it. Under
+    `torch.no_grad()` nothing is retained and this is the whole story.
+
+    With grad enabled this is still *correct* but not memory-efficient, because
+    autograd keeps every chunk's intermediates alive for the backward pass —
+    which is exactly what `selective_scan_checkpointed` exists to fix.
+    """
+    length = x.shape[1]
+    h = x.new_zeros(x.shape[0], x.shape[2], A.shape[-1])
+    pieces = []
+    for start in range(0, length, chunk):
+        end = min(start + chunk, length)
+        y_c, h = _scan_one_chunk(
+            x[:, start:end], delta[:, start:end], A, B[:, start:end],
+            C[:, start:end], h,
+        )
+        pieces.append(y_c)
+    return torch.cat(pieces, dim=1)
+
+
+def selective_scan_checkpointed(
+    x: Tensor, delta: Tensor, A: Tensor, B: Tensor, C: Tensor, chunk: int = 64
+) -> Tensor:
+    """Training path: stream the chunks, and recompute each one in backward.
+
+    Every chunk is wrapped in `torch.utils.checkpoint`, so the forward pass keeps
+    only that chunk's inputs and its incoming state instead of every intermediate
+    it produced. Peak memory falls from `O(B * L * D * N)` to
+    `O(B * L * D * N / chunk)` for the saved states plus `O(B * chunk * D * N)`
+    for the one chunk being recomputed.
+
+    The gradients are identical to the un-checkpointed path. `tests/test_scan.py`
+    asserts that against the reference autograd rather than assuming it, because
+    a checkpointing mistake produces plausible-looking wrong gradients that
+    training quietly absorbs.
+    """
+    from torch.utils.checkpoint import checkpoint
+
+    length = x.shape[1]
+    h = x.new_zeros(x.shape[0], x.shape[2], A.shape[-1])
+    pieces = []
+    for start in range(0, length, chunk):
+        end = min(start + chunk, length)
+        chunk_args = (
+            x[:, start:end], delta[:, start:end], A, B[:, start:end],
+            C[:, start:end],
+        )
+        if torch.is_grad_enabled() and any(t.requires_grad for t in chunk_args):
+            y_c, h = checkpoint(
+                _scan_one_chunk, *chunk_args, h, use_reentrant=False
+            )
+        else:
+            y_c, h = _scan_one_chunk(*chunk_args, h)
+        pieces.append(y_c)
+    return torch.cat(pieces, dim=1)
+
+
+#: What the model uses. The other implementations exist to check it.
 def selective_scan(
     x: Tensor, delta: Tensor, A: Tensor, B: Tensor, C: Tensor, chunk: int = 64
 ) -> Tensor:
-    return selective_scan_chunked(x, delta, A, B, C, chunk=chunk)
+    if torch.is_grad_enabled():
+        return selective_scan_checkpointed(x, delta, A, B, C, chunk=chunk)
+    return selective_scan_streaming(x, delta, A, B, C, chunk=chunk)

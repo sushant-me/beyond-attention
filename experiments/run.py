@@ -104,10 +104,12 @@ def mqar_sweep(
 
 
 def length_scaling(
-    lengths: list[int], batch: int, d_model: int, n_layers: int
+    lengths: list[int], batch: int, d_model: int, n_layers: int,
+    causal_mode: str = "mask",
 ) -> dict:
     print(f"\n## Length scaling — forward+backward, batch={batch}, "
-          f"d_model={d_model}, layers={n_layers}, one process per point")
+          f"d_model={d_model}, layers={n_layers}, "
+          f"attention causal mode={causal_mode}, one process per point")
     print("activation memory is peak RSS growth over the post-import baseline,")
     print("so it excludes the ~500 MB that importing torch costs by itself.")
     print(f"{'length':>7} {'model':<11} {'seconds':>9} {'activ MB':>12} "
@@ -120,7 +122,7 @@ def length_scaling(
                 [sys.executable, str(pathlib.Path(__file__).parent / "scaling.py"),
                  "--block", block, "--length", str(length), "--batch", str(batch),
                  "--d-model", str(d_model), "--n-layers", str(n_layers),
-                 "--threads", str(cpu)],
+                 "--threads", str(cpu), "--causal-mode", causal_mode],
                 capture_output=True, text=True,
             )
             if proc.returncode != 0:
@@ -149,6 +151,8 @@ def main() -> int:
     parser.add_argument("--lengths", type=int, nargs="+",
                         default=[64, 128, 256, 512, 1024])
     parser.add_argument("--scaling-batch", type=int, default=8)
+    parser.add_argument("--causal-mode", choices=["mask", "sdpa"], default="mask",
+                        help="how the attention baseline is made causal")
     parser.add_argument("--blocks", nargs="+", default=["attention", "ssm"],
                         choices=["attention", "ssm"])
     parser.add_argument("--skip-sweep", action="store_true")
@@ -177,7 +181,8 @@ def main() -> int:
         )
     if not args.skip_scaling:
         payload["scaling"] = length_scaling(
-            args.lengths, args.scaling_batch, args.d_model, args.n_layers
+            args.lengths, args.scaling_batch, args.d_model, args.n_layers,
+            args.causal_mode,
         )
 
     payload["wall_seconds"] = round(time.time() - started, 1)

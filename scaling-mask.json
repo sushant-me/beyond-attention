@@ -1,0 +1,100 @@
+{
+  "config": {
+    "pairs": [
+      2,
+      4,
+      8,
+      16
+    ],
+    "steps": 3000,
+    "seeds": [
+      0
+    ],
+    "d_model": 64,
+    "n_layers": 2,
+    "batch_size": 32,
+    "queries": 1,
+    "lr": 0.005,
+    "lengths": [
+      8192,
+      16384,
+      32768
+    ],
+    "scaling_batch": 4,
+    "causal_mode": "mask",
+    "blocks": [
+      "attention",
+      "ssm"
+    ],
+    "skip_sweep": true,
+    "skip_scaling": false,
+    "out": "scaling-mask.json"
+  },
+  "parameter_check_vocab": {
+    "ssm": 67584,
+    "attention": 67968
+  },
+  "scaling": {
+    "attention@8192": {
+      "block": "attention",
+      "causal_mode": "mask",
+      "length": 8192,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 3.5999,
+      "activation_rss_kb": 1006964,
+      "finite": true
+    },
+    "ssm@8192": {
+      "block": "ssm",
+      "causal_mode": "mask",
+      "length": 8192,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 8.1062,
+      "activation_rss_kb": 1256732,
+      "finite": true
+    },
+    "attention@16384": {
+      "block": "attention",
+      "causal_mode": "mask",
+      "length": 16384,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 15.0845,
+      "activation_rss_kb": 3049140,
+      "finite": true
+    },
+    "ssm@16384": {
+      "block": "ssm",
+      "causal_mode": "mask",
+      "length": 16384,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 20.6686,
+      "activation_rss_kb": 1789460,
+      "finite": true
+    },
+    "attention@32768": {
+      "block": "attention",
+      "causal_mode": "mask",
+      "length": 32768,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 57.5542,
+      "activation_rss_kb": 9340628,
+      "finite": true
+    },
+    "ssm@32768": {
+      "block": "ssm",
+      "causal_mode": "mask",
+      "length": 32768,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 55.8569,
+      "activation_rss_kb": 4763972,
+      "finite": true
+    }
+  },
+  "wall_seconds": 168.4
+}

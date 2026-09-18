@@ -1,0 +1,105 @@
+{
+  "config": {
+    "pairs": [
+      2,
+      4,
+      8,
+      16
+    ],
+    "steps": 3000,
+    "seeds": [
+      0
+    ],
+    "d_model": 64,
+    "n_layers": 2,
+    "batch_size": 32,
+    "queries": 1,
+    "lr": 0.005,
+    "lengths": [
+      8192,
+      16384,
+      32768
+    ],
+    "scaling_batch": 4,
+    "blocks": [
+      "attention",
+      "ssm"
+    ],
+    "skip_sweep": true,
+    "skip_scaling": false,
+    "out": "scaling-crossover.json"
+  },
+  "parameter_check_vocab": {
+    "ssm": 67584,
+    "attention": 67968
+  },
+  "scaling": {
+    "attention@8192": {
+      "block": "attention",
+      "length": 8192,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 3.5233,
+      "baseline_rss_kb": 234600,
+      "peak_rss_kb": 1238284,
+      "activation_rss_kb": 1003684,
+      "finite": true
+    },
+    "ssm@8192": {
+      "block": "ssm",
+      "length": 8192,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 7.8013,
+      "baseline_rss_kb": 234600,
+      "peak_rss_kb": 1238156,
+      "activation_rss_kb": 1003556,
+      "finite": true
+    },
+    "attention@16384": {
+      "block": "attention",
+      "length": 16384,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 15.0088,
+      "baseline_rss_kb": 234600,
+      "peak_rss_kb": 3279540,
+      "activation_rss_kb": 3044940,
+      "finite": true
+    },
+    "ssm@16384": {
+      "block": "ssm",
+      "length": 16384,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 20.5047,
+      "baseline_rss_kb": 234600,
+      "peak_rss_kb": 2604892,
+      "activation_rss_kb": 2370292,
+      "finite": true
+    },
+    "attention@32768": {
+      "block": "attention",
+      "length": 32768,
+      "batch": 4,
+      "parameters": 82240,
+      "seconds": 66.4435,
+      "baseline_rss_kb": 234600,
+      "peak_rss_kb": 10032388,
+      "activation_rss_kb": 9797788,
+      "finite": true
+    },
+    "ssm@32768": {
+      "block": "ssm",
+      "length": 32768,
+      "batch": 4,
+      "parameters": 81856,
+      "seconds": 59.5411,
+      "baseline_rss_kb": 234600,
+      "peak_rss_kb": 5002592,
+      "activation_rss_kb": 4767992,
+      "finite": true
+    }
+  },
+  "wall_seconds": 180.9
+}
