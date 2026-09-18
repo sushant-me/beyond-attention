@@ -363,6 +363,9 @@ python experiments/run.py --pairs 8 16 --steps 20000 --blocks attention \
 # the price of no longer being able to attribute the decay to anything.
 python experiments/length_extrapolation.py --out length-extrapolation.json
 
+# streamed memory: real RSS over a million tokens, with a positive control
+python -u experiments/stream_memory.py --out stream-memory.json
+
 # both scaling baselines, same measurement method
 python experiments/run.py --skip-sweep --causal-mode sdpa \
     --lengths 256 1024 4096 8192 16384 32768 --out scaling-final.json
@@ -417,6 +420,40 @@ amount of kernel work removes it, because the model needs the keys and values it
 has already seen. This is the concrete sense in which the two are different tools
 rather than different speeds — a state-space model reads a stream in constant
 memory, and an attention model, by construction, cannot.
+
+### Measured, not just arithmetic
+
+Every figure above is `numel * 4` — arithmetic on a tensor shape, which says
+what the state *should* cost rather than what the process does.
+`experiments/stream_memory.py` streams for real and samples `VmRSS` from
+`/proc/self/status` throughout:
+
+| | measured |
+|---|---|
+| SSM streamed over 1,048,576 tokens | RSS **243.1 MB, spread 0.00%** |
+| positive control: same sampling loop, KV cache growing to 262,144 tokens | **+192.9 MB** |
+| attention KV cache at 1,048,576 tokens | **1,024.0 MB** (1,024.0 MB arithmetic) |
+
+The control is what makes the flat line mean anything. A flat line is only
+evidence if the instrument can see growth, so the identical loop is run a second
+time with the attention cache growing underneath it, and it rises by 193 MB.
+Without that, "RSS did not move" is indistinguishable from "RSS was never
+looked at".
+
+Two things worth stating plainly rather than leaving to be inferred:
+
+* **RSS is an upper bound, and that is why it is the right instrument.** The CPU
+  allocator caches freed blocks instead of handing them back to the OS, so a loop
+  that allocated and freed would plateau rather than return to its baseline.
+  Reuse cannot hide an accumulation, which is exactly the property this claim
+  needs. The measured cache column above lands on the arithmetic one to the
+  megabyte, which is the cross-check that both are measuring the same thing.
+* **The model's state is constant; the outputs are not.** `stream_step` discards
+  each step's logits, which is what makes the loop bounded. `stream_sequence`
+  appends them and returns a stacked `(B, L, vocab)` tensor — **132 MB** at a
+  million tokens. That is the caller's choice rather than a property of the
+  model, but a reader who conflated the two would be wrong in a direction that
+  flatters the architecture, so both are measured.
 
 ### The other question: how long an input can each one read?
 
@@ -490,11 +527,13 @@ python -u experiments/long_context.py --out long-context.json
   the reference is reported at the two lengths that bound the interpretation
   rather than at all four.
 * **Streaming inference is measured, but on CPU with an unoptimised loop**, so
-  its numbers are about state size, not speed.
+  its numbers are about state size, not speed. The state figures are now
+  measured resident memory rather than arithmetic (see above), but still CPU
+  resident memory.
 * **CPU only.** No CUDA was available, so nothing reflects GPU throughput, where
   the memory-bandwidth contract is entirely different and where selective-scan
-  kernels are designed to run. The streaming state figures are dtype- and
-  device-independent arithmetic, but they were produced on CPU.
+  kernels are designed to run. The measured memory figures are for CPU
+  allocations.
 * **The scaling numbers come from `scaling-final.json` (fused baseline) and
   `scaling-mask.json` (mask baseline)**, not from the sweep run, and both were
   taken after the memory probe was fixed. The earlier `scaling.json`,

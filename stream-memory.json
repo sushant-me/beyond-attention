@@ -1,0 +1,400 @@
+{
+  "config": {
+    "d_model": 64,
+    "n_layers": 2,
+    "vocab": 33,
+    "torch": "2.14.0+cpu"
+  },
+  "ssm_stream": {
+    "length": 1048576,
+    "seconds": 190.01,
+    "us_per_token": 181.2,
+    "state_elements_start": 4864,
+    "state_elements_max": 4864,
+    "state_constant": true,
+    "state_bytes_arithmetic": 19456,
+    "samples": [
+      {
+        "token": 0,
+        "rss_bytes": 254853120
+      },
+      {
+        "token": 16384,
+        "rss_bytes": 254906368
+      },
+      {
+        "token": 32768,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 49152,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 65536,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 81920,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 98304,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 114688,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 131072,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 147456,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 163840,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 180224,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 196608,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 212992,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 229376,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 245760,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 262144,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 278528,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 294912,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 311296,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 327680,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 344064,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 360448,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 376832,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 393216,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 409600,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 425984,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 442368,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 458752,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 475136,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 491520,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 507904,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 524288,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 540672,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 557056,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 573440,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 589824,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 606208,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 622592,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 638976,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 655360,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 671744,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 688128,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 704512,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 720896,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 737280,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 753664,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 770048,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 786432,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 802816,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 819200,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 835584,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 851968,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 868352,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 884736,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 901120,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 917504,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 933888,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 950272,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 966656,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 983040,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 999424,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 1015808,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 1032192,
+        "rss_bytes": 254910464
+      },
+      {
+        "token": 1048575,
+        "rss_bytes": 254910464
+      }
+    ],
+    "rss_after_warmup_min": 254910464,
+    "rss_after_warmup_max": 254910464,
+    "rss_after_warmup_growth_bytes": 0,
+    "rss_after_warmup_growth_fraction": 0.0
+  },
+  "cache_growth_control": {
+    "length": 262144,
+    "candidate_bytes_allocated": 268435456,
+    "samples": [
+      {
+        "token": 0,
+        "rss_bytes": 276180992
+      },
+      {
+        "token": 16384,
+        "rss_bytes": 312971264
+      },
+      {
+        "token": 32768,
+        "rss_bytes": 312971264
+      },
+      {
+        "token": 49152,
+        "rss_bytes": 346529792
+      },
+      {
+        "token": 65536,
+        "rss_bytes": 346529792
+      },
+      {
+        "token": 81920,
+        "rss_bytes": 380084224
+      },
+      {
+        "token": 98304,
+        "rss_bytes": 380084224
+      },
+      {
+        "token": 114688,
+        "rss_bytes": 413638656
+      },
+      {
+        "token": 131072,
+        "rss_bytes": 413638656
+      },
+      {
+        "token": 147456,
+        "rss_bytes": 447193088
+      },
+      {
+        "token": 163840,
+        "rss_bytes": 447193088
+      },
+      {
+        "token": 180224,
+        "rss_bytes": 480747520
+      },
+      {
+        "token": 196608,
+        "rss_bytes": 480747520
+      },
+      {
+        "token": 212992,
+        "rss_bytes": 514301952
+      },
+      {
+        "token": 229376,
+        "rss_bytes": 514301952
+      },
+      {
+        "token": 245760,
+        "rss_bytes": 515260416
+      },
+      {
+        "token": 262143,
+        "rss_bytes": 515260416
+      }
+    ],
+    "rss_after_warmup_min": 312971264,
+    "rss_after_warmup_max": 515260416,
+    "rss_after_warmup_growth_bytes": 202289152,
+    "rss_after_warmup_growth_fraction": 0.6463505607978117
+  },
+  "attention_cache": [
+    {
+      "length": 4096,
+      "cache_bytes_arithmetic": 4194304,
+      "candidate_bytes_allocated": 4194304,
+      "rss_delta_bytes": 4087808
+    },
+    {
+      "length": 16384,
+      "cache_bytes_arithmetic": 16777216,
+      "candidate_bytes_allocated": 16777216,
+      "rss_delta_bytes": 12582912
+    },
+    {
+      "length": 65536,
+      "cache_bytes_arithmetic": 67108864,
+      "candidate_bytes_allocated": 67108864,
+      "rss_delta_bytes": 67125248
+    },
+    {
+      "length": 262144,
+      "cache_bytes_arithmetic": 268435456,
+      "candidate_bytes_allocated": 268435456,
+      "rss_delta_bytes": 268451840
+    },
+    {
+      "length": 1048576,
+      "cache_bytes_arithmetic": 1073741824,
+      "candidate_bytes_allocated": 1073741824,
+      "rss_delta_bytes": 1073758208
+    }
+  ],
+  "output_retention": {
+    "length_allocated": 65536,
+    "note": "capped at 65536 rows for runtime; growth is linear in rows",
+    "stacked_bytes_if_full_length": 138412032,
+    "rss_delta_bytes": 47525888,
+    "candidate_bytes_allocated": 8650752
+  }
+}
