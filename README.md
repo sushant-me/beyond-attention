@@ -712,12 +712,16 @@ The budget-1 slice of the agent is the one-step control: **0.200** solved over a
   and the pair of conditions generated from *identical* parameters is classified
   at 0.562 — about +0.7σ, which is noise, and is the right answer for two groups
   that differ in nothing but the random stream.
-* **The F0 estimator is checked against the generator, not assumed.** Mean
-  absolute error against the synthesised pitch is about 1%, worst case under 2%
-  at these frequencies. At 70 Hz, where a 25 ms window holds fewer than two
-  periods, the same estimator reads 3.2% high and calls 40% of frames unvoiced —
-  which is why the tests assert a 2% tolerance over 100–380 Hz rather than over
-  the whole advertised 60–400 Hz range.
+* **The F0 estimator is checked against the generator, and its advertised
+  range is wider than its working range.** Mean absolute error against the
+  synthesised pitch is about 1%, and a 10 Hz sweep from 100 Hz to 380 Hz stays
+  inside 1.6%. Below that it fails rather than degrading: at 70 Hz the estimate
+  is 3.2% high and only 40% of frames are called voiced, and at 60 Hz the
+  strongest peak inside the lag range is a short-lag artifact, so the frame is
+  reported near the 400 Hz end of the band. A 25 ms window does not hold the two
+  periods a 60 Hz fundamental needs, and the fix is a longer window rather than
+  a different threshold. The tests accordingly assert a 2% tolerance at 150, 220
+  and 300 Hz rather than across the advertised 60–400 Hz range.
 
 None of this is a result about emotion. It is a result about whether a front end
 measures the four prosodic axes it claims to, on signals where those axes are
@@ -781,12 +785,14 @@ control exists: it is the fault a pure-tone test cannot see.
   four prosodic axes the generator was given, and the labels come from that
   generator. It says nothing about whether real prosody varies along the same
   axes, and it is not evidence that emotion is decodable from a voice.
-* **The F0 estimator's accuracy is bounded by its window.** With the default
-  25 ms window and 16 kHz sampling, error is under 1.5% from 100 Hz to 380 Hz
-  and rises to 3.2% at 70 Hz, where the frame holds fewer than two periods.
-  The advertised 60–400 Hz search range is therefore wider than the range over
-  which the estimate is trustworthy, and the tests assert a 2% tolerance over
-  100–380 Hz rather than over the whole band.
+* **The F0 estimator's accuracy is bounded by its window, and its advertised
+  range is not its working range.** With the default 25 ms window and 16 kHz
+  sampling, a 10 Hz sweep from 100 Hz to 380 Hz stays within 1.6% (worst 1.57%,
+  at 110 Hz). At 70 Hz the error is 3.2% with only 40% of frames voiced, and at
+  60 Hz the search locks onto a short-lag artifact and reports about 400 Hz —
+  a 570% error. The 60–400 Hz band in the module is the *search* range, not a
+  promise: the tests assert a 2% tolerance at 150, 220 and 300 Hz, and
+  low-pitched audio needs a longer `window_ms`.
 * **Jitter and speaking rate are frame-level proxies, not phonetics
   measurements.** Jitter is a successive-F0 difference between adjacent voiced
   frames and its resolution is bounded below by the 10 ms hop; the rate proxy

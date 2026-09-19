@@ -50,13 +50,18 @@ import numpy as np
 # explained rather than inlined.
 # --------------------------------------------------------------------------
 
-# The F0 search range. 60 Hz is below most adult male speaking F0 (~85-180 Hz)
+# The F0 *search* range. 60 Hz is below most adult male speaking F0 (~85-180 Hz)
 # and 400 Hz above most adult female speaking F0 (~165-255 Hz), so both the
-# speaking range and the expressive excursions outside it are covered. Clamping
+# speaking range and the expressive excursions outside it are searched. Clamping
 # matters: an unclamped autocorrelation search will happily report a lag of 3
-# samples as a 5 kHz "pitch" for a noisy frame. A consequence worth stating is
-# that a true F0 below 60 Hz is reported as an octave above it (~120 Hz), which
-# is the standard failure mode of a bounded search.
+# samples as a 5 kHz "pitch" for a noisy frame.
+#
+# It is a search range rather than a promise, and the difference was measured:
+# with the default 25 ms window the estimator works from about 100 Hz up and
+# fails below ~75 Hz, where the frame no longer holds the two periods the biased
+# estimator needs -- at 60 Hz the largest peak in range is a short-lag artifact
+# and the frame is reported near the 400 Hz end of the band. Raising F0_MIN_HZ
+# would not fix that; a longer `window_ms` would. See `autocorrelation_f0`.
 F0_MIN_HZ = 60.0
 F0_MAX_HZ = 400.0
 
@@ -168,13 +173,18 @@ def autocorrelation_f0(
       quantised to samples: at 16 kHz a 150 Hz tone has a period of 106.7
       samples, and reporting 107 is a 0.3% (5 cent) error before refinement.
 
-    Measured accuracy at the default 25 ms window and 16 kHz, on steady tones:
-    0.0-1.5% error from 100 Hz to 380 Hz (0.63% at 150 Hz, 0.72% at 220 Hz),
-    degrading to 2.5% at 80 Hz and 3.2% at 70 Hz, where the frame holds fewer
-    than two periods and the peak the search is looking for stops being a peak.
-    The tests assert a 2% tolerance at frequencies where the estimator is
-    actually reliable rather than a tolerance that only holds in the middle of
-    the range.
+    Measured accuracy at the default 25 ms window and 16 kHz, on steady tones: a
+    10 Hz sweep from 100 Hz to 380 Hz stays inside 1.6% (worst 1.57%, at
+    110 Hz; 0.63% at 150 Hz, 0.72% at 220 Hz). Below that it does not degrade
+    gracefully, it fails, because the taper above weakens the true peak as the
+    period approaches the frame length: at 70 Hz the estimate is 3.2% high with
+    only 40% of frames called voiced, and at 60-65 Hz the largest peak in range
+    is a short-lag artifact, giving an octave-class error (a 60 Hz tone is
+    reported near the 400 Hz end of the band). The advertised search range is
+    therefore wider than the range over which the estimate is trustworthy, and a
+    longer ``window_ms`` is the fix for low-pitched voices rather than a
+    different threshold. The tests assert a 2% tolerance at 150, 220 and 300 Hz
+    -- where the estimator is reliable -- not across the whole advertised band.
 
     Unvoiced frames return ``(nan, False, confidence)``: the pitch of an
     aperiodic frame does not exist, and returning 0.0 would quietly enter any
