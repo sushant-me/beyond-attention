@@ -246,7 +246,8 @@ def voice_section(payload: dict) -> str:
         f"({config.get('utterances_per_condition')} per condition, "
         f"{config.get('duration_s')} s each) at "
         f"{config.get('sample_rate'):,} Hz, seed {config.get('seed')}. "
-        f"{config.get('classifier')} over {len(features)} descriptors.",
+        f"Classifier: {config.get('classifier')}, over {len(features)} "
+        f"descriptors.",
         "",
         "| condition | F0 target (Hz) | F0 mean (Hz) | F0 std (Hz) | "
         "energy std | energy std (voiced) | voiced runs/s | jitter (Hz) |",

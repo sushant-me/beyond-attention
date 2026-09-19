@@ -388,7 +388,7 @@ when only a label had changed.
 uv venv && uv pip install --index-url https://download.pytorch.org/whl/cpu torch
 uv pip install -e . pytest
 
-python -m pytest tests/ -q                     # 103 correctness tests
+python -m pytest tests/ -q                     # 144 correctness tests
 
 python experiments/run.py --pairs 2 4 8 16 --steps 3000 --seeds 0 \
     --out results.json                         # main sweep    (~30 min, CPU)
@@ -415,11 +415,22 @@ python experiments/run.py --skip-sweep --causal-mode mask \
 
 python experiments/render_readme.py --mqar results.json \
     --scaling scaling-final.json --scaling scaling-mask.json \
-    --control control-attention.json --readme README.md
+    --control control-attention.json --scan-inner scan-inner.json \
+    --readme README.md
+
+# the voice/affect front end: synthetic prosody conditions, seconds to run
+python experiments/voice_affect.py --out voice-affect.json
+python experiments/render_readme.py --voice voice-affect.json --readme README.md
 ```
 
 `experiments/run.py --help` lists the knobs; `--steps`, `--seeds`, `--pairs`,
 `--queries` and `--blocks` are the ones that cost time.
+
+The voice block renders on its own (`--voice`) rather than as part of the
+results command. That is deliberate: the results block currently contains one
+hand-written section that `render_readme.py` does not produce, so re-rendering
+it removes that section instead of reproducing it. See the last bullet of the
+limitations.
 
 ## Streaming: what it costs to keep reading
 
@@ -586,7 +597,7 @@ Three claims that would be easy to make from the table below, and are all false:
   documented as proxies in the module, and both are used as proxies here.
 
 <!-- VOICE:BEGIN -->
-**Synthetic utterances** — 64 utterances (16 per condition, 2.0 s each) at 16,000 Hz, seed 0. leave-one-out nearest centroid, z-scored per fold over 15 descriptors.
+**Synthetic utterances** — 64 utterances (16 per condition, 2.0 s each) at 16,000 Hz, seed 0. Classifier: leave-one-out nearest centroid, z-scored per fold, over 15 descriptors.
 
 | condition | F0 target (Hz) | F0 mean (Hz) | F0 std (Hz) | energy std | energy std (voiced) | voiced runs/s | jitter (Hz) |
 |---|---:|---:|---:|---:|---:|---:|---:|
@@ -666,6 +677,17 @@ None of this is a result about emotion. It is a result about whether a front end
 measures the four prosodic axes it claims to, on signals where those axes are
 known because they were set by hand.
 
+The tests were mutation-checked the same way the scan's were, because a test
+that passes is not evidence until something that should break it does. Ten
+deliberate faults in `voice.py` — accepting every frame as voiced, removing the
+energy gate, swapping the frame and hop, giving the encoder a bias, collapsing
+the voiced-frame energy spread back onto all frames, counting voiced frames
+instead of runs, letting jitter span the pauses, moving the rolloff threshold to
+5% of the power, and weighting the spectral centroid by power instead of
+magnitude — each fail a specific test, and seven of the ten fail exactly one.
+The voicing fault is caught by the white-noise control, which is the reason that
+control exists: it is the fault a pure-tone test cannot see.
+
 ## Limitations, stated rather than discovered later
 
 * **This is not a language model.** The task is synthetic, the vocabulary is 33
@@ -706,6 +728,32 @@ known because they were set by hand.
 * **Run-to-run variance is a few percent.** The SSM at 8,192 tokens measured
   8.106 s in one run and 7.835 s in another with identical settings, so
   differences below ~5% in these tables are noise, not signal.
+* **The voice module is validated only on signals this repository synthesised.**
+  There is no real speech anywhere in it: no corpus, no listener labels, no
+  trained classifier, and no agentic loop that would act on the descriptors.
+  Every accuracy in the voice block is a check that the descriptors recover the
+  four prosodic axes the generator was given, and the labels come from that
+  generator. It says nothing about whether real prosody varies along the same
+  axes, and it is not evidence that emotion is decodable from a voice.
+* **The F0 estimator's accuracy is bounded by its window.** With the default
+  25 ms window and 16 kHz sampling, error is under 1.5% from 100 Hz to 380 Hz
+  and rises to 3.2% at 70 Hz, where the frame holds fewer than two periods.
+  The advertised 60–400 Hz search range is therefore wider than the range over
+  which the estimate is trustworthy, and the tests assert a 2% tolerance over
+  100–380 Hz rather than over the whole band.
+* **Jitter and speaking rate are frame-level proxies, not phonetics
+  measurements.** Jitter is a successive-F0 difference between adjacent voiced
+  frames and its resolution is bounded below by the 10 ms hop; the rate proxy
+  counts voiced segments and cannot see unvoiced consonants at all. Both are
+  named as proxies in every table above.
+* **`render_readme.py` does not produce every section in the results block.**
+  The block also contains `### Does either model read longer than it trained?`,
+  written by hand. Re-running the documented results-rendering command therefore
+  *removes* that section: the renderer's guard checks for the tables' markers,
+  which survive the round trip, not for headings. The voice block added here is
+  a separate block and is unaffected; rendering the extrapolation section from
+  `length-extrapolation.json` is the fix, and until then that command should not
+  be trusted to reproduce the README.
 
 ## References
 
