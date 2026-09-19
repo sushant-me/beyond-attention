@@ -49,6 +49,13 @@ curve next to the 0.45 threshold is the thing the assertion is about. They are
 written here rather than recomputed by the renderer so that the page and the
 tables above it are the same measurement.
 
+`experiments/emotion_classifier.py` is the next increment: it builds five
+conditions from the published acoustic correlates of crying, excitement, anger,
+calm and fear, extracts eleven more voice-quality features, and trains an actual
+classifier with an utterance-level split and a full set of controls. It reports
+the same caveat this file does, and more sharply -- its labels are the
+generator's too -- and it adds the cross-condition check this one cannot make.
+
     python -u experiments/voice_affect.py --out voice-affect.json
 """
 

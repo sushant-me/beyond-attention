@@ -1,0 +1,1858 @@
+{
+  "config": {
+    "sample_rate": 16000,
+    "duration_s": 2.0,
+    "utterances_per_condition": 40,
+    "seed": 0,
+    "quick": false,
+    "n_conditions": 5,
+    "n_utterances": 200,
+    "n_features": 26,
+    "feature_names": [
+      "f0_mean",
+      "f0_std",
+      "f0_range",
+      "jitter",
+      "jitter_relative",
+      "energy_mean",
+      "energy_std",
+      "energy_mean_voiced",
+      "energy_std_voiced",
+      "energy_flux_mean",
+      "voiced_ratio",
+      "speaking_rate",
+      "zcr_mean",
+      "centroid_mean",
+      "flatness_mean",
+      "hnr_db",
+      "hnr_db_std",
+      "shimmer",
+      "tremor_rate_hz",
+      "f0_slope_st_per_s",
+      "f0_final_ratio",
+      "pause_rate",
+      "pause_fraction",
+      "pause_mean_s",
+      "onset_sharpness",
+      "centroid_std"
+    ],
+    "feature_families": {
+      "f0_level_and_contour": [
+        "f0_mean",
+        "f0_std",
+        "f0_range",
+        "f0_slope_st_per_s",
+        "f0_final_ratio"
+      ],
+      "pitch_dynamics": [
+        "jitter",
+        "jitter_relative",
+        "tremor_rate_hz"
+      ],
+      "voice_quality": [
+        "hnr_db",
+        "hnr_db_std",
+        "shimmer",
+        "flatness_mean"
+      ],
+      "energy_dynamics": [
+        "energy_mean",
+        "energy_std",
+        "energy_mean_voiced",
+        "energy_std_voiced",
+        "energy_flux_mean",
+        "onset_sharpness"
+      ],
+      "rhythm_and_pauses": [
+        "speaking_rate",
+        "voiced_ratio",
+        "pause_rate",
+        "pause_fraction",
+        "pause_mean_s"
+      ],
+      "spectral_shape": [
+        "zcr_mean",
+        "centroid_mean",
+        "centroid_std"
+      ]
+    },
+    "split": {
+      "unit": "utterance",
+      "fractions": [
+        0.6,
+        0.2,
+        0.2
+      ],
+      "train": 120,
+      "val": 40,
+      "test": 40
+    },
+    "classifier": "MLP 26->32->5, ReLU, full-batch Adam lr=0.01, weight_decay=0.0001, 1500 steps, snapshot chosen on validation accuracy",
+    "chance": 0.2
+  },
+  "conditions": {
+    "crying": {
+      "parameters": {
+        "name": "crying",
+        "f0_base": 320.0,
+        "f0_range_st": 2.0,
+        "f0_slope_st": -1.0,
+        "f0_final_drop_st": -6.0,
+        "tremor_hz": 6.5,
+        "tremor_depth_st": 2.5,
+        "jitter_st": 0.06,
+        "shimmer": 0.35,
+        "breathiness": 0.55,
+        "syllables_per_sec": 3.0,
+        "duty": 0.45,
+        "slot_jitter": 0.55,
+        "amplitude": 0.22,
+        "amplitude_var": 0.4,
+        "attack_s": 0.06,
+        "harmonic_alpha": 1.6
+      },
+      "correlates": [
+        "high F0 with a falling terminal contour (LaGasse et al. 2005)",
+        "harsh/breathy phonation, low HNR (LaGasse et al. 2005)",
+        "high jitter and shimmer, irregular phonation (LaGasse et al. 2005)",
+        "irregular rhythm broken by pauses (Scherer 1986)",
+        "reduced energy relative to anger or excitement (Banse & Scherer 1996)"
+      ],
+      "descriptors": {
+        "f0_mean": 317.2180580558662,
+        "f0_std": 25.544181695933307,
+        "f0_range": 115.13320725596468,
+        "jitter": 6.997685263375447,
+        "jitter_relative": 0.022057016690929257,
+        "energy_mean": 0.07259129272712203,
+        "energy_std": 0.1094031160871705,
+        "energy_mean_voiced": 0.15986515884099933,
+        "energy_std_voiced": 0.11267048974734646,
+        "energy_flux_mean": 0.15705366830902506,
+        "voiced_ratio": 0.44545454545454544,
+        "speaking_rate": 3.585858585858586,
+        "zcr_mean": 0.14275018353965724,
+        "centroid_mean": 1369.6049686268693,
+        "flatness_mean": 0.07591896274362953,
+        "hnr_db": 4.037043724015364,
+        "hnr_db_std": 1.4701847146522542,
+        "shimmer": 0.16731327075877306,
+        "tremor_rate_hz": 1.5966917214809548,
+        "f0_slope_st_per_s": -1.759573291787175,
+        "f0_final_ratio": 0.8839597086124297,
+        "pause_rate": 2.26010101010101,
+        "pause_fraction": 0.4419191919191919,
+        "pause_mean_s": 0.19763750000000002,
+        "onset_sharpness": 0.22255447519266616,
+        "centroid_std": 112.28152642381073
+      }
+    },
+    "excited": {
+      "parameters": {
+        "name": "excited",
+        "f0_base": 280.0,
+        "f0_range_st": 3.5,
+        "f0_slope_st": 0.5,
+        "f0_final_drop_st": 0.0,
+        "tremor_hz": 1.2,
+        "tremor_depth_st": 3.0,
+        "jitter_st": 0.02,
+        "shimmer": 0.04,
+        "breathiness": 0.1,
+        "syllables_per_sec": 5.5,
+        "duty": 0.75,
+        "slot_jitter": 0.15,
+        "amplitude": 0.5,
+        "amplitude_var": 0.45,
+        "attack_s": 0.01,
+        "harmonic_alpha": 1.0
+      },
+      "correlates": [
+        "high F0 level and wide F0 range (Banse & Scherer 1996)",
+        "fast speaking rate (Juslin & Laukka 2003)",
+        "high energy and high energy variance (Juslin & Laukka 2003)",
+        "low jitter relative to level: controlled phonation (Banse & Scherer 1996)",
+        "the wide excursion is a slow contour, not tremor (our choice)"
+      ],
+      "descriptors": {
+        "f0_mean": 281.72840076939576,
+        "f0_std": 20.12531331474173,
+        "f0_range": 62.195111485275774,
+        "jitter": 1.2394992592014649,
+        "jitter_relative": 0.004399615203899232,
+        "energy_mean": 0.367591123744783,
+        "energy_std": 0.262462141753409,
+        "energy_mean_voiced": 0.46078814288595343,
+        "energy_std_voiced": 0.21658479266353878,
+        "energy_flux_mean": 0.20770769777618786,
+        "voiced_ratio": 0.7813131313131313,
+        "speaking_rate": 5.555555555555555,
+        "zcr_mean": 0.09243088782562466,
+        "centroid_mean": 1389.3585542538174,
+        "flatness_mean": 0.0172775739895302,
+        "hnr_db": 21.11560834868079,
+        "hnr_db_std": 14.3797262884714,
+        "shimmer": 0.07526953891737385,
+        "tremor_rate_hz": 1.1745710374784746,
+        "f0_slope_st_per_s": 0.243631282281732,
+        "f0_final_ratio": 1.0176019699740242,
+        "pause_rate": 0.0,
+        "pause_fraction": 0.0,
+        "pause_mean_s": 0.0,
+        "onset_sharpness": 0.3531326647259764,
+        "centroid_std": 73.59562706075364
+      }
+    },
+    "angry": {
+      "parameters": {
+        "name": "angry",
+        "f0_base": 190.0,
+        "f0_range_st": 1.5,
+        "f0_slope_st": 0.0,
+        "f0_final_drop_st": -1.0,
+        "tremor_hz": 3.0,
+        "tremor_depth_st": 1.5,
+        "jitter_st": 0.03,
+        "shimmer": 0.06,
+        "breathiness": 0.15,
+        "syllables_per_sec": 5.0,
+        "duty": 0.7,
+        "slot_jitter": 0.2,
+        "amplitude": 0.72,
+        "amplitude_var": 0.28,
+        "attack_s": 0.005,
+        "harmonic_alpha": 0.6
+      },
+      "correlates": [
+        "high energy (Banse & Scherer 1996)",
+        "higher spectral centroid than calm/neutral (Banse & Scherer 1996)",
+        "fast speaking rate (Juslin & Laukka 2003)",
+        "moderate-high F0 (Banse & Scherer 1996)",
+        "sharp onsets (Scherer 1986)"
+      ],
+      "descriptors": {
+        "f0_mean": 189.00893243152547,
+        "f0_std": 6.260146217863545,
+        "f0_range": 23.274226858895098,
+        "jitter": 0.9176338514722555,
+        "jitter_relative": 0.004855013749811415,
+        "energy_mean": 0.5322343040860732,
+        "energy_std": 0.3431321784331553,
+        "energy_mean_voiced": 0.7155979114373611,
+        "energy_std_voiced": 0.20182202585222492,
+        "energy_flux_mean": 0.17207937949181332,
+        "voiced_ratio": 0.7068181818181818,
+        "speaking_rate": 5.05050505050505,
+        "zcr_mean": 0.1133442824232298,
+        "centroid_mean": 1307.3739863673563,
+        "flatness_mean": 0.027051249404264045,
+        "hnr_db": 15.264430914996604,
+        "hnr_db_std": 8.529630057562581,
+        "shimmer": 0.06507038378870408,
+        "tremor_rate_hz": 3.026764557490304,
+        "f0_slope_st_per_s": -0.2725705665187783,
+        "f0_final_ratio": 0.9798460003097038,
+        "pause_rate": 0.3535353535353535,
+        "pause_fraction": 0.029040404040404044,
+        "pause_mean_s": 0.04725,
+        "onset_sharpness": 0.36216920515164774,
+        "centroid_std": 54.28140851804959
+      }
+    },
+    "calm": {
+      "parameters": {
+        "name": "calm",
+        "f0_base": 135.0,
+        "f0_range_st": 0.5,
+        "f0_slope_st": 0.0,
+        "f0_final_drop_st": -0.3,
+        "tremor_hz": 1.0,
+        "tremor_depth_st": 0.4,
+        "jitter_st": 0.02,
+        "shimmer": 0.02,
+        "breathiness": 0.08,
+        "syllables_per_sec": 2.2,
+        "duty": 0.62,
+        "slot_jitter": 0.1,
+        "amplitude": 0.3,
+        "amplitude_var": 0.03,
+        "attack_s": 0.04,
+        "harmonic_alpha": 1.5
+      },
+      "correlates": [
+        "low F0 range (Banse & Scherer 1996)",
+        "steady energy (Juslin & Laukka 2003)",
+        "moderate speaking rate (Juslin & Laukka 2003)",
+        "low jitter: stable phonation (Eyben et al. 2016)"
+      ],
+      "descriptors": {
+        "f0_mean": 135.31478746848217,
+        "f0_std": 1.4408540554187634,
+        "f0_range": 5.852071463329511,
+        "jitter": 0.4620755728525774,
+        "jitter_relative": 0.003414714011627386,
+        "energy_mean": 0.1658544802597563,
+        "energy_std": 0.13955007392528257,
+        "energy_mean_voiced": 0.2740436894075996,
+        "energy_std_voiced": 0.057749480910271545,
+        "energy_flux_mean": 0.10112808056662455,
+        "voiced_ratio": 0.5977272727272727,
+        "speaking_rate": 2.0202020202020203,
+        "zcr_mean": 0.02862807270702008,
+        "centroid_mean": 730.3905782253318,
+        "flatness_mean": 0.005758829483178242,
+        "hnr_db": 26.534708214246706,
+        "hnr_db_std": 19.33225273060122,
+        "shimmer": 0.04197388684533347,
+        "tremor_rate_hz": 0.9488995197224572,
+        "f0_slope_st_per_s": -0.055269641516872026,
+        "f0_final_ratio": 0.9961682481650678,
+        "pause_rate": 1.5151515151515151,
+        "pause_fraction": 0.3087121212121212,
+        "pause_mean_s": 0.20375000000000004,
+        "onset_sharpness": 0.23003102127639324,
+        "centroid_std": 37.81200960264583
+      }
+    },
+    "afraid": {
+      "parameters": {
+        "name": "afraid",
+        "f0_base": 300.0,
+        "f0_range_st": 2.5,
+        "f0_slope_st": 0.6,
+        "f0_final_drop_st": 0.0,
+        "tremor_hz": 6.0,
+        "tremor_depth_st": 2.0,
+        "jitter_st": 0.05,
+        "shimmer": 0.16,
+        "breathiness": 0.3,
+        "syllables_per_sec": 5.0,
+        "duty": 0.65,
+        "slot_jitter": 0.35,
+        "amplitude": 0.26,
+        "amplitude_var": 0.22,
+        "attack_s": 0.05,
+        "harmonic_alpha": 1.2
+      },
+      "correlates": [
+        "high F0 (Juslin & Laukka 2003)",
+        "high jitter: tremulous, unstable phonation (Banse & Scherer 1996)",
+        "fast speaking rate (Juslin & Laukka 2003)",
+        "low energy, weak phonation at onsets (Scherer 1986)",
+        "rising contour (our choice)"
+      ],
+      "descriptors": {
+        "f0_mean": 301.19081849251506,
+        "f0_std": 15.31703039907934,
+        "f0_range": 51.98566989068041,
+        "jitter": 4.530189699111631,
+        "jitter_relative": 0.01504254868336792,
+        "energy_mean": 0.11517892414030047,
+        "energy_std": 0.11197137147586304,
+        "energy_mean_voiced": 0.16836828002651452,
+        "energy_std_voiced": 0.09787355844871184,
+        "energy_flux_mean": 0.25285143209152855,
+        "voiced_ratio": 0.6799242424242424,
+        "speaking_rate": 5.037878787878787,
+        "zcr_mean": 0.10627136021872863,
+        "centroid_mean": 1687.07162469034,
+        "flatness_mean": 0.0562862243928627,
+        "hnr_db": 8.229673950612135,
+        "hnr_db_std": 2.552645361574154,
+        "shimmer": 0.09799524583531478,
+        "tremor_rate_hz": 5.992531604704796,
+        "f0_slope_st_per_s": 0.3234233962589955,
+        "f0_final_ratio": 1.0258235116816539,
+        "pause_rate": 1.426767676767677,
+        "pause_fraction": 0.13181818181818183,
+        "pause_mean_s": 0.09266666666666667,
+        "onset_sharpness": 0.20522300457327985,
+        "centroid_std": 91.19605117099444
+      }
+    }
+  },
+  "correlate_checks": {
+    "checks": {
+      "crying: highest jitter": true,
+      "crying: highest shimmer": true,
+      "crying: lowest HNR": true,
+      "crying: lowest final/initial F0 ratio": true,
+      "crying: lower energy than angry": true,
+      "crying: more pauses than excited": true,
+      "excited: widest F0 range of the low-jitter conditions": true,
+      "excited: highest voiced-frame energy spread": true,
+      "excited: lower jitter than crying": true,
+      "angry: highest energy": true,
+      "angry: sharpest onsets": true,
+      "angry: higher centroid than calm": true,
+      "afraid: higher F0 than calm": true,
+      "afraid: more jitter than excited": true,
+      "afraid: softer onsets than angry": true,
+      "calm: lowest F0 spread": true,
+      "calm: lowest voiced-frame energy spread": true
+    },
+    "all_pass": true
+  },
+  "training": {
+    "selected_epoch": 10,
+    "train_accuracy": 1.0,
+    "val_accuracy": 1.0,
+    "test_accuracy": 1.0,
+    "chance": 0.2,
+    "majority_baseline": 0.2,
+    "nearest_centroid_baseline": 1.0,
+    "n_test": 40,
+    "z_vs_chance": 12.649110640673516,
+    "confusion": [
+      [
+        8,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        8,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        8,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        8,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        8
+      ]
+    ],
+    "classes": [
+      "afraid",
+      "angry",
+      "calm",
+      "crying",
+      "excited"
+    ],
+    "per_class_recall": {
+      "afraid": 1.0,
+      "angry": 1.0,
+      "calm": 1.0,
+      "crying": 1.0,
+      "excited": 1.0
+    },
+    "history": [
+      {
+        "epoch": 0.0,
+        "loss": 1.7318515559700336,
+        "val_accuracy": 0.45
+      },
+      {
+        "epoch": 10.0,
+        "loss": 0.2727486659078079,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 20.0,
+        "loss": 0.015646717070296485,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 30.0,
+        "loss": 0.0020861175291487528,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 40.0,
+        "loss": 0.0007425299898709398,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 50.0,
+        "loss": 0.0004403742883693853,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 60.0,
+        "loss": 0.00034186809354583866,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 70.0,
+        "loss": 0.0003015305598368685,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 80.0,
+        "loss": 0.00028097514263607053,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 90.0,
+        "loss": 0.00026778920942518726,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 100.0,
+        "loss": 0.0002576207003081801,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 110.0,
+        "loss": 0.0002489044656054716,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 120.0,
+        "loss": 0.00024104481637898686,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 130.0,
+        "loss": 0.00023382413956752647,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 140.0,
+        "loss": 0.000227155253872377,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 150.0,
+        "loss": 0.00022098224841293968,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 160.0,
+        "loss": 0.00021525413410793256,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 170.0,
+        "loss": 0.00020995209271099457,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 180.0,
+        "loss": 0.00020503267618118004,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 190.0,
+        "loss": 0.0002004870996973333,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 200.0,
+        "loss": 0.00019628633513221603,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 210.0,
+        "loss": 0.0001924000731724539,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 220.0,
+        "loss": 0.0001888181616359853,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 230.0,
+        "loss": 0.00018553455237483213,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 240.0,
+        "loss": 0.0001825138712370371,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 250.0,
+        "loss": 0.00017973525152637182,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 260.0,
+        "loss": 0.00017717421630859733,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 270.0,
+        "loss": 0.0001748230369013114,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 280.0,
+        "loss": 0.00017264427919620032,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 290.0,
+        "loss": 0.0001706328853795535,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 300.0,
+        "loss": 0.00016878533424253398,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 310.0,
+        "loss": 0.00016709254398929963,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 320.0,
+        "loss": 0.00016554028308422562,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 330.0,
+        "loss": 0.00016411438360528153,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 340.0,
+        "loss": 0.00016280513167412473,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 350.0,
+        "loss": 0.00016160577619654632,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 360.0,
+        "loss": 0.0001605154088193717,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 370.0,
+        "loss": 0.00015952853916996015,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 380.0,
+        "loss": 0.00015862616359853715,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 390.0,
+        "loss": 0.00015780011900510727,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 400.0,
+        "loss": 0.0001570466982802002,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 410.0,
+        "loss": 0.0001563623426462903,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 420.0,
+        "loss": 0.00015574127969757886,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 430.0,
+        "loss": 0.00015517938584183347,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 440.0,
+        "loss": 0.00015467067513639157,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 450.0,
+        "loss": 0.0001542153367945825,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 460.0,
+        "loss": 0.0001538067822906542,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 470.0,
+        "loss": 0.00015344203682015272,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 480.0,
+        "loss": 0.0001531157219481463,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 490.0,
+        "loss": 0.00015282505478936636,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 500.0,
+        "loss": 0.00015256537883566365,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 510.0,
+        "loss": 0.0001523346864246504,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 520.0,
+        "loss": 0.00015214491012006305,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 530.0,
+        "loss": 0.0001519840942249538,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 540.0,
+        "loss": 0.00015184414892994503,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 550.0,
+        "loss": 0.00015172226021319116,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 560.0,
+        "loss": 0.00015161585322380218,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 570.0,
+        "loss": 0.00015152449762296656,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 580.0,
+        "loss": 0.00015144818393478794,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 590.0,
+        "loss": 0.00015138677048672465,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 600.0,
+        "loss": 0.00015133650616764652,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 610.0,
+        "loss": 0.0001512969546116502,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 620.0,
+        "loss": 0.00015126209348956374,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 630.0,
+        "loss": 0.00015123248704611736,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 640.0,
+        "loss": 0.0001512077078870633,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 650.0,
+        "loss": 0.0001511851076843981,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 660.0,
+        "loss": 0.00015116344014417477,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 670.0,
+        "loss": 0.00015114274055309996,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 680.0,
+        "loss": 0.00015113731903010743,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 690.0,
+        "loss": 0.0001511547677410967,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 700.0,
+        "loss": 0.00015117545888869348,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 710.0,
+        "loss": 0.00015119074153951693,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 720.0,
+        "loss": 0.0001511978384543499,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 730.0,
+        "loss": 0.00015119793282586562,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 740.0,
+        "loss": 0.00015119171201082206,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 750.0,
+        "loss": 0.0001511788521175801,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 760.0,
+        "loss": 0.00015116512472725685,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 770.0,
+        "loss": 0.00015114622012858382,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 780.0,
+        "loss": 0.00015112237503469645,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 790.0,
+        "loss": 0.00015109455617242845,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 800.0,
+        "loss": 0.0001510610508372047,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 810.0,
+        "loss": 0.00015102251140092473,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 820.0,
+        "loss": 0.0001509795851361708,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 830.0,
+        "loss": 0.00015092881000518672,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 840.0,
+        "loss": 0.00015087020802667387,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 850.0,
+        "loss": 0.00015080470571537583,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 860.0,
+        "loss": 0.00015073292580027788,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 870.0,
+        "loss": 0.0001506549810563317,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 880.0,
+        "loss": 0.00015057194152464412,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 890.0,
+        "loss": 0.00015048256511044652,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 900.0,
+        "loss": 0.00015038761226013626,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 910.0,
+        "loss": 0.00015028711924121985,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 920.0,
+        "loss": 0.0001501814982181253,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 930.0,
+        "loss": 0.0001500727330370409,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 940.0,
+        "loss": 0.00014998529956356766,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 950.0,
+        "loss": 0.00014990175038422475,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 960.0,
+        "loss": 0.0001498121072540849,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 970.0,
+        "loss": 0.00014971252085536343,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 980.0,
+        "loss": 0.00014960281718817114,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 990.0,
+        "loss": 0.00014948337988379454,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1000.0,
+        "loss": 0.0001493552809293034,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1010.0,
+        "loss": 0.000149218386457317,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1020.0,
+        "loss": 0.00014907407126088973,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1030.0,
+        "loss": 0.00014892396573691331,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1040.0,
+        "loss": 0.0001487694033597142,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1050.0,
+        "loss": 0.00014861136724002226,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1060.0,
+        "loss": 0.00014844878314653235,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1070.0,
+        "loss": 0.00014828228717044925,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1080.0,
+        "loss": 0.0001481115259959511,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1090.0,
+        "loss": 0.00014793760688962238,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1100.0,
+        "loss": 0.00014777620471744562,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1110.0,
+        "loss": 0.00014762240855278509,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1120.0,
+        "loss": 0.00014746398839762408,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1130.0,
+        "loss": 0.0001472985166521599,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1140.0,
+        "loss": 0.00014712816409283638,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1150.0,
+        "loss": 0.00014695440674744356,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1160.0,
+        "loss": 0.00014677803613731598,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1170.0,
+        "loss": 0.0001465976818156531,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1180.0,
+        "loss": 0.00014641778611446785,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1190.0,
+        "loss": 0.00014623376847705161,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1200.0,
+        "loss": 0.00014604727391096984,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1210.0,
+        "loss": 0.00014586109087662096,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1220.0,
+        "loss": 0.000145673342569981,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1230.0,
+        "loss": 0.00014548356614917584,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1240.0,
+        "loss": 0.0001452913428600536,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1250.0,
+        "loss": 0.00014510545991789197,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1260.0,
+        "loss": 0.00014492422098343874,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1270.0,
+        "loss": 0.0001447414700949781,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1280.0,
+        "loss": 0.00014455159349862452,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1290.0,
+        "loss": 0.00014435615482895277,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1300.0,
+        "loss": 0.00014415514272252266,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1310.0,
+        "loss": 0.00014395037754490937,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1320.0,
+        "loss": 0.00014374296822324123,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1330.0,
+        "loss": 0.00014353356581033809,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1340.0,
+        "loss": 0.0001433251463491653,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1350.0,
+        "loss": 0.00014311474397888345,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1360.0,
+        "loss": 0.00014290493803092953,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1370.0,
+        "loss": 0.000142694999901606,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1380.0,
+        "loss": 0.00014248599795445592,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1390.0,
+        "loss": 0.00014228008295468457,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1400.0,
+        "loss": 0.00014208547450904435,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1410.0,
+        "loss": 0.00014189131122792876,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1420.0,
+        "loss": 0.0001416952756209215,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1430.0,
+        "loss": 0.00014149709503884195,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1440.0,
+        "loss": 0.00014129931809889136,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1450.0,
+        "loss": 0.0001410997675953472,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1460.0,
+        "loss": 0.00014091231053972312,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1470.0,
+        "loss": 0.00014072852199195138,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1480.0,
+        "loss": 0.00014053267929948265,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1490.0,
+        "loss": 0.0001403363335689623,
+        "val_accuracy": 1.0
+      },
+      {
+        "epoch": 1499.0,
+        "loss": 0.00014015739170865235,
+        "val_accuracy": 1.0
+      }
+    ]
+  },
+  "controls": {
+    "label_shuffle": {
+      "rounds": 25.0,
+      "mean": 0.196,
+      "std": 0.11909659944767524,
+      "p95": 0.35,
+      "max": 0.4,
+      "min": 0.0
+    },
+    "random_features": {
+      "rounds": 5.0,
+      "mean": 0.19,
+      "p95": 0.22,
+      "max": 0.225
+    },
+    "nearest_centroid_confusion": [
+      [
+        8,
+        0,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        8,
+        0,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        8,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        8,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        0,
+        8
+      ]
+    ]
+  },
+  "ablations": {
+    "only_f0_level_and_contour": {
+      "n_features": 5,
+      "test_accuracy": 0.975,
+      "selected_epoch": 30,
+      "features": [
+        "f0_mean",
+        "f0_std",
+        "f0_range",
+        "f0_slope_st_per_s",
+        "f0_final_ratio"
+      ]
+    },
+    "only_pitch_dynamics": {
+      "n_features": 3,
+      "test_accuracy": 1.0,
+      "selected_epoch": 50,
+      "features": [
+        "jitter",
+        "jitter_relative",
+        "tremor_rate_hz"
+      ]
+    },
+    "only_voice_quality": {
+      "n_features": 4,
+      "test_accuracy": 0.975,
+      "selected_epoch": 30,
+      "features": [
+        "hnr_db",
+        "hnr_db_std",
+        "shimmer",
+        "flatness_mean"
+      ]
+    },
+    "only_energy_dynamics": {
+      "n_features": 6,
+      "test_accuracy": 1.0,
+      "selected_epoch": 30,
+      "features": [
+        "energy_mean",
+        "energy_std",
+        "energy_mean_voiced",
+        "energy_std_voiced",
+        "energy_flux_mean",
+        "onset_sharpness"
+      ]
+    },
+    "only_rhythm_and_pauses": {
+      "n_features": 5,
+      "test_accuracy": 1.0,
+      "selected_epoch": 120,
+      "features": [
+        "speaking_rate",
+        "voiced_ratio",
+        "pause_rate",
+        "pause_fraction",
+        "pause_mean_s"
+      ]
+    },
+    "only_spectral_shape": {
+      "n_features": 3,
+      "test_accuracy": 0.975,
+      "selected_epoch": 60,
+      "features": [
+        "zcr_mean",
+        "centroid_mean",
+        "centroid_std"
+      ]
+    },
+    "without_f0_family": {
+      "n_features": 21,
+      "test_accuracy": 1.0,
+      "selected_epoch": 10,
+      "features": [
+        "jitter",
+        "jitter_relative",
+        "energy_mean",
+        "energy_std",
+        "energy_mean_voiced",
+        "energy_std_voiced",
+        "energy_flux_mean",
+        "voiced_ratio",
+        "speaking_rate",
+        "zcr_mean",
+        "centroid_mean",
+        "flatness_mean",
+        "hnr_db",
+        "hnr_db_std",
+        "shimmer",
+        "tremor_rate_hz",
+        "pause_rate",
+        "pause_fraction",
+        "pause_mean_s",
+        "onset_sharpness",
+        "centroid_std"
+      ]
+    },
+    "without_pitch_derived": {
+      "n_features": 18,
+      "test_accuracy": 1.0,
+      "selected_epoch": 10,
+      "features": [
+        "energy_mean",
+        "energy_std",
+        "energy_mean_voiced",
+        "energy_std_voiced",
+        "energy_flux_mean",
+        "voiced_ratio",
+        "speaking_rate",
+        "zcr_mean",
+        "centroid_mean",
+        "flatness_mean",
+        "hnr_db",
+        "hnr_db_std",
+        "shimmer",
+        "pause_rate",
+        "pause_fraction",
+        "pause_mean_s",
+        "onset_sharpness",
+        "centroid_std"
+      ]
+    }
+  },
+  "per_feature": {
+    "f0_mean": {
+      "only_accuracy": 0.975,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "f0_std": {
+      "only_accuracy": 0.975,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "f0_range": {
+      "only_accuracy": 0.95,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "jitter": {
+      "only_accuracy": 0.975,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "jitter_relative": {
+      "only_accuracy": 0.85,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "energy_mean": {
+      "only_accuracy": 0.925,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "energy_std": {
+      "only_accuracy": 0.725,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "energy_mean_voiced": {
+      "only_accuracy": 0.725,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "energy_std_voiced": {
+      "only_accuracy": 0.65,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "energy_flux_mean": {
+      "only_accuracy": 0.9,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "voiced_ratio": {
+      "only_accuracy": 1.0,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "speaking_rate": {
+      "only_accuracy": 0.8,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "zcr_mean": {
+      "only_accuracy": 0.475,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "centroid_mean": {
+      "only_accuracy": 0.9,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "flatness_mean": {
+      "only_accuracy": 0.975,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "hnr_db": {
+      "only_accuracy": 1.0,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "hnr_db_std": {
+      "only_accuracy": 0.975,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "shimmer": {
+      "only_accuracy": 0.925,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "tremor_rate_hz": {
+      "only_accuracy": 0.95,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "f0_slope_st_per_s": {
+      "only_accuracy": 0.8,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "f0_final_ratio": {
+      "only_accuracy": 0.7,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "pause_rate": {
+      "only_accuracy": 0.8,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "pause_fraction": {
+      "only_accuracy": 0.925,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "pause_mean_s": {
+      "only_accuracy": 0.75,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "onset_sharpness": {
+      "only_accuracy": 0.5,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    },
+    "centroid_std": {
+      "only_accuracy": 0.95,
+      "without_accuracy": 1.0,
+      "drop": 0.0
+    }
+  },
+  "crying_vs_excited": {
+    "test_accuracy": 1.0,
+    "val_accuracy": 1.0,
+    "chance": 0.5,
+    "n_test": 16,
+    "confusion": [
+      [
+        8,
+        0
+      ],
+      [
+        0,
+        8
+      ]
+    ],
+    "classes": [
+      "crying",
+      "excited"
+    ],
+    "recall": {
+      "crying": 1.0,
+      "excited": 1.0
+    },
+    "selected_epoch": 0,
+    "n_features": 26,
+    "per_feature": {
+      "f0_mean": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "f0_std": {
+        "single_accuracy": 0.875,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "f0_range": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "jitter": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "jitter_relative": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "energy_mean": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "energy_std": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "energy_mean_voiced": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "energy_std_voiced": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "energy_flux_mean": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "voiced_ratio": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "speaking_rate": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "zcr_mean": {
+        "single_accuracy": 0.9375,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "centroid_mean": {
+        "single_accuracy": 0.75,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "flatness_mean": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "hnr_db": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "hnr_db_std": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "shimmer": {
+        "single_accuracy": 0.9375,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "tremor_rate_hz": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "f0_slope_st_per_s": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "f0_final_ratio": {
+        "single_accuracy": 0.9375,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "pause_rate": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "pause_fraction": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "pause_mean_s": {
+        "single_accuracy": 1.0,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "onset_sharpness": {
+        "single_accuracy": 0.875,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      },
+      "centroid_std": {
+        "single_accuracy": 0.9375,
+        "without_accuracy": 1.0,
+        "drop": 0.0
+      }
+    },
+    "ranked": [
+      "f0_mean",
+      "f0_range",
+      "jitter",
+      "jitter_relative",
+      "energy_mean",
+      "energy_std",
+      "energy_mean_voiced",
+      "energy_std_voiced",
+      "energy_flux_mean",
+      "voiced_ratio",
+      "speaking_rate",
+      "flatness_mean",
+      "hnr_db",
+      "hnr_db_std",
+      "tremor_rate_hz",
+      "f0_slope_st_per_s",
+      "pause_rate",
+      "pause_fraction",
+      "pause_mean_s",
+      "zcr_mean",
+      "shimmer",
+      "f0_final_ratio",
+      "centroid_std",
+      "f0_std",
+      "onset_sharpness",
+      "centroid_mean"
+    ],
+    "top_feature": "f0_mean",
+    "top_single_accuracy": 1.0,
+    "top_without_accuracy": 1.0,
+    "top_drop": 0.0,
+    "greedy_forward": {
+      "target": [
+        "crying",
+        "excited"
+      ],
+      "chance": 0.5,
+      "history": [
+        {
+          "round": 1,
+          "added": "f0_mean",
+          "val_accuracy": 1.0,
+          "test_accuracy": 1.0,
+          "features": [
+            "f0_mean"
+          ]
+        }
+      ],
+      "n_features_needed": 1,
+      "features": [
+        "f0_mean"
+      ],
+      "final_val_accuracy": 1.0,
+      "final_test_accuracy": 1.0,
+      "stopped_because": "validation_perfect"
+    }
+  },
+  "cross_condition": {
+    "per_condition": {
+      "crying": {
+        "n_held_out": 40,
+        "assignment": {
+          "excited": 0.0,
+          "angry": 0.0,
+          "calm": 0.0,
+          "afraid": 1.0
+        },
+        "dominant_assignment": "afraid",
+        "dominant_fraction": 1.0,
+        "nearest_centroid_assignment": {
+          "excited": 0.0,
+          "angry": 0.0,
+          "calm": 0.0,
+          "afraid": 1.0
+        },
+        "nearest_centroid_dominant": "afraid",
+        "assigned_class_nll": 0.05462175592185834,
+        "distance_to_nearest_training_centroid": 9.726790532071904,
+        "within_class_spread": 1.2662955514958831,
+        "training_test_accuracy": 1.0
+      },
+      "excited": {
+        "n_held_out": 40,
+        "assignment": {
+          "crying": 0.0,
+          "angry": 1.0,
+          "calm": 0.0,
+          "afraid": 0.0
+        },
+        "dominant_assignment": "angry",
+        "dominant_fraction": 1.0,
+        "nearest_centroid_assignment": {
+          "crying": 0.0,
+          "angry": 1.0,
+          "calm": 0.0,
+          "afraid": 0.0
+        },
+        "nearest_centroid_dominant": "angry",
+        "assigned_class_nll": 0.05778467953192372,
+        "distance_to_nearest_training_centroid": 3.331546352705331,
+        "within_class_spread": 1.121378610738847,
+        "training_test_accuracy": 1.0
+      },
+      "angry": {
+        "n_held_out": 40,
+        "assignment": {
+          "crying": 0.0,
+          "excited": 0.325,
+          "calm": 0.0,
+          "afraid": 0.675
+        },
+        "dominant_assignment": "afraid",
+        "dominant_fraction": 0.675,
+        "nearest_centroid_assignment": {
+          "crying": 0.0,
+          "excited": 1.0,
+          "calm": 0.0,
+          "afraid": 0.0
+        },
+        "nearest_centroid_dominant": "excited",
+        "assigned_class_nll": 1.0883652029143536,
+        "distance_to_nearest_training_centroid": 4.101696437979732,
+        "within_class_spread": 1.068949429348961,
+        "training_test_accuracy": 1.0
+      },
+      "calm": {
+        "n_held_out": 40,
+        "assignment": {
+          "crying": 0.0,
+          "excited": 0.0,
+          "angry": 1.0,
+          "afraid": 0.0
+        },
+        "dominant_assignment": "angry",
+        "dominant_fraction": 1.0,
+        "nearest_centroid_assignment": {
+          "crying": 0.0,
+          "excited": 0.0,
+          "angry": 1.0,
+          "afraid": 0.0
+        },
+        "nearest_centroid_dominant": "angry",
+        "assigned_class_nll": 0.7869009441375264,
+        "distance_to_nearest_training_centroid": 6.5500342108539344,
+        "within_class_spread": 1.405217053114364,
+        "training_test_accuracy": 1.0
+      },
+      "afraid": {
+        "n_held_out": 40,
+        "assignment": {
+          "crying": 0.5,
+          "excited": 0.0,
+          "angry": 0.5,
+          "calm": 0.0
+        },
+        "dominant_assignment": "crying",
+        "dominant_fraction": 0.5,
+        "nearest_centroid_assignment": {
+          "crying": 0.2,
+          "excited": 0.8,
+          "angry": 0.0,
+          "calm": 0.0
+        },
+        "nearest_centroid_dominant": "excited",
+        "assigned_class_nll": 1.2998710443844481,
+        "distance_to_nearest_training_centroid": 6.038622731920121,
+        "within_class_spread": 1.1652580407656092,
+        "training_test_accuracy": 1.0
+      }
+    },
+    "mean_dominant_fraction": 0.835,
+    "mean_training_test_nll": 0.6238065226860974,
+    "chance_for_one_training_class": 0.2,
+    "mlp_agrees_with_nearest_centroid": 0.6,
+    "note": "the held-out label is not in the trained label space, so accuracy is 0 by construction; the assignment distribution, the cross-entropy of the assigned class and the distance to the nearest training centroid are what carry the result"
+  },
+  "wall_seconds": 133.72
+}

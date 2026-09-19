@@ -56,6 +56,35 @@ from .memory import (
     MemoryStore,
     store_bytes,
 )
+# The trained emotion classifier. `emotion.accuracy` is deliberately NOT
+# re-exported: `tasks.accuracy` above already owns that name for the model's
+# exact-match score, and two functions with one name in one namespace is how a
+# caller ends up measuring the wrong thing.
+from .emotion import (
+    CONDITIONS,
+    CONDITION_NAMES,
+    CORRELATES,
+    EMOTION_FEATURES,
+    F0_FAMILY,
+    FEATURE_FAMILIES,
+    PITCH_DERIVED_FAMILY,
+    Dataset,
+    EmotionCondition,
+    Split,
+    TrainedClassifier,
+    ablation,
+    binary_cry_vs_excited,
+    build_dataset,
+    correlate_checks,
+    dominant_modulation_hz,
+    emotion_descriptors,
+    frame_hnr_db,
+    greedy_forward_selection,
+    leave_one_condition_out,
+    synthesise,
+    train_classifier,
+    unvoiced_runs,
+)
 from .model import (
     AttentionBlock,
     LanguageModel,
@@ -165,5 +194,15 @@ __all__ = [
     # of it, so a caller can compute on exactly what the dashboard draws.
     "affect_summary", "prosody_reading", "AffectSummary", "AFFECT_FRAMING",
     "run_task", "trace_lines",
+    # The trained emotion classifier, and the disclaimer that travels with it:
+    # its labels come from the synthesiser in this module, so it learns this
+    # repository's acoustic model of five emotions and not a listener's.
+    "CONDITIONS", "CONDITION_NAMES", "CORRELATES", "EMOTION_FEATURES",
+    "F0_FAMILY", "PITCH_DERIVED_FAMILY", "FEATURE_FAMILIES",
+    "EmotionCondition", "Dataset", "Split", "TrainedClassifier",
+    "synthesise", "emotion_descriptors", "build_dataset", "correlate_checks",
+    "frame_hnr_db", "dominant_modulation_hz", "unvoiced_runs",
+    "train_classifier", "ablation", "binary_cry_vs_excited",
+    "greedy_forward_selection", "leave_one_condition_out",
     "__version__",
 ]

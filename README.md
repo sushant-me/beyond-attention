@@ -399,6 +399,11 @@ python experiments/render_readme.py --mqar results.json \
 python experiments/voice_affect.py --out voice-affect.json
 python experiments/render_readme.py --voice voice-affect.json --readme README.md
 
+# the trained classifier: 200 synthesised utterances, ~3 min on CPU
+python -u experiments/emotion_classifier.py --out emotion-classifier.json
+python experiments/render_readme.py --emotion emotion-classifier.json \
+    --readme README.md
+
 # the agent loop: 300 seeded tasks, six budgets, the controls and two sweeps (~2 s)
 python experiments/agent_loop.py --out agent-loop.json
 python experiments/render_readme.py --agent agent-loop.json --readme README.md
@@ -684,6 +689,260 @@ instead of runs, letting jitter span the pauses, moving the rolloff threshold to
 magnitude — each fail a specific test, and seven of the ten fail exactly one.
 The voicing fault is caught by the white-noise control, which is the reason that
 control exists: it is the fault a pure-tone test cannot see.
+
+### The trained classifier: what this is, and what it is not
+
+`voice.py` said — in its module docstring and in this README — that no
+classifier had been trained, and that a regression fitted to the descriptors
+would be a hypothesis rather than a result. `src/beyond_attention/emotion.py`
+closes that specific gap: five conditions built from the published acoustic
+correlates of crying/sad-sobbing, excitement, anger, calm and fear; 26 features
+per utterance, the 15 from `voice.py` plus 11 new voice-quality measurements
+(harmonics-to-noise ratio, shimmer, tremor rate, F0 slope and terminal fall,
+pause structure, onset sharpness, spectral spread); and a real PyTorch MLP with
+an optimisation loop, a split **by utterance**, a fixed seed, and model
+selection on validation only. The headline is held-out accuracy.
+
+**The labels are the synthesiser's, so the classifier learns our acoustic model
+of these emotions, not a listener's. It is not validated on speech.** That is
+the single most important sentence here. Every "crying" utterance is a signal this repository generated
+from a parameter tuple this repository chose, and its label is that tuple's
+name. No human listener heard it, no annotator labelled it, and no real
+recording is involved anywhere. Three claims that would be easy to make from
+the block below, and are all false:
+
+* *"It understands emotion."* It separates five clusters that were placed in a
+  26-dimensional space by hand, along exactly the axes the features measure. It
+  is not evidence that it recognises emotion in a voice, and it cannot be: the
+  target is our own generator. The honest test of whether that is recognition
+  or the generator is to hold a
+  whole condition out, and it **fails**: trained on four conditions and pointed
+  at the fifth, the model does not abstain and does not spread its answers — it
+  puts 50–100% of the unseen condition onto one training class and is confident
+  about it (assigned-class NLL 0.05–1.30 nats), naming the same class the
+  untrained nearest-centroid rule names on three of the five. A model that
+  understands emotion would have somewhere to put a condition it had never
+  seen; this one has nowhere, because the target is our own generator.
+* *"It can tell crying from excitement."* It separates the two signals this
+  generator produces under those names, and the ablation says why that is not
+  much of a claim: **19 of the 26 features separate the pair perfectly on their
+  own**, removing any single feature changes the held-out accuracy by exactly
+  **0.000**, and one feature — mean F0, with the conditions built 40 Hz apart
+  and tight within-condition means — is enough to reach 1.000. The two
+  conditions do share elevated F0 in the sense that both are high-pitched, but
+  they were also built apart on twenty other axes at once, so what the
+  classifier is reading is the separation the generator put there. There is no
+  single feature "doing it", and naming one would be choosing the answer.
+* *"This transfers to real speech."* Nothing here was tested on real speech.
+  There is no affect corpus in this repository, none is downloaded, and no
+  network access is used. Every condition is synthetic, and the only signals the
+  extractor has ever seen are ones this repository's own synthesiser produced.
+  The correct statement is not that it fails to transfer but that transfer is
+  **untested**, in either direction, because there is no held-out human data
+  anywhere in the path.
+
+<!-- EMOTION:BEGIN -->
+**Acoustically-grounded conditions** — 200 utterances (40 per condition, 2.0 s each) at 16,000 Hz, seed 0. Every parameter is a published acoustic correlate of the state, cited in `emotion.py`; the correlate column in the JSON carries the citation for each one.
+
+| condition | F0 base (Hz) | F0 range (st) | tremor (Hz @ st) | jitter (st) | shimmer | breathiness | rate (syl/s) | duty | onset (ms) | harmonic α |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| afraid | 300 | 2.5 | 6.0 @ 2.0 | 0.05 | 0.16 | 0.30 | 5.0 | 0.65 | 50 | 1.2 |
+| angry | 190 | 1.5 | 3.0 @ 1.5 | 0.03 | 0.06 | 0.15 | 5.0 | 0.70 | 5 | 0.6 |
+| calm | 135 | 0.5 | 1.0 @ 0.4 | 0.02 | 0.02 | 0.08 | 2.2 | 0.62 | 40 | 1.5 |
+| crying | 320 | 2.0 | 6.5 @ 2.5 | 0.06 | 0.35 | 0.55 | 3.0 | 0.45 | 60 | 1.6 |
+| excited | 280 | 3.5 | 1.2 @ 3.0 | 0.02 | 0.04 | 0.10 | 5.5 | 0.75 | 10 | 1.0 |
+
+What the extractor measures on those signals (means over the condition's utterances; the full 26-feature vector per condition is in the JSON):
+
+| condition | F0 mean (Hz) | F0 std (Hz) | F0 range (Hz) | jitter (Hz) | shimmer | HNR (dB) | tremor est. (Hz) | final/initial F0 | pauses/s | onset sharpness | energy mean | energy std (voiced) | centroid (Hz) |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| afraid | 301.2 | 15.3 | 52.0 | 4.53 | 0.098 | 8.23 | 5.99 | 1.026 | 1.43 | 0.205 | 0.115 | 0.098 | 1687 |
+| angry | 189.0 | 6.3 | 23.3 | 0.92 | 0.065 | 15.26 | 3.03 | 0.980 | 0.35 | 0.362 | 0.532 | 0.202 | 1307 |
+| calm | 135.3 | 1.4 | 5.9 | 0.46 | 0.042 | 26.53 | 0.95 | 0.996 | 1.52 | 0.230 | 0.166 | 0.058 | 730 |
+| crying | 317.2 | 25.5 | 115.1 | 7.00 | 0.167 | 4.04 | 1.60 | 0.884 | 2.26 | 0.223 | 0.073 | 0.113 | 1370 |
+| excited | 281.7 | 20.1 | 62.2 | 1.24 | 0.075 | 21.12 | 1.17 | 1.018 | 0.00 | 0.353 | 0.368 | 0.217 | 1389 |
+
+**17 of 17 documented correlate checks hold.** Each is a test that the generated signal shows the acoustic profile its citation names — not that the profile means the emotion.
+
+The checks: `crying: highest jitter`; `crying: highest shimmer`; `crying: lowest HNR`; `crying: lowest final/initial F0 ratio`; `crying: lower energy than angry`; `crying: more pauses than excited`; `excited: widest F0 range of the low-jitter conditions`; `excited: highest voiced-frame energy spread`; `excited: lower jitter than crying`; `angry: highest energy`; `angry: sharpest onsets`; `angry: higher centroid than calm`; `afraid: higher F0 than calm`; `afraid: more jitter than excited`; `afraid: softer onsets than angry`; `calm: lowest F0 spread`; `calm: lowest voiced-frame energy spread`
+
+**Training** — 40 held-out utterances, split by utterance (train/validation/test 120/40/40), seed 0. Classifier: MLP 26->32->5, ReLU, full-batch Adam lr=0.01, weight_decay=0.0001, 1500 steps, snapshot chosen on validation accuracy.
+
+Held-out accuracy **1.000** against chance 0.200 (+12.6σ over 40 utterances). Train 1.000, validation 1.000, snapshot at step 10. Baselines on the same split: majority 0.200, the previous increment's untrained nearest-centroid rule 1.000.
+
+| true \ predicted | afraid | angry | calm | crying | excited | recall |
+|---|---:|---:|---:|---:|---:|---:|
+| afraid | 8 | 0 | 0 | 0 | 0 | 1.00 |
+| angry | 0 | 8 | 0 | 0 | 0 | 1.00 |
+| calm | 0 | 0 | 8 | 0 | 0 | 1.00 |
+| crying | 0 | 0 | 0 | 8 | 0 | 1.00 |
+| excited | 0 | 0 | 0 | 0 | 8 | 1.00 |
+
+| control | measured | what it rules out |
+|---|---|---|
+| labels shuffled, 25 rounds, same recipe | mean 0.196 ± 0.119, 95th pct 0.350, max 0.400 | that the accuracy is the features' rather than the labels' (chance 0.200) |
+| trained on Gaussian noise of the same shape | mean 0.190, 95th pct 0.220, max 0.225 | that 26 random columns carry the task (the positive control for real learning) |
+| chance | 0.200 | a floor, not a result |
+| majority class | 0.200 | a model that ignores its input |
+
+**Ablations.** `without` removes one feature family and retrains; `only` keeps one family and discards the rest. The point of the second block is that a high accuracy without F0 is not evidence of a deeper representation: with six acoustic axes varied at once, several families are independently sufficient, so no one family is necessary.
+
+| features | n | held-out accuracy |
+|---|---:|---:|
+| F0 level and contour removed | 21 | 1.000 |
+| everything pitch-derived removed | 18 | 1.000 |
+| only energy_dynamics | 6 | 1.000 |
+| only f0_level_and_contour | 5 | 0.975 |
+| only pitch_dynamics | 3 | 1.000 |
+| only rhythm_and_pauses | 5 | 1.000 |
+| only spectral_shape | 3 | 0.975 |
+| only voice_quality | 4 | 0.975 |
+
+Each feature alone, and each feature removed, on the five-class task:
+
+| feature | alone | without | drop |
+|---|---:|---:|---:|
+| `voiced_ratio` | 1.000 | 1.000 | +0.000 |
+| `hnr_db` | 1.000 | 1.000 | +0.000 |
+| `f0_mean` | 0.975 | 1.000 | +0.000 |
+| `f0_std` | 0.975 | 1.000 | +0.000 |
+| `jitter` | 0.975 | 1.000 | +0.000 |
+| `flatness_mean` | 0.975 | 1.000 | +0.000 |
+| `hnr_db_std` | 0.975 | 1.000 | +0.000 |
+| `f0_range` | 0.950 | 1.000 | +0.000 |
+| `tremor_rate_hz` | 0.950 | 1.000 | +0.000 |
+| `centroid_std` | 0.950 | 1.000 | +0.000 |
+| `energy_mean` | 0.925 | 1.000 | +0.000 |
+| `shimmer` | 0.925 | 1.000 | +0.000 |
+| `pause_fraction` | 0.925 | 1.000 | +0.000 |
+| `energy_flux_mean` | 0.900 | 1.000 | +0.000 |
+| `centroid_mean` | 0.900 | 1.000 | +0.000 |
+| `jitter_relative` | 0.850 | 1.000 | +0.000 |
+| `speaking_rate` | 0.800 | 1.000 | +0.000 |
+| `f0_slope_st_per_s` | 0.800 | 1.000 | +0.000 |
+| `pause_rate` | 0.800 | 1.000 | +0.000 |
+| `pause_mean_s` | 0.750 | 1.000 | +0.000 |
+| `energy_std` | 0.725 | 1.000 | +0.000 |
+| `energy_mean_voiced` | 0.725 | 1.000 | +0.000 |
+| `f0_final_ratio` | 0.700 | 1.000 | +0.000 |
+| `energy_std_voiced` | 0.650 | 1.000 | +0.000 |
+| `onset_sharpness` | 0.500 | 1.000 | +0.000 |
+| `zcr_mean` | 0.475 | 1.000 | +0.000 |
+
+**Crying against excited** — 16 held-out utterances, a dedicated binary model on the same split rule, chance 0.500. Accuracy **1.000**.
+
+| true \ predicted | crying | excited |
+|---|---:|---:|
+| crying | 8 | 0 |
+| excited | 0 | 8 |
+
+| feature | alone | without | drop |
+|---|---:|---:|---:|
+| `f0_mean` | 1.000 | 1.000 | +0.000 |
+| `f0_range` | 1.000 | 1.000 | +0.000 |
+| `jitter` | 1.000 | 1.000 | +0.000 |
+| `jitter_relative` | 1.000 | 1.000 | +0.000 |
+| `energy_mean` | 1.000 | 1.000 | +0.000 |
+| `energy_std` | 1.000 | 1.000 | +0.000 |
+| `energy_mean_voiced` | 1.000 | 1.000 | +0.000 |
+| `energy_std_voiced` | 1.000 | 1.000 | +0.000 |
+| `energy_flux_mean` | 1.000 | 1.000 | +0.000 |
+| `voiced_ratio` | 1.000 | 1.000 | +0.000 |
+| `speaking_rate` | 1.000 | 1.000 | +0.000 |
+| `flatness_mean` | 1.000 | 1.000 | +0.000 |
+| `hnr_db` | 1.000 | 1.000 | +0.000 |
+| `hnr_db_std` | 1.000 | 1.000 | +0.000 |
+| `tremor_rate_hz` | 1.000 | 1.000 | +0.000 |
+| `f0_slope_st_per_s` | 1.000 | 1.000 | +0.000 |
+| `pause_rate` | 1.000 | 1.000 | +0.000 |
+| `pause_fraction` | 1.000 | 1.000 | +0.000 |
+| `pause_mean_s` | 1.000 | 1.000 | +0.000 |
+| `zcr_mean` | 0.938 | 1.000 | +0.000 |
+| `shimmer` | 0.938 | 1.000 | +0.000 |
+| `f0_final_ratio` | 0.938 | 1.000 | +0.000 |
+| `centroid_std` | 0.938 | 1.000 | +0.000 |
+| `f0_std` | 0.875 | 1.000 | +0.000 |
+| `onset_sharpness` | 0.875 | 1.000 | +0.000 |
+| `centroid_mean` | 0.750 | 1.000 | +0.000 |
+
+The first row is the best single feature and it is **not** an answer to "which feature tells them apart": every `drop` in the table is +0.000, so no feature is load-bearing, and **19 of the 26 features** separate the pair perfectly on their own. The smallest set that reaches the accuracy, chosen on validation and scored on test, is **1 feature**: `f0_mean` (validation 1.000, test 1.000, stopping because `validation_perfect`).
+
+| features kept | added | validation | test |
+|---:|---|---:|---:|
+| 1 | `f0_mean` | 1.000 | 1.000 |
+
+**Cross-condition generalisation** — train on four conditions, hold the fifth out entirely. The held-out label is not in the trained label space, so accuracy is 0 by construction and an "accuracy" row here would be a restatement of that rather than a measurement. What is measured is where the model puts a condition it has never seen.
+
+| held out | the model calls it | fraction | assigned-class NLL (nats) | distance to nearest training centroid (spreads) | nearest-centroid says | agrees |
+|---|---|---:|---:|---:|---|---|
+| afraid | crying | 0.50 | 1.30 | 6.04 | excited | no |
+| angry | afraid | 0.68 | 1.09 | 4.10 | excited | no |
+| calm | angry | 1.00 | 0.79 | 6.55 | angry | yes |
+| crying | afraid | 1.00 | 0.05 | 9.73 | afraid | yes |
+| excited | angry | 1.00 | 0.06 | 3.33 | angry | yes |
+
+Mean dominant fraction **0.835** against 0.200 for any one training class: the model does not abstain and it does not spread its answers. It is confident in them, too — the mean cross-entropy of the class it *did* assign is 0.66 nats on the unseen conditions against 0.62 nats on the held-out rows of the conditions it was trained on, so it is not that it does not know; it is that it has no way to say so. The untrained nearest-centroid rule names the same class on 0.60 of the five held-out conditions, so the collapse is a property of the feature space rather than of the trained model.
+<!-- EMOTION:END -->
+
+
+### What the classifier's numbers say, including the unflattering parts
+
+* **The headline accuracy is the least interesting number in the block.** It is
+  1.000 held out, and it is 1.000 for a reason that is visible in the ablation
+  table: only 2 of the 26 features reach 1.000 *alone*, but removing any one
+  of them changes nothing at all, and each of the six feature families is
+  sufficient by itself (0.975–1.000). The previous increment's untrained
+  nearest-centroid rule also scores 1.000 on the same split, so on this task
+  training is not what made the difference. The controls are what make the accuracy mean anything, and they
+  behave: labels shuffled gives 0.196 against a chance of 0.200, Gaussian noise
+  features give 0.190, and the identical loop learns a planted five-cluster task
+  at better than 0.9 — so those two controls are not measuring a broken
+  optimiser.
+* **"A model that only knows loud and high is not recognising crying" — but
+  this one does not have to be, and that is the finding.** Removing the entire
+  F0 level/contour family leaves the held-out accuracy at 1.000, and removing
+  everything pitch-derived — F0 level, spread, slope, terminal fall, jitter,
+  relative jitter and tremor rate — leaves it at 1.000 as well. That is not
+  evidence of a subtle representation. It is what happens when six acoustic
+  axes are varied at once: rhythm, voice quality, energy dynamics and spectral
+  shape each carry the task on their own, so no one family is necessary. The
+  ablation that was meant to expose a shallow model instead exposed how easy
+  the task was built to be.
+* **The cross-condition check is the real result, and it is a negative.** Mean
+  dominant assignment is 0.835 against 0.200 for any one training class.
+  Held-out crying is called "afraid" 100% of the time at a distance of 9.7
+  within-class spreads — farther from everything the model knows than the
+  training classes are from each other — and the model is confident about it
+  (0.05 nats). Held-out angry is split 68/32, the only case that is not a clean
+  collapse. The untrained nearest-centroid rule names the same class on three
+  of the five, so this is a property of the feature space rather than a
+  pathology of the trained model: the conditions form five regions with no
+  "other" region between them, and an unseen condition lands in whichever one
+  is nearest.
+* **One new feature does not work, and the block reports it rather than hiding
+  it.** `tremor_rate_hz` recovers the generator's modulation rate on excited
+  (1.17 against 1.2 Hz), angry (3.03 against 3.0), afraid (5.99 against 6.0)
+  and calm (0.95 against 1.0), and returns 1.60 Hz against 6.5 Hz on crying,
+  because the pitch track of a strongly breathy signal is noisy enough that
+  low-frequency estimation error outweighs the tremor. It is kept, used by the
+  classifier, and documented as valid only where the contour is periodic and
+  the phonation clean.
+* **The spectral centroid does not rank the conditions the way a naive reading
+  of the citation would.** Banse & Scherer report a higher centroid for anger
+  than for calm or neutrality, and the generated `angry` condition shows that
+  (1,307 Hz against calm's 730); but fear's breathy high-frequency voice
+  measures brighter still (1,687 Hz) and excitement (1,389 Hz) and crying
+  (1,370 Hz) sit just below it. The centroid is driven by F0 level and by
+  turbulence noise at least as much as by "tension", so it is reported as
+  measured rather than bent to fit the claim.
+* **Seventeen documented correlate checks are asserted, and all seventeen
+  hold.** Each says the generated signal shows the acoustic profile its
+  citation names — crying has the highest jitter and shimmer and the lowest HNR
+  and the lowest terminal F0 ratio; excitement has the widest F0 range and the
+  highest voiced-frame energy spread with low jitter; anger is the loudest with
+  the sharpest onsets; calm has the lowest F0 and energy spread; fear has high
+  F0, high jitter and soft onsets. They are a test, not a paragraph: a change
+  that made a condition stop implementing its correlate would fail the suite.
 
 ## Agent: acting, not only reading
 
@@ -1190,12 +1449,38 @@ The store is a data structure and the family is synthetic. Specifically:
   8.106 s in one run and 7.835 s in another with identical settings, so
   differences below ~5% in these tables are noise, not signal.
 * **The voice module is validated only on signals this repository synthesised.**
-  There is no real speech anywhere in it: no corpus, no listener labels, no
-  trained classifier, and no agentic loop that would act on the descriptors.
-  Every accuracy in the voice block is a check that the descriptors recover the
-  four prosodic axes the generator was given, and the labels come from that
-  generator. It says nothing about whether real prosody varies along the same
-  axes, and it is not evidence that emotion is decodable from a voice.
+  There is no real speech anywhere in it: no corpus and no listener labels. The
+  classifier now exists (`emotion.py`), and that is what makes this limitation
+  sharper rather than weaker: its labels are the synthesiser's, so it learns our
+  acoustic model of five emotions, not a listener's. Every accuracy in the voice
+  and classifier blocks is a check that the descriptors recover the axes the
+  generator was given. It says nothing about whether real prosody varies along
+  the same axes, and it is not evidence that emotion is decodable from a voice.
+* **The trained classifier does not generalise to a held-out condition.** Train
+  on four conditions and point it at the fifth and it does not abstain: it puts
+  50-100% of the unseen condition onto one training class, at a mean dominant
+  fraction of 0.835 against 0.200 for any one class, and is confident about it.
+  The untrained nearest-centroid rule names the same class on three of the five,
+  so the collapse is a property of the feature space. This is the honest answer
+  to "did it learn emotion or my generator", and it is the generator.
+* **The five-class task is trivially separable, so the headline accuracy is not
+  a result.** The conditions were built to differ along the axes the features
+  measure, and they do — which is why the ablation table is flat rather than
+  informative. Removing the entire F0 level/contour family, or everything
+  pitch-derived, leaves the held-out accuracy at 1.000, because six acoustic
+  axes were varied at once and rhythm, voice quality, energy dynamics and
+  spectral shape each carry the task alone. No single feature family is necessary, and the
+  per-feature ablation shows a drop of exactly 0.000 for all 26.
+* **There is no held-out human data anywhere in the classifier path.** No affect
+  corpus is present, none is downloaded, and no network access is used. "This
+  transfers to real speech" is untested rather than disproved: the measurements
+  cannot speak to it in either direction.
+* **`tremor_rate_hz` is unreliable on breathy phonation.** It recovers the
+  modulation rate to within 0.1 Hz on excited, angry, afraid and calm, and
+  returns 1.60 Hz against a 6.5 Hz setting on crying, because the pitch track
+  under low HNR is noisy enough that low-frequency estimation error outweighs
+  the tremor. It is used by the classifier and documented as valid only where
+  the contour is periodic.
 * **The F0 estimator's accuracy is bounded by its window, and its advertised
   range is not its working range.** With the default 25 ms window and 16 kHz
   sampling, a 10 Hz sweep from 100 Hz to 380 Hz stays within 1.6% (worst 1.57%,

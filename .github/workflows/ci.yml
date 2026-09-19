@@ -226,3 +226,41 @@ jobs:
                 f"{scalar['rate']:.3f} on selective; fixed decay "
                 f"{controls['fixed_decay']['selective@6']['rate']:.3f}")
           PY
+
+      - name: The trained classifier learns, and its controls fall to chance
+        # The three numbers the emotion block's honesty rests on, asserted as
+        # their own CI step so a failure is unmistakable: the classifier beats
+        # chance on held-out utterances, the shuffled-label and noise-feature
+        # controls do not, and a held-out *condition* collapses onto a training
+        # class instead of being recognised. A quick configuration is used here;
+        # the published numbers come from the full run recorded in the README.
+        run: |
+          python -u experiments/emotion_classifier.py --quick \
+            --out /tmp/emotion-classifier.json
+          cp README.md /tmp/README.emotion.md
+          python experiments/render_readme.py --emotion \
+            /tmp/emotion-classifier.json --readme /tmp/README.emotion.md
+          python - <<'PY'
+          import json, pathlib
+          data = json.loads(
+              pathlib.Path("/tmp/emotion-classifier.json").read_text()
+          )
+          training = data["training"]
+          chance = training["chance"]
+          assert data["correlate_checks"]["all_pass"], data["correlate_checks"]
+          assert training["test_accuracy"] > chance + 0.3, training
+          for key in ("label_shuffle", "random_features"):
+              assert data["controls"][key]["mean"] < chance + 0.2, key
+          cross = data["cross_condition"]
+          assert cross["mean_dominant_fraction"] > 0.5, cross
+          assert cross["mlp_agrees_with_nearest_centroid"] > 0.0
+          rendered = pathlib.Path("/tmp/README.emotion.md").read_text()
+          for marker in ("| condition |", "| control |", "| held out |"):
+              assert marker in rendered, f"emotion render lost {marker!r}"
+          print(f"emotion classifier ok: held-out {training['test_accuracy']:.3f} "
+                f"vs chance {chance:.3f}; shuffle "
+                f"{data['controls']['label_shuffle']['mean']:.3f}; noise "
+                f"{data['controls']['random_features']['mean']:.3f}; "
+                f"unseen-condition collapse "
+                f"{cross['mean_dominant_fraction']:.3f}")
+          PY

@@ -55,6 +55,8 @@ BEGIN = "<!-- RESULTS:BEGIN -->"
 END = "<!-- RESULTS:END -->"
 VOICE_BEGIN = "<!-- VOICE:BEGIN -->"
 VOICE_END = "<!-- VOICE:END -->"
+EMOTION_BEGIN = "<!-- EMOTION:BEGIN -->"
+EMOTION_END = "<!-- EMOTION:END -->"
 AGENT_BEGIN = "<!-- AGENT:BEGIN -->"
 AGENT_END = "<!-- AGENT:END -->"
 MEMORY_BEGIN = "<!-- MEMORY:BEGIN -->"
@@ -548,6 +550,327 @@ def voice_section(payload: dict) -> str:
         f"degenerate all-zero projection |",
         f"| bridge output | `{tuple(config.get('bridge_output_shape') or [])}` "
         f"| a front end that never reaches the model's `(B, L, D)` layout |",
+    ]
+    return "\n".join(lines)
+
+
+def emotion_section(payload: dict) -> str:
+    """The trained-classifier section, rendered from `emotion-classifier.json`.
+
+    Three things this renderer is careful about, because the section exists to
+    keep a classifier honest and would be self-refuting otherwise:
+
+    * the **generator parameters are rendered next to the measured
+      descriptors**, so a reader can see that the conditions were built
+      separable along the axes the features measure instead of taking the
+      condition names' word for it;
+    * the **controls and the cross-condition result render next to the headline
+      accuracy**, not in a footnote, because "1.000 held out" and "every
+      unseen condition is confidently called something it is not" are one
+      claim read two ways;
+    * the **cry-versus-excited question is answered by a full per-feature
+      ablation table** rather than by a sentence naming a feature.
+
+    A payload missing any of its sections raises rather than rendering a block
+    of empty tables: an empty table looks like a result of zero, and a reader
+    cannot tell it from a truncated file.
+    """
+    required = (
+        "config", "conditions", "training", "controls", "ablations",
+        "per_feature", "crying_vs_excited", "cross_condition",
+        "correlate_checks",
+    )
+    missing = [key for key in required if not payload.get(key)]
+    if missing:
+        raise ValueError(f"emotion payload is missing {missing}")
+
+    config = payload.get("config", {})
+    conditions = payload.get("conditions", {})
+    training = payload.get("training", {})
+    controls = payload.get("controls", {})
+    ablations = payload.get("ablations", {})
+    per_feature = payload.get("per_feature", {})
+    cry = payload.get("crying_vs_excited", {})
+    cross = payload.get("cross_condition", {})
+    checks = payload.get("correlate_checks", {})
+    classes = training.get("classes") or list(conditions)
+
+    lines = [
+        f"**Acoustically-grounded conditions** — {config.get('n_utterances')} "
+        f"utterances ({config.get('utterances_per_condition')} per condition, "
+        f"{config.get('duration_s')} s each) at "
+        f"{config.get('sample_rate'):,} Hz, seed {config.get('seed')}. "
+        f"Every parameter is a published acoustic correlate of the state, cited "
+        f"in `emotion.py`; the correlate column in the JSON carries the citation "
+        f"for each one.",
+        "",
+        "| condition | F0 base (Hz) | F0 range (st) | tremor (Hz @ st) | "
+        "jitter (st) | shimmer | breathiness | rate (syl/s) | duty | "
+        "onset (ms) | harmonic α |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for name in classes:
+        p = conditions[name]["parameters"]
+        lines.append(
+            f"| {name} | {p['f0_base']:.0f} | {p['f0_range_st']:.1f} | "
+            f"{p['tremor_hz']:.1f} @ {p['tremor_depth_st']:.1f} | "
+            f"{p['jitter_st']:.2f} | {p['shimmer']:.2f} | "
+            f"{p['breathiness']:.2f} | {p['syllables_per_sec']:.1f} | "
+            f"{p['duty']:.2f} | {p['attack_s'] * 1000:.0f} | "
+            f"{p['harmonic_alpha']:.1f} |"
+        )
+
+    lines += [
+        "",
+        "What the extractor measures on those signals (means over the "
+        "condition's utterances; the full 26-feature vector per condition is in "
+        "the JSON):",
+        "",
+        "| condition | F0 mean (Hz) | F0 std (Hz) | F0 range (Hz) | jitter (Hz) | "
+        "shimmer | HNR (dB) | tremor est. (Hz) | final/initial F0 | pauses/s | "
+        "onset sharpness | energy mean | energy std (voiced) | centroid (Hz) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    measured = (
+        "f0_mean", "f0_std", "f0_range", "jitter", "shimmer", "hnr_db",
+        "tremor_rate_hz", "f0_final_ratio", "pause_rate", "onset_sharpness",
+        "energy_mean", "energy_std_voiced", "centroid_mean",
+    )
+    measured_format = {
+        "f0_mean": "{:.1f}", "f0_std": "{:.1f}", "f0_range": "{:.1f}",
+        "jitter": "{:.2f}", "shimmer": "{:.3f}", "hnr_db": "{:.2f}",
+        "tremor_rate_hz": "{:.2f}", "f0_final_ratio": "{:.3f}",
+        "pause_rate": "{:.2f}", "onset_sharpness": "{:.3f}",
+        "energy_mean": "{:.3f}", "energy_std_voiced": "{:.3f}",
+        "centroid_mean": "{:.0f}",
+    }
+    for name in classes:
+        d = conditions[name]["descriptors"]
+        lines.append(
+            f"| {name} | " + " | ".join(
+                measured_format[key].format(d[key]) for key in measured
+            ) + " |"
+        )
+
+    held = checks.get("checks", {})
+    passing = [name for name, ok in held.items() if ok]
+    failing = [name for name, ok in held.items() if not ok]
+    lines += [
+        "",
+        f"**{len(passing)} of {len(held)} documented correlate checks hold.** "
+        f"Each is a test that the generated signal shows the acoustic profile "
+        f"its citation names — not that the profile means the emotion.",
+    ]
+    if failing:
+        lines += [
+            "",
+            "The checks that **fail**, which mean the condition does not "
+            "implement the correlate it advertises:",
+            "",
+        ] + [f"* {name}" for name in failing]
+    else:
+        lines += ["", "The checks: " + "; ".join(f"`{name}`" for name in passing)]
+
+    lines += [
+        "",
+        f"**Training** — {training.get('n_test')} held-out utterances, split by "
+        f"utterance (train/validation/test "
+        f"{config.get('split', {}).get('train')}/"
+        f"{config.get('split', {}).get('val')}/"
+        f"{config.get('split', {}).get('test')}), seed "
+        f"{config.get('seed')}. Classifier: {config.get('classifier')}.",
+        "",
+        f"Held-out accuracy **{training.get('test_accuracy', float('nan')):.3f}** "
+        f"against chance {training.get('chance', 0.0):.3f} "
+        f"({training.get('z_vs_chance', 0.0):+.1f}σ over "
+        f"{training.get('n_test')} utterances). Train "
+        f"{training.get('train_accuracy', float('nan')):.3f}, validation "
+        f"{training.get('val_accuracy', float('nan')):.3f}, snapshot at step "
+        f"{training.get('selected_epoch')}. Baselines on the same split: "
+        f"majority {training.get('majority_baseline', 0.0):.3f}, the previous "
+        f"increment's untrained nearest-centroid rule "
+        f"{training.get('nearest_centroid_baseline', 0.0):.3f}.",
+        "",
+        "| true \\ predicted | " + " | ".join(classes) + " | recall |",
+        "|---|" + "---:|" * (len(classes) + 1),
+    ]
+    for name, row in zip(classes, training.get("confusion", [])):
+        recall = training.get("per_class_recall", {}).get(name, 0.0)
+        lines.append(
+            f"| {name} | " + " | ".join(str(v) for v in row)
+            + f" | {recall:.2f} |"
+        )
+
+    shuffle = controls.get("label_shuffle", {})
+    noise = controls.get("random_features", {})
+    lines += [
+        "",
+        "| control | measured | what it rules out |",
+        "|---|---|---|",
+        f"| labels shuffled, {int(shuffle.get('rounds', 0))} rounds, same recipe | "
+        f"mean {shuffle.get('mean', 0.0):.3f} ± {shuffle.get('std', 0.0):.3f}, "
+        f"95th pct {shuffle.get('p95', 0.0):.3f}, max "
+        f"{shuffle.get('max', 0.0):.3f} | that the accuracy is the features' "
+        f"rather than the labels' (chance {training.get('chance', 0.0):.3f}) |",
+        f"| trained on Gaussian noise of the same shape | mean "
+        f"{noise.get('mean', 0.0):.3f}, 95th pct {noise.get('p95', 0.0):.3f}, "
+        f"max {noise.get('max', 0.0):.3f} | that 26 random columns carry the "
+        f"task (the positive control for real learning) |",
+        f"| chance | {training.get('chance', 0.0):.3f} | a floor, not a result |",
+        f"| majority class | {training.get('majority_baseline', 0.0):.3f} | a "
+        f"model that ignores its input |",
+    ]
+
+    lines += [
+        "",
+        "**Ablations.** `without` removes one feature family and retrains; "
+        "`only` keeps one family and discards the rest. The point of the second "
+        "block is that a high accuracy without F0 is not evidence of a deeper "
+        "representation: with six acoustic axes varied at once, several "
+        "families are independently sufficient, so no one family is necessary.",
+        "",
+        "| features | n | held-out accuracy |",
+        "|---|---:|---:|",
+    ]
+    order = (
+        [f"without_{name}" for name in
+         ("f0_family", "pitch_derived") if f"without_{name}" in ablations]
+        + [name for name in sorted(ablations) if name.startswith("only_")]
+    )
+    labels = {
+        "without_f0_family": "F0 level and contour removed",
+        "without_pitch_derived": "everything pitch-derived removed",
+    }
+    for key in order:
+        row = ablations[key]
+        label = labels.get(key, "only " + key[len("only_"):])
+        lines.append(
+            f"| {label} | {row['n_features']} | "
+            f"{row['test_accuracy']:.3f} |"
+        )
+
+    lines += [
+        "",
+        "Each feature alone, and each feature removed, on the five-class task:",
+        "",
+        "| feature | alone | without | drop |",
+        "|---|---:|---:|---:|",
+    ]
+    for name, row in sorted(
+        per_feature.items(), key=lambda kv: -kv[1]["only_accuracy"]
+    ):
+        lines.append(
+            f"| `{name}` | {row['only_accuracy']:.3f} | "
+            f"{row['without_accuracy']:.3f} | {row['drop']:+.3f} |"
+        )
+
+    lines += [
+        "",
+        f"**Crying against excited** — {cry.get('n_test')} held-out utterances, "
+        f"a dedicated binary model on the same split rule, chance "
+        f"{cry.get('chance', 0.5):.3f}. Accuracy "
+        f"**{cry.get('test_accuracy', float('nan')):.3f}**.",
+        "",
+        "| true \\ predicted | " + " | ".join(cry.get("classes", [])) + " |",
+        "|---|" + "---:|" * len(cry.get("classes", [])),
+    ]
+    for name, row in zip(cry.get("classes", []), cry.get("confusion", [])):
+        lines.append(f"| {name} | " + " | ".join(str(v) for v in row) + " |")
+    lines += [
+        "",
+        "| feature | alone | without | drop |",
+        "|---|---:|---:|---:|",
+    ]
+    for name in cry.get("ranked", []):
+        row = cry.get("per_feature", {}).get(name)
+        if row is None:
+            continue
+        lines.append(
+            f"| `{name}` | {row['single_accuracy']:.3f} | "
+            f"{row['without_accuracy']:.3f} | {row['drop']:+.3f} |"
+        )
+
+    perfect_alone = sum(
+        1 for row in cry.get("per_feature", {}).values()
+        if row["single_accuracy"] >= 1.0
+    )
+    greedy = cry.get("greedy_forward", {})
+    if greedy:
+        needed = greedy.get("n_features_needed", 0)
+        lines += [
+            "",
+            f"The first row is the best single feature and it is **not** an "
+            f"answer to \"which feature tells them apart\": every `drop` in the "
+            f"table is +0.000, so no feature is load-bearing, and "
+            f"**{perfect_alone} of the {cry.get('n_features')} features** "
+            f"separate the pair perfectly on their own. The smallest set that "
+            f"reaches the accuracy, chosen on validation and scored on test, is "
+            f"**{needed} feature{'s' if needed != 1 else ''}**: "
+            + ", ".join(f"`{f}`" for f in greedy.get("features", []))
+            + f" (validation "
+            f"{greedy.get('final_val_accuracy', 0.0):.3f}, test "
+            f"{greedy.get('final_test_accuracy', 0.0):.3f}, stopping because "
+            f"`{greedy.get('stopped_because')}`).",
+            "",
+            "| features kept | added | validation | test |",
+            "|---:|---|---:|---:|",
+        ]
+        for entry in greedy.get("history", []):
+            lines.append(
+                f"| {entry['round']} | `{entry['added']}` | "
+                f"{entry['val_accuracy']:.3f} | {entry['test_accuracy']:.3f} |"
+            )
+
+    lines += [
+        "",
+        "**Cross-condition generalisation** — train on four conditions, hold the "
+        "fifth out entirely. The held-out label is not in the trained label "
+        "space, so accuracy is 0 by construction and an \"accuracy\" row here "
+        "would be a restatement of that rather than a measurement. What is "
+        "measured is where the model puts a condition it has never seen.",
+        "",
+        "| held out | the model calls it | fraction | assigned-class NLL (nats) | "
+        "distance to nearest training centroid (spreads) | nearest-centroid says | "
+        "agrees |",
+        "|---|---|---:|---:|---:|---|---|",
+    ]
+    per_condition = cross.get("per_condition", {})
+    for name in classes:
+        entry = per_condition.get(name)
+        if entry is None:
+            continue
+        agrees = (
+            entry["dominant_assignment"] == entry["nearest_centroid_dominant"]
+        )
+        lines.append(
+            f"| {name} | {entry['dominant_assignment']} | "
+            f"{entry['dominant_fraction']:.2f} | "
+            f"{entry['assigned_class_nll']:.2f} | "
+            f"{entry['distance_to_nearest_training_centroid']:.2f} | "
+            f"{entry['nearest_centroid_dominant']} | "
+            f"{'yes' if agrees else 'no'} |"
+        )
+    assigned_nlls = [
+        entry["assigned_class_nll"] for entry in per_condition.values()
+    ]
+    mean_assigned_nll = (
+        sum(assigned_nlls) / len(assigned_nlls) if assigned_nlls else 0.0
+    )
+    lines += [
+        "",
+        f"Mean dominant fraction **{cross.get('mean_dominant_fraction', 0.0):.3f}** "
+        f"against {cross.get('chance_for_one_training_class', 0.0):.3f} for any "
+        f"one training class: the model does not abstain and it does not spread "
+        f"its answers. It is confident in them, too — the mean cross-entropy of "
+        f"the class it *did* assign is {mean_assigned_nll:.2f} nats on the "
+        f"unseen conditions against "
+        f"{cross.get('mean_training_test_nll', 0.0):.2f} nats on the held-out "
+        f"rows of the conditions it was trained on, so it is not that it does "
+        f"not know; it is that it has no way to say so. The untrained "
+        f"nearest-centroid rule names the same class on "
+        f"{cross.get('mlp_agrees_with_nearest_centroid', 0.0):.2f} of the five "
+        f"held-out conditions, so the collapse is a property of the feature "
+        f"space rather than of the trained model.",
     ]
     return "\n".join(lines)
 
@@ -1277,6 +1600,9 @@ def main() -> int:
     parser.add_argument("--scan-inner")
     parser.add_argument("--voice",
                         help="voice-affect.json, which renders the voice block")
+    parser.add_argument("--emotion",
+                        help="emotion-classifier.json, which renders the "
+                             "trained-classifier block")
     parser.add_argument("--agent",
                         help="agent-loop.json, which renders the agent block")
     parser.add_argument("--memory",
@@ -1288,9 +1614,11 @@ def main() -> int:
     parser.add_argument("--readme", default="README.md")
     args = parser.parse_args()
 
-    if not (args.mqar or args.voice or args.agent or args.memory):
+    if not (args.mqar or args.voice or args.emotion or args.agent
+            or args.memory):
         parser.error("give --mqar (to render the results block), --voice "
-                     "(to render the voice block), --agent (to render the agent "
+                     "(to render the voice block), --emotion (to render the "
+                     "trained-classifier block), --agent (to render the agent "
                      "block), --memory (to render the memory block), or a "
                      "combination")
 
@@ -1364,6 +1692,32 @@ def main() -> int:
 
         text = f"{head}{VOICE_BEGIN}\n{rendered}\n{VOICE_END}{tail}"
         print(f"wrote {args.readme} voice block "
+              f"({len(rendered.splitlines())} lines)")
+
+    if args.emotion:
+        emotion = _load(args.emotion, "the trained-classifier run")
+        if emotion is None:
+            return 1
+        if EMOTION_BEGIN not in text or EMOTION_END not in text:
+            print(f"{args.readme} has no {EMOTION_BEGIN} / {EMOTION_END} block",
+                  file=sys.stderr)
+            return 1
+        head, rest = text.split(EMOTION_BEGIN, 1)
+        _, tail = rest.split(EMOTION_END, 1)
+
+        try:
+            rendered = emotion_section(emotion)
+        except ValueError as exc:
+            print(f"refusing to write the emotion block: {exc}", file=sys.stderr)
+            return 1
+        for marker in ("| condition |", "| control |", "| held out |",
+                       "| true \\ predicted |"):
+            if marker not in rendered:
+                print(f"refusing to write: {marker!r} missing from the emotion "
+                      f"render", file=sys.stderr)
+                return 1
+        text = f"{head}{EMOTION_BEGIN}\n{rendered}\n{EMOTION_END}{tail}"
+        print(f"wrote {args.readme} emotion block "
               f"({len(rendered.splitlines())} lines)")
 
     if args.agent:
