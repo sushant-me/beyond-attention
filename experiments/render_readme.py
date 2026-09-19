@@ -375,8 +375,9 @@ def agent_section(payload: dict) -> str:
         f"by `evaluate_plan`, so correctness is a property of the task. Tools: "
         + ", ".join(f"`{t}`" for t in config.get("tools", [])) + ".",
         "",
-        f"The memory is a {len(config.get('registers', []))}-wide "
-        f"selective-scan state with one named register per dimension: "
+        f"The memory is a selective-scan state "
+        f"{len(config.get('registers', []))} registers wide, one named register "
+        f"per dimension: "
         + ", ".join(f"`{r}`" for r in config.get("registers", [])) + ".",
         "",
         "| task family | loop steps needed | "

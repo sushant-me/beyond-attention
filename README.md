@@ -756,7 +756,7 @@ that would be easy to make from the table below, and are all false:
 <!-- AGENT:BEGIN -->
 **Seeded task suite** — 250 tasks (50 per family), seed 0. Each task is a plan over bounded integers plus a bounded key/value table, and its answer is computed in Python integers by `evaluate_plan`, so correctness is a property of the task. Tools: `add`, `mul`, `sub`, `lookup`, `finish`.
 
-The memory is a 8-wide selective-scan state with one named register per dimension: `carry`, `observations`, `op`, `arg`, `arg2`, `miss`, `kind`, `instructions`.
+The memory is a selective-scan state 8 registers wide, one named register per dimension: `carry`, `observations`, `op`, `arg`, `arg2`, `miss`, `kind`, `instructions`.
 
 | task family | loop steps needed | budget 1 | budget 2 | budget 3 | budget 4 | budget 5 | budget 6 |
 |---|---:|---:|---:|---:|---:|---:|---:|
