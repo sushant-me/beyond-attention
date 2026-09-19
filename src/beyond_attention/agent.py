@@ -6,8 +6,9 @@ small one. It contains:
 
 * a **tool registry** with strict input schemas and pure, deterministic tools:
   ``add``/``mul``/``sub`` over bounded integers, ``lookup`` over a bounded
-  key/value table supplied with the task, and ``finish``, which ends the loop and
-  returns the answer;
+  key/value table supplied with the task, ``remember``/``fetch`` against an
+  explicit :class:`~beyond_attention.memory.MemoryStore`, and ``finish``, which
+  ends the loop and returns the answer;
 * a **loop** with an explicit step budget that observes, chooses, executes,
   appends the observation and repeats, recording every step so the run can be
   replayed;
@@ -47,9 +48,10 @@ What it is **not**, stated here rather than left to be discovered:
 
 * **It is not a general agent.** The task text is a closed instruction grammar
   (``ADD``/``MUL``/``SUB``/``KEY``/``IFPOS``/``RET``, plus ``PUT``/``NOISE``/
-  ``RECALL`` for the selective family) delivered as structured events, not
-  natural language. There is no tokenizer, no language understanding, and no
-  open-ended tool use: the tool set is five functions fixed at import time.
+  ``RECALL`` for the selective family and ``REMEMBER``/``FETCH`` for the external
+  store) delivered as structured events, not natural language. There is no
+  tokenizer, no language understanding, and no open-ended tool use: the tool set
+  is seven functions fixed at import time.
 * **It does not learn.** The policy is hand-written branching, the SSM
   parameters are constants, and a seed only decides which tasks get generated.
 * **The SSM is not what makes the arithmetic families work.**
@@ -67,8 +69,22 @@ What it is **not**, stated here rather than left to be discovered:
   says the gating (rather than the width) is doing the work. Neither says the
   architecture is what makes the loop work: the gate is hand-set, the controller
   is hand-written, and the family is closed and synthetic.
+* **The two memories are named apart on purpose.** ``RECALL`` belongs to the
+  selective family and reads a *slot of the state*; ``FETCH`` reads the
+  *external store*. Two instructions with one name and two meanings would be a
+  bug waiting to happen, so the external one is ``FETCH`` and its tool is
+  ``fetch``. The prose still calls the result "recall" -- that is what the task
+  asks for -- but no symbol is shared.
+* **The SSM is not what gives it long memory either.** The register file is
+  eight wide and holds the last observation, so a fact from a thousand steps
+  earlier is not in it and cannot be recovered from it.
+  ``experiments/long_memory.py`` measures the distance at which that state fails
+  and the explicit store does not, and it measures a state with **64x the bytes**
+  failing in exactly the same place, because the width is not what is doing the
+  work -- the key is. Nothing in that result is a property of the recurrence.
 * **The tools cannot touch anything.** No network, no filesystem, no clock. A
-  test parses this module's imports and asserts that ``numpy`` is the only one.
+  test parses this module's imports and asserts that ``numpy`` and its own
+  numpy-only siblings are the only ones.
 
 Only ``numpy`` is used, and every run is deterministic given its seed.
 """
@@ -79,6 +95,8 @@ from dataclasses import dataclass, field
 from typing import Callable, Sequence
 
 import numpy as np
+
+from .memory import DEFAULT_CAPACITY, MemoryStore
 
 # --------------------------------------------------------------------------
 # The register file. The state is AGENT_DIM wide and every dimension has a
@@ -149,6 +167,17 @@ def decay_vector(width: int) -> np.ndarray:
 DELTA_HOLD = 0.0
 DELTA_WRITE = 1.0
 
+
+def state_bytes(dim: int = AGENT_DIM) -> int:
+    """Bytes the register file occupies: one float64 per register.
+
+    Constant in the number of steps, which is the whole claim about the working
+    state -- and, at eight registers, 64 bytes, against a store whose slots are
+    counted in ``memory.py``. Published so the two can be put side by side
+    without either number being a guess.
+    """
+    return dim * 8
+
 # Observation kinds, written into R_KIND.
 OBS_NONE = 0
 OBS_VALUE = 1
@@ -170,6 +199,12 @@ OP_RETLIT = "RETLIT"  # finish with the literal operand (the one-step family)
 OP_PUT = "PUT"        # write arg2 into the memory slot addressed by arg
 OP_NOISE = "NOISE"    # a distractor: carries a value and is written nowhere
 OP_RECALL = "RECALL"  # finish with the value the slot addressed by arg holds
+# The external store's two instructions. ``RECALL`` above is the selective
+# family's read of a *state slot*; ``FETCH`` is this module's read of the
+# ``MemoryStore``, and the two are deliberately different names for different
+# memories rather than one name with two meanings.
+OP_REMEMBER = "REMEMBER"  # store the carried value in the store under key arg
+OP_FETCH = "FETCH"    # acc = the value the store holds under key arg
 
 OP_CODES = {
     OP_RET: 1,
@@ -182,6 +217,8 @@ OP_CODES = {
     OP_PUT: 8,
     OP_NOISE: 9,
     OP_RECALL: 10,
+    OP_REMEMBER: 11,
+    OP_FETCH: 12,
 }
 CODE_OPS = {code: op for op, code in OP_CODES.items()}
 NONE_CODE = 0  # nothing has been streamed into R_OP yet
@@ -211,7 +248,8 @@ def instruction(op: str, *args: int) -> Instruction:
         raise ValueError(f"unknown instruction {op!r}")
     arity = {OP_ADD: 1, OP_MUL: 1, OP_SUB: 1, OP_KEY: 0, OP_IFPOS: 1,
              OP_RET: 0, OP_RETLIT: 1,
-             OP_PUT: 2, OP_NOISE: 1, OP_RECALL: 1}[op]
+             OP_PUT: 2, OP_NOISE: 1, OP_RECALL: 1,
+             OP_REMEMBER: 1, OP_FETCH: 1}[op]
     if len(args) != arity:
         raise ValueError(f"{op} takes {arity} operand(s), got {len(args)}")
     return Instruction(op=op, args=tuple(int(a) for a in args))
@@ -251,10 +289,20 @@ TOOL_SCHEMAS: dict[str, ToolSchema] = {
         "lookup", (Param("value"),),
         "the key paired with value in the task's table, or a miss",
     ),
+    "remember": ToolSchema(
+        "remember", (Param("key"), Param("value")),
+        "store value under key in the episodic store",
+    ),
+    "fetch": ToolSchema(
+        "fetch", (Param("key"),),
+        "the value the episodic store holds under key, or a miss",
+    ),
     "finish": ToolSchema("finish", (Param("answer"),), "end the loop"),
 }
 
-TOOL_NAMES = tuple(TOOL_SCHEMAS)  # insertion order: add, mul, sub, lookup, finish
+# The keys and values the memory tools are exercised with live far below the
+# schema's bound, which bounds nonsense rather than describing the task.
+TOOL_NAMES = tuple(TOOL_SCHEMAS)
 
 ToolTable = Sequence[tuple[int, int]]
 
@@ -308,8 +356,20 @@ def validate_call(call: ToolCall) -> str | None:
     return None
 
 
-def execute(call: ToolCall, table: ToolTable = ()) -> ToolResult:
-    """Run one validated call. Pure: the same call and table give the same result."""
+def execute(call: ToolCall, table: ToolTable = (),
+            store: MemoryStore | None = None) -> ToolResult:
+    """Run one validated call. Pure: the same call and table give the same result.
+
+    ``store`` is the episodic store the ``remember`` and ``fetch`` tools act on.
+    It is a parameter rather than a module global so that a run owns its memory:
+    two runs cannot see each other's facts, and a control can be handed a store
+    configured to fail. A memory call with no store is a typed error
+    (``no_store``) rather than an exception, because the loop must record it and
+    keep going -- which is exactly the working-state-only control.
+
+    The selective family's memory is not here: it lives in the *state*, is
+    written by ``embed`` and read by ``slot_value``, and no tool touches it.
+    """
     error = validate_call(call)
     if error is not None:
         return ToolResult(ok=False, value=None, error=error)
@@ -333,6 +393,18 @@ def execute(call: ToolCall, table: ToolTable = ()) -> ToolResult:
                 error="no_key" if not found else "ambiguous_table",
             )
         value = found[0]
+    elif tool == "remember":
+        if store is None:
+            return ToolResult(ok=False, value=None, error="no_store")
+        value = call.args["value"]
+        store.write(call.args["key"], value)
+    elif tool == "fetch":
+        if store is None:
+            return ToolResult(ok=False, value=None, error="no_store")
+        stored = store.retrieve(call.args["key"])
+        if stored is None:
+            return ToolResult(ok=False, value=None, error="no_key")
+        value = stored
     else:  # finish -- there is no arithmetic, the answer is what was passed
         value = call.args["answer"]
 
@@ -671,6 +743,13 @@ def choose_action(registers: Registers) -> ToolCall:
         return ToolCall("finish", {"answer": slot_value(registers, arg)})
     if op in VALUE_INSTRUCTIONS:
         return NOOP_CALL
+    if op == OP_REMEMBER:
+        # The fact is whatever the last observation produced; the key is the
+        # instruction. Writing a fact is therefore a decision the *plan* makes,
+        # not one the policy makes -- see the module docstring.
+        return ToolCall("remember", {"key": arg, "value": carry})
+    if op == OP_FETCH:
+        return ToolCall("fetch", {"key": arg})
     raise AssertionError(f"unhandled op {op!r}")  # pragma: no cover
 
 
@@ -709,7 +788,15 @@ def never_finish_action(registers: Registers) -> ToolCall:
 
 @dataclass(frozen=True)
 class Task:
-    """A verifiable task: a plan, a lookup table, and an analytic answer."""
+    """A verifiable task: a plan, a lookup table, and an analytic answer.
+
+    The last five fields describe a *recall* task -- one that uses the external
+    store -- and default to 0/empty for the families that do not. They are on the
+    task rather than recomputed from the plan by whoever reads it, because the
+    distance between the fact and the query is the independent variable of the
+    long-memory measurement, and a results file should not have to parse a plan
+    to find it.
+    """
 
     task_id: str
     family: str
@@ -717,6 +804,11 @@ class Task:
     table: tuple[tuple[int, int], ...]
     answer: int
     text: str
+    distance: int = 0                 # loop steps between the fact and the query
+    n_facts: int = 0                  # distinct facts written before the query
+    query_key: int = 0                # the key the plan finally fetches
+    superseded: tuple[int, ...] = ()  # values a later write replaced
+    facts: tuple[tuple[int, int], ...] = ()  # (memory key, stored value), in order
 
 
 def evaluate_plan(plan: Sequence[Instruction],
@@ -732,9 +824,14 @@ def evaluate_plan(plan: Sequence[Instruction],
     what a correct reader of the event stream would report regardless of how the
     event stream is implemented -- the state-space memory is not consulted, and
     a bug in it cannot move the target.
+
+    The external store has its own dict for the same reason: a bounded
+    ``MemoryStore`` that cannot hold a fact fails a task whose answer was fixed
+    before any array existed.
     """
     acc = 0
     memory: dict[int, int] = {}
+    episodic: dict[int, int] = {}
     for instr in plan:
         if instr.op == OP_ADD:
             acc = acc + instr.args[0]
@@ -759,6 +856,13 @@ def evaluate_plan(plan: Sequence[Instruction],
             if key not in memory:
                 raise ValueError(f"nothing was stored under key {key}")
             return memory[key]
+        elif instr.op == OP_REMEMBER:
+            episodic[instr.args[0]] = acc
+        elif instr.op == OP_FETCH:
+            key = instr.args[0]
+            if key not in episodic:
+                raise ValueError(f"FETCH {key} before it was written")
+            acc = episodic[key]
         elif instr.op == OP_RETLIT:
             return instr.args[0]
         elif instr.op == OP_RET:
@@ -796,6 +900,10 @@ def task_text(plan: Sequence[Instruction]) -> str:
             parts.append(f"ignore {instr.args[0]}")
         elif instr.op == OP_RECALL:
             parts.append(f"report the value of key {instr.args[0]}")
+        elif instr.op == OP_REMEMBER:
+            parts.append(f"remember the result under key {instr.args[0]}")
+        elif instr.op == OP_FETCH:
+            parts.append(f"fetch the value under key {instr.args[0]}")
         elif instr.op == OP_RETLIT:
             parts.append(f"report {instr.args[0]}")
         elif instr.op == OP_RET:
@@ -1046,6 +1154,423 @@ def selective_example_task() -> Task:
 
 
 # --------------------------------------------------------------------------
+# Recall over a long horizon: the family the store exists for.
+#
+# The five families above are solvable with the working state alone, because
+# each one is decided from the instruction being streamed and the value the
+# previous decision produced -- adjacent steps, never a distant one. These
+# families are the opposite: a fact is produced and stored, a controllable
+# number of distractor steps overwrite the carried value, and the query arrives
+# afterwards. The answer is the *stored* fact, so the working state alone cannot
+# produce it, and `distance` is the independent variable of the measurement.
+#
+# The distractors are load-bearing, and so is the shape of the failure. A
+# working state with no store does not fail with an exception: the memory call
+# comes back as a typed error (or a miss), a failed observation is an observation
+# like any other, and a miss writes the carry to zero -- a documented and tested
+# property of the register file, since 0 is a legitimate value and the miss flag
+# is what distinguishes them. So the control terminates with a *valid wrong
+# number*, which is what makes it a memory control rather than a broken loop.
+# The distance is what the store is insensitive to: the fact sits `distance`
+# steps back, and the working state's contents say nothing about it at any
+# distance measured.
+# --------------------------------------------------------------------------
+
+RECALL_FAMILIES = ("recall", "recall_capacity", "recall_stale")
+
+# Operands for a fact chain and for its distractors. The same range the five
+# generated families use, so a fact's magnitude is comparable with theirs.
+FACT_OPERAND_LOW = 2
+FACT_OPERAND_HIGH = 9
+
+# Memory keys are drawn from a small positive range so a slot index is readable
+# in a trace. The capacity sweep uses consecutive integers instead, on purpose.
+KEY_LOW = 1
+KEY_HIGH = 64
+
+def _running_value(plan: Sequence[Instruction], table: ToolTable = ()) -> int:
+    """What the carry holds after ``plan``, read out of the ground truth itself.
+
+    The table is needed because a plan that contains ``KEY`` cannot be evaluated
+    without it: the ground truth is the only thing allowed to decide what a
+    lookup returns, here as everywhere else.
+    """
+    return evaluate_plan(tuple(plan) + (instruction(OP_RET),), table)
+
+
+def _try_fact_step(rng: np.random.Generator, prefix: Sequence[Instruction],
+                   table: ToolTable, used_values: set[int],
+                   used_keys: set[int],
+                   ) -> tuple[tuple[Instruction, ...], int, int] | None:
+    """Four instructions producing one fact: ``ADD a, MUL b, SUB c, KEY``.
+
+    The fact is **the key the table pairs with the derived value**, not the
+    derived value itself, and that choice is load-bearing twice over.
+
+    It keeps the fact out of reach of the working state: the key exists only in
+    the observations and in the table, so a state that holds the last observation
+    holds nothing that yields it. And it keeps the carry small for *any* number
+    of facts, because every fact ends as a key rather than as the product of the
+    previous one -- so a thirty-fact task is a plan whose every intermediate
+    value is inside the tools' argument bound rather than one that has quietly
+    left it.
+
+    Every intermediate value is passed as an *argument* to the next tool, so all
+    of them -- not only the last -- have to sit inside the schema's argument
+    bound. Checking that here is what keeps a generated plan executable.
+
+    Returns ``None`` rather than raising when no draw fits, because its callers
+    differ: the single-fact families treat that as a bug, and the stale family
+    treats it as a reason to redraw the walk it landed on.
+    """
+    start = abs(_running_value(prefix, table))
+    for _ in range(1000):
+        a, b, c = (int(v) for v in rng.integers(
+            FACT_OPERAND_LOW, FACT_OPERAND_HIGH + 1, size=3))
+        if start + a > ARG_BOUND or (start + a) * b > ARG_BOUND \
+                or (start + a) * b + c > ARG_BOUND:
+            continue
+        chain = (instruction(OP_ADD, a), instruction(OP_MUL, b),
+                 instruction(OP_SUB, c), instruction(OP_KEY))
+        derived = _running_value(tuple(prefix) + chain[:3], table)
+        if derived == 0 or derived in used_values:
+            continue
+        key = int(rng.integers(KEY_LOW, KEY_HIGH + 1))
+        if key in used_keys:
+            continue
+        return chain, key, derived
+    return None
+
+
+def _fact_step(rng: np.random.Generator, prefix: Sequence[Instruction],
+               table: ToolTable, used_values: set[int],
+               used_keys: set[int]) -> tuple[tuple[Instruction, ...], int, int]:
+    """``_try_fact_step`` where a failure is a generator bug, not a redraw."""
+    got = _try_fact_step(rng, prefix, table, used_values, used_keys)
+    if got is None:  # pragma: no cover - defensive
+        raise RuntimeError("no fact inside the bounds was found")
+    return got
+
+
+def _distractor_chain(rng: np.random.Generator,
+                      prefix: Sequence[Instruction],
+                      table: ToolTable,
+                      length: int,
+                      avoid: set[int]) -> tuple[Instruction, ...]:
+    """``length`` instructions that move the carry somewhere it should not rest.
+
+    Each is an ordinary ``ADD``/``SUB``/``MUL`` whose observation overwrites the
+    carried value, and each is chosen so that every value the chain can reach
+    stays inside ``ARG_BOUND`` -- the carry is passed as an *argument* to the next
+    tool, so a chain that walked out of range would produce a plan the loop
+    physically cannot execute, and the measurement would be of the tool schema
+    rather than of memory.
+
+    Staying inside the bound is a look-ahead, not a rejection: a step is only
+    taken if what it leaves still has room for the worst case of the steps that
+    follow (``9 * remaining``). The first version checked the bound and redrew the
+    chain when it was exceeded, which for a thousand-step chain never terminated
+    -- a multiplicative step always exceeds it eventually, so every draw failed.
+    """
+    ops = (OP_ADD, OP_SUB, OP_MUL)
+    start = abs(_running_value(prefix, table))
+    for _ in range(1000):
+        chain: list[Instruction] = []
+        bound = start  # an upper bound on |carry| after every step so far
+        for _ in range(length):
+            remaining = length - len(chain) - 1
+            room = ARG_BOUND - FACT_OPERAND_HIGH * remaining
+            op = ops[int(rng.integers(len(ops)))]
+            arg = int(rng.integers(FACT_OPERAND_LOW, FACT_OPERAND_HIGH + 1))
+            grown = bound * arg if op == OP_MUL else bound + arg
+            if grown > room:
+                # Fall back to the cheapest additive step. If even that does not
+                # fit, the chain cannot be completed at this starting value.
+                op, arg = OP_ADD, FACT_OPERAND_LOW
+                grown = bound + FACT_OPERAND_LOW
+                if grown > room:
+                    break
+            bound = grown
+            chain.append(instruction(op, arg))
+        if len(chain) != length:
+            continue
+        final = _running_value(tuple(prefix) + tuple(chain), table)
+        if final not in avoid:
+            return tuple(chain)
+    raise RuntimeError("no distractor chain inside the bounds was found")  # pragma: no cover
+
+
+def _decoys(rng: np.random.Generator, used_values: set[int],
+            used_keys: set[int], count: int = 3) -> list[tuple[int, int]]:
+    """Table entries that are not facts, so a lookup has something to miss.
+
+    A table holding only the fact's own value would make ``KEY`` a formality:
+    there would be no other entry to return, and a retrieval that ignored the
+    table would look identical.
+    """
+    decoys: list[tuple[int, int]] = []
+    attempts = 0
+    while len(decoys) < count and attempts < 1000:
+        attempts += 1
+        key = int(rng.integers(KEY_LOW, KEY_HIGH + 1))
+        value = int(rng.integers(1, 100))
+        if key in used_keys or value in used_values:
+            continue
+        used_keys.add(key)
+        used_values.add(value)
+        decoys.append((key, value))
+    return decoys
+
+
+def recall_task(rng: np.random.Generator, task_id: str, distance: int,
+                key: int | None = None) -> Task:
+    """One fact, ``distance`` distractors, one query.
+
+    The shortest version of the long-memory question, and the one the solve-rate
+    curve is drawn against: everything but the distance is fixed.
+    """
+    if distance < 1:
+        raise ValueError("a recall task needs at least one distractor step")
+    entries: list[tuple[int, int]] = []
+    chain, fact, derived = _fact_step(rng, (), entries, set(), set())
+    entries.append((fact, derived))
+    if key is None:
+        key = int(rng.integers(KEY_LOW, KEY_HIGH + 1))
+    prefix = chain + (instruction(OP_REMEMBER, key),)
+    distractors = _distractor_chain(rng, prefix, entries, distance,
+                                    avoid={fact})
+    plan = prefix + distractors + (instruction(OP_FETCH, key),
+                                   instruction(OP_RET))
+    table = tuple(sorted(entries + _decoys(rng, {derived}, {fact})))
+    return Task(
+        task_id=task_id, family="recall", plan=plan, table=table,
+        answer=evaluate_plan(plan, table), text=task_text(plan),
+        distance=distance, n_facts=1, query_key=key, facts=((key, fact),),
+    )
+
+
+def recall_suite(distances: Sequence[int], tasks_per_distance: int = 8,
+                 seed: int = 0) -> tuple[Task, ...]:
+    """One task per (distance, draw). The per-task seed does not depend on order."""
+    if tasks_per_distance < 1:
+        raise ValueError("tasks_per_distance must be >= 1")
+    tasks: list[Task] = []
+    for distance in distances:
+        for made in range(tasks_per_distance):
+            rng = np.random.default_rng(
+                (seed * 1_000_003) + distance * 9_973 + made * 97)
+            tasks.append(recall_task(rng, f"recall-d{distance}-{made}",
+                                     distance))
+    return tuple(tasks)
+
+
+def capacity_task(rng: np.random.Generator, task_id: str, n_facts: int,
+                  distance: int, query_index: int) -> Task:
+    """``n_facts`` facts, then a query for one of them.
+
+    Memory keys are ``1..n_facts`` and the store is direct-mapped at
+    ``key % capacity``, so with more facts than slots key ``i`` and key
+    ``i + capacity`` share a slot and the later write evicts the earlier one. The
+    collision is **designed** rather than drawn from a random key space: this
+    measures what a bounded store does at a known load, not the birthday-paradox
+    rate a wider key space would give, and the README says which of the two it is.
+
+    ``facts`` holds the writes in order, so a reader -- and the precision
+    accounting -- can tell the queried fact's value from another fact's value
+    without re-deriving either.
+    """
+    if n_facts < 1:
+        raise ValueError("a capacity task needs at least one fact")
+    if distance < 1:
+        raise ValueError("a capacity task needs at least one distractor step")
+
+    prefix: tuple[Instruction, ...] = ()
+    used_values: set[int] = set()
+    used_keys: set[int] = set()
+    facts: list[tuple[int, int]] = []
+    entries: list[tuple[int, int]] = []
+    for index in range(n_facts):
+        chain, fact, derived = _fact_step(rng, prefix, entries, used_values,
+                                          used_keys)
+        entries.append((fact, derived))
+        memory_key = index + 1
+        prefix = prefix + chain + (instruction(OP_REMEMBER, memory_key),)
+        used_values.add(derived)
+        used_keys.add(fact)
+        facts.append((memory_key, fact))
+
+    query_key, answer = facts[query_index]
+    stored = {value for _, value in facts}
+    distractors = _distractor_chain(rng, prefix, entries, distance,
+                                    avoid=stored)
+    plan = prefix + distractors + (instruction(OP_FETCH, query_key),
+                                   instruction(OP_RET))
+    table = tuple(sorted(entries
+                         + _decoys(rng, set(used_values), set(used_keys))))
+    return Task(
+        task_id=task_id, family="recall_capacity", plan=plan, table=table,
+        answer=evaluate_plan(plan, table), text=task_text(plan),
+        distance=distance, n_facts=n_facts, query_key=query_key,
+        facts=tuple(facts),
+    )
+
+
+def capacity_suite(n_facts: Sequence[int], distance: int = 4,
+                   tasks_per_size: int = 4, seed: int = 0,
+                   query_indices: Sequence[int] = (0, -1)) -> tuple[Task, ...]:
+    """Facts against slots, querying the oldest and the newest fact written.
+
+    The oldest is the one a bounded store evicts first and the newest is the one
+    it cannot have lost, so the two together separate "this store forgot" from
+    "this store was never asked anything hard".
+    """
+    tasks: list[Task] = []
+    for size in n_facts:
+        for query_index in query_indices:
+            for made in range(tasks_per_size):
+                rng = np.random.default_rng(
+                    (seed * 1_000_003) + size * 9_973 + (query_index + 64) * 379
+                    + made * 97)
+                tasks.append(capacity_task(
+                    rng, f"capacity-f{size}-q{query_index}-{made}", size,
+                    distance, query_index))
+    return tuple(tasks)
+
+
+def stale_task(rng: np.random.Generator, task_id: str, distance: int,
+               key: int | None = None) -> Task:
+    """A fact written, overwritten, and queried.
+
+    The write under ``key`` happens twice with distractors in between, so the
+    second value is the answer and the first is *stale*. A store that returns the
+    first is not merely wrong about this task: it hands the loop a value that was
+    true earlier and is not true now, which is the failure mode the control
+    exists to catch.
+    """
+    if distance < 1:
+        raise ValueError("a stale task needs at least one distractor step")
+    if key is None:
+        key = int(rng.integers(KEY_LOW, KEY_HIGH + 1))
+
+    used_values: set[int] = set()
+    used_keys: set[int] = set()
+    entries: list[tuple[int, int]] = []
+    first_chain, first, first_derived = _fact_step(rng, (), entries,
+                                                   used_values, used_keys)
+    entries.append((first, first_derived))
+    used_values.add(first_derived)
+    used_keys.add(first)
+    prefix = first_chain + (instruction(OP_REMEMBER, key),)
+
+    # The second fact's arithmetic starts from wherever the walk above ended, so
+    # a walk that landed on a large value leaves no room to multiply inside the
+    # tools' argument bound. That is a property of *that draw*, not of the task,
+    # so the walk is redrawn rather than the bound loosened: the number of steps
+    # between the two writes is the distance under test and does not change.
+    for _ in range(200):
+        middle = _distractor_chain(rng, prefix, entries, distance,
+                                   avoid={first})
+        candidate = prefix + middle
+        got = _try_fact_step(rng, candidate, entries, used_values, used_keys)
+        if got is None:
+            continue
+        second_chain, second, second_derived = got
+        entries.append((second, second_derived))
+        used_values.add(second_derived)
+        used_keys.add(second)
+        plan_prefix = candidate + second_chain + (instruction(OP_REMEMBER, key),)
+        tail = _distractor_chain(rng, plan_prefix, entries, distance,
+                                 avoid={first, second})
+        plan = plan_prefix + tail + (instruction(OP_FETCH, key),
+                                     instruction(OP_RET))
+        table = tuple(sorted(entries + _decoys(rng, used_values, used_keys)))
+        return Task(
+            task_id=task_id, family="recall_stale", plan=plan, table=table,
+            answer=evaluate_plan(plan, table), text=task_text(plan),
+            distance=distance, n_facts=1, query_key=key, superseded=(first,),
+            facts=((key, first), (key, second)),
+        )
+    raise RuntimeError("no stale task inside the bounds was found")  # pragma: no cover
+
+
+def stale_suite(distances: Sequence[int], tasks_per_distance: int = 4,
+                seed: int = 0) -> tuple[Task, ...]:
+    tasks: list[Task] = []
+    for distance in distances:
+        for made in range(tasks_per_distance):
+            rng = np.random.default_rng(
+                (seed * 1_000_003) + distance * 9_973 + made * 97)
+            tasks.append(stale_task(rng, f"stale-d{distance}-{made}", distance))
+    return tuple(tasks)
+
+
+def example_recall_task() -> Task:
+    """The recall trace in the README, with a hand-checkable answer.
+
+    ``0 + 3 = 3``, ``3 * 4 = 12``, ``12 - 5 = 7``; the table pairs **7 with key
+    9**, so the fact is 9, and it is remembered under memory key 4. Then
+    ``9 + 5 - 2 = 12`` overwrites the carry, and the query returns 9.
+
+    Without a store the same plan ends differently: the ``remember`` call comes
+    back as a typed ``no_store`` error and the ``recall`` as a miss, and a
+    failed observation writes the carry to zero. The loop therefore terminates
+    with **0** -- a valid wrong answer rather than an exception, which is what
+    makes the contrast a measurement of memory instead of a broken loop.
+    """
+    plan = (
+        instruction(OP_ADD, 3),
+        instruction(OP_MUL, 4),
+        instruction(OP_SUB, 5),
+        instruction(OP_KEY),
+        instruction(OP_REMEMBER, 4),
+        instruction(OP_ADD, 5),
+        instruction(OP_SUB, 2),
+        instruction(OP_FETCH, 4),
+        instruction(OP_RET),
+    )
+    table = ((2, 11), (5, 99), (9, 7))
+    return Task(
+        task_id="example-recall", family="recall", plan=plan, table=table,
+        answer=evaluate_plan(plan, table), text=task_text(plan),
+        distance=2, n_facts=1, query_key=4, facts=((4, 9),),
+    )
+
+
+def example_stale_task() -> Task:
+    """The stale-fact trace, with both values known by hand.
+
+    Memory key 4 holds **9** after the first write. Then ``9 + 5 + 2 = 16``,
+    ``16 * 3 = 48``, ``48 - 6 = 42``, and the table pairs 42 with key 7, so the
+    second write puts **7** under key 4. After one more distractor the query
+    returns 7 -- the value that is true now, not the 9 that was true four steps
+    earlier and is the answer a first-write-wins store gives.
+    """
+    plan = (
+        instruction(OP_ADD, 3),
+        instruction(OP_MUL, 4),
+        instruction(OP_SUB, 5),
+        instruction(OP_KEY),
+        instruction(OP_REMEMBER, 4),
+        instruction(OP_ADD, 5),
+        instruction(OP_ADD, 2),
+        instruction(OP_MUL, 3),
+        instruction(OP_SUB, 6),
+        instruction(OP_KEY),
+        instruction(OP_REMEMBER, 4),
+        instruction(OP_SUB, 2),
+        instruction(OP_FETCH, 4),
+        instruction(OP_RET),
+    )
+    table = ((2, 11), (7, 42), (9, 7))
+    return Task(
+        task_id="example-stale", family="recall_stale", plan=plan, table=table,
+        answer=evaluate_plan(plan, table), text=task_text(plan),
+        distance=1, n_facts=1, query_key=4, superseded=(9,),
+        facts=((4, 9), (4, 7)),
+    )
+
+
+# --------------------------------------------------------------------------
 # The loop.
 # --------------------------------------------------------------------------
 
@@ -1062,7 +1587,15 @@ class Step:
 
 @dataclass(frozen=True)
 class AgentRun:
-    """A finished (or exhausted) run, with everything needed to replay it."""
+    """A finished (or exhausted) run, with everything needed to replay it.
+
+    ``store`` is the episodic store the run wrote to, or ``None`` if it had none.
+    A live reference rather than a description, because the store's byte count
+    and its hit/miss accounting are part of what a run is: a results file that
+    recorded only the actions could not say what the memory cost. ``state_dim``
+    is the *total* width of the state the run carried, so the byte ledger can be
+    read off a finished run rather than assumed.
+    """
 
     task_id: str
     family: str
@@ -1072,6 +1605,8 @@ class AgentRun:
     answer: int | None
     solved: bool
     stop_reason: str  # "finish" | "budget" | "plan_exhausted"
+    store: MemoryStore | None = None
+    state_dim: int = AGENT_DIM
 
     @property
     def actions(self) -> tuple[tuple[str, tuple[tuple[str, int], ...]], ...]:
@@ -1104,6 +1639,7 @@ def run_agent(
     policy: str | Policy = "plan",
     seed: int = 0,
     state_width: int | None = None,
+    store: MemoryStore | None = None,
 ) -> AgentRun:
     """Run the loop until ``finish`` or the budget runs out.
 
@@ -1132,6 +1668,13 @@ def run_agent(
     ``required_state_width`` -- so a selective task gets a state wide enough to
     hold its keys and an arithmetic task gets the eight named registers -- and
     an explicit width is how the experiment measures aliasing.
+
+    ``store`` is the episodic memory the ``remember``/``fetch`` tools act on.
+    ``None`` is the working-state-only control: the instructions still stream and
+    the policy still reaches for the right tool, and the call comes back as a
+    typed ``no_store`` error. It is independent of ``state_width``: the store is
+    outside the state, which is why a task that uses it runs with the same eight
+    named registers the arithmetic families use.
 
     ``policy`` is ``"plan"``, ``"random"``, ``"never"``, or any callable taking
     the decoded state and returning a (possibly malformed) call.
@@ -1168,8 +1711,9 @@ def run_agent(
     steps: list[Step] = []
     for index in range(budget):
         if index >= len(task.plan):
-            return AgentRun(task.task_id, task.family, memory, budget, tuple(steps),
-                            None, False, "plan_exhausted")
+            return AgentRun(task.task_id, task.family, memory, budget,
+                            tuple(steps), None, False, "plan_exhausted", store,
+                            AGENT_DIM + width)
 
         instr = task.plan[index]
         keyed = instr.op in VALUE_INSTRUCTIONS
@@ -1199,13 +1743,14 @@ def run_agent(
             regs = read_registers(state)
 
         call = act(regs)
-        result = execute(call, task.table)
+        result = execute(call, task.table, store)
         steps.append(Step(index, instr, call, result, regs))
 
         if call.tool == "finish":
             solved = result.ok and result.value == task.answer
             return AgentRun(task.task_id, task.family, memory, budget,
-                            tuple(steps), result.value, solved, "finish")
+                            tuple(steps), result.value, solved, "finish", store,
+                            AGENT_DIM + width)
 
         if memory in ("ssm", "fixed"):
             x, delta = embed(observation_event(result), state_width=width,
@@ -1217,15 +1762,24 @@ def run_agent(
         # streamed, which is exactly what "wiped between steps" means here.
 
     return AgentRun(task.task_id, task.family, memory, budget, tuple(steps),
-                    None, False, "budget")
+                    None, False, "budget", store, AGENT_DIM + width)
 
 
-def replay(run: AgentRun, table: ToolTable) -> tuple[ToolResult, ...]:
+def replay(run: AgentRun, table: ToolTable,
+           store: MemoryStore | None = None) -> tuple[ToolResult, ...]:
     """Re-execute a run's recorded actions and return the results.
 
     The trace is the artifact the experiment publishes, so it has to be enough
     to reproduce the run: this takes nothing but the trace and the task's table.
     A test asserts the results match the recorded ones, and that a fresh run
     produces the identical action sequence.
+
+    A run that used a store is replayed against a **fresh** store built from that
+    store's ``spec()``, not against the live one: the recorded actions include
+    the writes, in order, so replaying them from empty rebuilds the same state.
+    Replaying against the store the run already filled would find every fact
+    already there and prove nothing.
     """
-    return tuple(execute(step.action, table) for step in run.steps)
+    if store is None and run.store is not None:
+        store = MemoryStore.from_spec(run.store.spec())
+    return tuple(execute(step.action, table, store) for step in run.steps)

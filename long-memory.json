@@ -1,0 +1,3699 @@
+{
+  "config": {
+    "seed": 0,
+    "distances": [
+      1,
+      4,
+      16,
+      64,
+      256,
+      1024
+    ],
+    "tasks_per_distance": {
+      "1": 16,
+      "4": 16,
+      "16": 16,
+      "64": 8,
+      "256": 4,
+      "1024": 2
+    },
+    "capacity": 8,
+    "facts_per_size": [
+      1,
+      2,
+      4,
+      8,
+      9,
+      16,
+      32
+    ],
+    "tasks_per_size": 8,
+    "capacity_distance": 4,
+    "stale_distances": [
+      1,
+      4,
+      16,
+      64
+    ],
+    "tasks_per_stale": 4,
+    "agent_dim": 8,
+    "wide_dim": 512,
+    "arg_bound": 10000,
+    "slot_bytes": 17,
+    "conditions": [
+      "store",
+      "single_slot_store",
+      "unbounded_store",
+      "working_state",
+      "wide_state",
+      "retrieval_disabled",
+      "random_retrieval"
+    ],
+    "capacity_conditions": [
+      "store",
+      "single_slot_store",
+      "unbounded_store",
+      "working_state",
+      "wide_state",
+      "retrieval_disabled",
+      "random_retrieval",
+      "untagged_store"
+    ],
+    "stale_conditions": [
+      "store",
+      "single_slot_store",
+      "unbounded_store",
+      "working_state",
+      "wide_state",
+      "retrieval_disabled",
+      "random_retrieval",
+      "stale_store"
+    ],
+    "budget_rule": "len(plan)"
+  },
+  "distance": {
+    "1": {
+      "tasks": 16,
+      "plan_steps": 8,
+      "conditions": {
+        "store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 128
+        },
+        "single_slot_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 128
+        },
+        "unbounded_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 128
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 128
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 128
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 128
+        },
+        "random_retrieval": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 128
+        }
+      }
+    },
+    "4": {
+      "tasks": 16,
+      "plan_steps": 11,
+      "conditions": {
+        "store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "single_slot_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "unbounded_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 176
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "random_retrieval": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 176
+        }
+      }
+    },
+    "16": {
+      "tasks": 16,
+      "plan_steps": 23,
+      "conditions": {
+        "store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 368
+        },
+        "single_slot_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 368
+        },
+        "unbounded_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 368
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 368
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 368
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 368
+        },
+        "random_retrieval": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 368
+        }
+      }
+    },
+    "64": {
+      "tasks": 8,
+      "plan_steps": 71,
+      "conditions": {
+        "store": {
+          "solved": 8,
+          "total": 8,
+          "rate": 1.0,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 8,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 568
+        },
+        "single_slot_store": {
+          "solved": 8,
+          "total": 8,
+          "rate": 1.0,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 8,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 568
+        },
+        "unbounded_store": {
+          "solved": 8,
+          "total": 8,
+          "rate": 1.0,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 8,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 568
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 8,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 8,
+          "precision": 0.0,
+          "wrong_confident": 8,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 568
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 8,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 8,
+          "precision": 0.0,
+          "wrong_confident": 8,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 568
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 8,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 8,
+          "precision": 0.0,
+          "wrong_confident": 8,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 568
+        },
+        "random_retrieval": {
+          "solved": 8,
+          "total": 8,
+          "rate": 1.0,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 8,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 568
+        }
+      }
+    },
+    "256": {
+      "tasks": 4,
+      "plan_steps": 263,
+      "conditions": {
+        "store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 1052
+        },
+        "single_slot_store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 1052
+        },
+        "unbounded_store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 1052
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 1052
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 1052
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 1052
+        },
+        "random_retrieval": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 1052
+        }
+      }
+    },
+    "1024": {
+      "tasks": 2,
+      "plan_steps": 1031,
+      "conditions": {
+        "store": {
+          "solved": 2,
+          "total": 2,
+          "rate": 1.0,
+          "correct": 2,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 2,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 2062
+        },
+        "single_slot_store": {
+          "solved": 2,
+          "total": 2,
+          "rate": 1.0,
+          "correct": 2,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 2,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 2062
+        },
+        "unbounded_store": {
+          "solved": 2,
+          "total": 2,
+          "rate": 1.0,
+          "correct": 2,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 2,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 2062
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 2,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 2,
+          "no_answer": 0,
+          "answered": 2,
+          "precision": 0.0,
+          "wrong_confident": 2,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 2062
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 2,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 2,
+          "no_answer": 0,
+          "answered": 2,
+          "precision": 0.0,
+          "wrong_confident": 2,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 2062
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 2,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 2,
+          "no_answer": 0,
+          "answered": 2,
+          "precision": 0.0,
+          "wrong_confident": 2,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 2062
+        },
+        "random_retrieval": {
+          "solved": 2,
+          "total": 2,
+          "rate": 1.0,
+          "correct": 2,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 2,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 2062
+        }
+      }
+    }
+  },
+  "capacity": {
+    "1": {
+      "tasks": 16,
+      "plan_steps": 11,
+      "conditions": {
+        "store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "single_slot_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "unbounded_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 176
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "random_retrieval": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "untagged_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 72,
+          "state_bytes": 64,
+          "steps": 176
+        }
+      }
+    },
+    "2": {
+      "tasks": 16,
+      "plan_steps": 16,
+      "conditions": {
+        "store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 256
+        },
+        "single_slot_store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 256
+        },
+        "unbounded_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 34,
+          "state_bytes": 64,
+          "steps": 256
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 256
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 256
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 256
+        },
+        "random_retrieval": {
+          "solved": 9,
+          "total": 16,
+          "rate": 0.5625,
+          "correct": 9,
+          "wrong_fact": 7,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5625,
+          "wrong_confident": 7,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 256
+        },
+        "untagged_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 72,
+          "state_bytes": 64,
+          "steps": 256
+        }
+      }
+    },
+    "4": {
+      "tasks": 16,
+      "plan_steps": 26,
+      "conditions": {
+        "store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 416
+        },
+        "single_slot_store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 416
+        },
+        "unbounded_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 68,
+          "state_bytes": 64,
+          "steps": 416
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 416
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 416
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 416
+        },
+        "random_retrieval": {
+          "solved": 2,
+          "total": 16,
+          "rate": 0.125,
+          "correct": 2,
+          "wrong_fact": 14,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.125,
+          "wrong_confident": 14,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 416
+        },
+        "untagged_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 72,
+          "state_bytes": 64,
+          "steps": 416
+        }
+      }
+    },
+    "8": {
+      "tasks": 16,
+      "plan_steps": 46,
+      "conditions": {
+        "store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 736
+        },
+        "single_slot_store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 736
+        },
+        "unbounded_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 736
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 736
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 736
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 736
+        },
+        "random_retrieval": {
+          "solved": 1,
+          "total": 16,
+          "rate": 0.0625,
+          "correct": 1,
+          "wrong_fact": 15,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0625,
+          "wrong_confident": 15,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 736
+        },
+        "untagged_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 72,
+          "state_bytes": 64,
+          "steps": 736
+        }
+      }
+    },
+    "9": {
+      "tasks": 16,
+      "plan_steps": 51,
+      "conditions": {
+        "store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 816
+        },
+        "single_slot_store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 816
+        },
+        "unbounded_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 272,
+          "state_bytes": 64,
+          "steps": 816
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 816
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 816
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 816
+        },
+        "random_retrieval": {
+          "solved": 1,
+          "total": 16,
+          "rate": 0.0625,
+          "correct": 1,
+          "wrong_fact": 15,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0625,
+          "wrong_confident": 15,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 816
+        },
+        "untagged_store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 8,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 72,
+          "state_bytes": 64,
+          "steps": 816
+        }
+      }
+    },
+    "16": {
+      "tasks": 16,
+      "plan_steps": 86,
+      "conditions": {
+        "store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 1376
+        },
+        "single_slot_store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 1376
+        },
+        "unbounded_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 272,
+          "state_bytes": 64,
+          "steps": 1376
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 1376
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 1376
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 1376
+        },
+        "random_retrieval": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 16,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 1376
+        },
+        "untagged_store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 8,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 72,
+          "state_bytes": 64,
+          "steps": 1376
+        }
+      }
+    },
+    "32": {
+      "tasks": 16,
+      "plan_steps": 166,
+      "conditions": {
+        "store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 2656
+        },
+        "single_slot_store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 8,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 2656
+        },
+        "unbounded_store": {
+          "solved": 16,
+          "total": 16,
+          "rate": 1.0,
+          "correct": 16,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 544,
+          "state_bytes": 64,
+          "steps": 2656
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 2656
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 2656
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 16,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 2656
+        },
+        "random_retrieval": {
+          "solved": 0,
+          "total": 16,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 16,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.0,
+          "wrong_confident": 16,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 2656
+        },
+        "untagged_store": {
+          "solved": 8,
+          "total": 16,
+          "rate": 0.5,
+          "correct": 8,
+          "wrong_fact": 8,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 16,
+          "precision": 0.5,
+          "wrong_confident": 8,
+          "store_bytes": 72,
+          "state_bytes": 64,
+          "steps": 2656
+        }
+      }
+    }
+  },
+  "stale": {
+    "1": {
+      "tasks": 4,
+      "plan_steps": 14,
+      "conditions": {
+        "store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 56
+        },
+        "single_slot_store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 56
+        },
+        "unbounded_store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 34,
+          "state_bytes": 64,
+          "steps": 56
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 56
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 56
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 56
+        },
+        "random_retrieval": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 56
+        },
+        "stale_store": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 4,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 56
+        }
+      }
+    },
+    "4": {
+      "tasks": 4,
+      "plan_steps": 20,
+      "conditions": {
+        "store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 80
+        },
+        "single_slot_store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 80
+        },
+        "unbounded_store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 34,
+          "state_bytes": 64,
+          "steps": 80
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 80
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 80
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 80
+        },
+        "random_retrieval": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 80
+        },
+        "stale_store": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 4,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 80
+        }
+      }
+    },
+    "16": {
+      "tasks": 4,
+      "plan_steps": 44,
+      "conditions": {
+        "store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "single_slot_store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "unbounded_store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 34,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 176
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "random_retrieval": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 176
+        },
+        "stale_store": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 4,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 176
+        }
+      }
+    },
+    "64": {
+      "tasks": 4,
+      "plan_steps": 140,
+      "conditions": {
+        "store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 560
+        },
+        "single_slot_store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 17,
+          "state_bytes": 64,
+          "steps": 560
+        },
+        "unbounded_store": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 34,
+          "state_bytes": 64,
+          "steps": 560
+        },
+        "working_state": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 0,
+          "state_bytes": 64,
+          "steps": 560
+        },
+        "wide_state": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 0,
+          "state_bytes": 4096,
+          "steps": 560
+        },
+        "retrieval_disabled": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 4,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 560
+        },
+        "random_retrieval": {
+          "solved": 4,
+          "total": 4,
+          "rate": 1.0,
+          "correct": 4,
+          "wrong_fact": 0,
+          "stale": 0,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 1.0,
+          "wrong_confident": 0,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 560
+        },
+        "stale_store": {
+          "solved": 0,
+          "total": 4,
+          "rate": 0.0,
+          "correct": 0,
+          "wrong_fact": 0,
+          "stale": 4,
+          "wrong_other": 0,
+          "no_answer": 0,
+          "answered": 4,
+          "precision": 0.0,
+          "wrong_confident": 4,
+          "store_bytes": 136,
+          "state_bytes": 64,
+          "steps": 560
+        }
+      }
+    }
+  },
+  "bytes": {
+    "capacity": 8,
+    "slot_bytes": 17,
+    "store_bytes": 136,
+    "rows": [
+      {
+        "length": 1,
+        "working_state_bytes": 64,
+        "wide_state_bytes": 4096,
+        "store_bytes": 136,
+        "untagged_store_bytes": 72,
+        "unbounded_store_bytes": 17,
+        "unbounded_store_arithmetic": 17,
+        "transcript_bytes": 8,
+        "model_kv_cache_bytes": 1024
+      },
+      {
+        "length": 8,
+        "working_state_bytes": 64,
+        "wide_state_bytes": 4096,
+        "store_bytes": 136,
+        "untagged_store_bytes": 72,
+        "unbounded_store_bytes": 136,
+        "unbounded_store_arithmetic": 136,
+        "transcript_bytes": 64,
+        "model_kv_cache_bytes": 8192
+      },
+      {
+        "length": 9,
+        "working_state_bytes": 64,
+        "wide_state_bytes": 4096,
+        "store_bytes": 136,
+        "untagged_store_bytes": 72,
+        "unbounded_store_bytes": 272,
+        "unbounded_store_arithmetic": 153,
+        "transcript_bytes": 72,
+        "model_kv_cache_bytes": 9216
+      },
+      {
+        "length": 17,
+        "working_state_bytes": 64,
+        "wide_state_bytes": 4096,
+        "store_bytes": 136,
+        "untagged_store_bytes": 72,
+        "unbounded_store_bytes": 544,
+        "unbounded_store_arithmetic": 289,
+        "transcript_bytes": 136,
+        "model_kv_cache_bytes": 17408
+      },
+      {
+        "length": 64,
+        "working_state_bytes": 64,
+        "wide_state_bytes": 4096,
+        "store_bytes": 136,
+        "untagged_store_bytes": 72,
+        "unbounded_store_bytes": 1088,
+        "unbounded_store_arithmetic": 1088,
+        "transcript_bytes": 512,
+        "model_kv_cache_bytes": 65536
+      },
+      {
+        "length": 100,
+        "working_state_bytes": 64,
+        "wide_state_bytes": 4096,
+        "store_bytes": 136,
+        "untagged_store_bytes": 72,
+        "unbounded_store_bytes": 2176,
+        "unbounded_store_arithmetic": 1700,
+        "transcript_bytes": 800,
+        "model_kv_cache_bytes": 102400
+      },
+      {
+        "length": 256,
+        "working_state_bytes": 64,
+        "wide_state_bytes": 4096,
+        "store_bytes": 136,
+        "untagged_store_bytes": 72,
+        "unbounded_store_bytes": 4352,
+        "unbounded_store_arithmetic": 4352,
+        "transcript_bytes": 2048,
+        "model_kv_cache_bytes": 262144
+      },
+      {
+        "length": 1024,
+        "working_state_bytes": 64,
+        "wide_state_bytes": 4096,
+        "store_bytes": 136,
+        "untagged_store_bytes": 72,
+        "unbounded_store_bytes": 17408,
+        "unbounded_store_arithmetic": 17408,
+        "transcript_bytes": 8192,
+        "model_kv_cache_bytes": 1048576
+      },
+      {
+        "length": 16384,
+        "working_state_bytes": 64,
+        "wide_state_bytes": 4096,
+        "store_bytes": 136,
+        "untagged_store_bytes": 72,
+        "unbounded_store_bytes": 278528,
+        "unbounded_store_arithmetic": 278528,
+        "transcript_bytes": 131072,
+        "model_kv_cache_bytes": 16777216
+      },
+      {
+        "length": 1048576,
+        "working_state_bytes": 64,
+        "wide_state_bytes": 4096,
+        "store_bytes": 136,
+        "untagged_store_bytes": 72,
+        "unbounded_store_bytes": 17825792,
+        "unbounded_store_arithmetic": 17825792,
+        "transcript_bytes": 8388608,
+        "model_kv_cache_bytes": 1073741824
+      }
+    ]
+  },
+  "model_scale": {
+    "ssm_state_bytes": 19456,
+    "source_ssm": "stream-memory.json",
+    "kv_cache_bytes": 1073741824,
+    "kv_cache_length": 1048576,
+    "kv_cache_bytes_per_token": 1024,
+    "source_kv": "long-context.json"
+  },
+  "crossover": {
+    "working_state_fails_at_distance": 1,
+    "wide_state_fails_at_distance": 1,
+    "store_fails_at_distance": null,
+    "unbounded_fails_at_distance": null,
+    "longest_distance": 1024,
+    "store_exact_to_facts": 8,
+    "store_first_failure_at_facts": 9,
+    "working_state_bytes": 64,
+    "wide_state_bytes": 4096,
+    "store_bytes": 136,
+    "untagged_store_bytes": 72,
+    "unbounded_store_exceeds_store_at_writes": 9,
+    "transcript_exceeds_store_at_events": 18,
+    "model_kv_exceeds_store_at_tokens": 1,
+    "model_ssm_state_bytes": 19456
+  },
+  "examples": {
+    "recall": {
+      "task_id": "example-recall",
+      "family": "recall",
+      "text": "add 3, then multiply the result by 4, then subtract 5, then report the key whose value equals the result, then remember the result under key 4, then add 5, then subtract 2, then fetch the value under key 4, then report the result",
+      "plan": [
+        {
+          "op": "ADD",
+          "args": [
+            3
+          ]
+        },
+        {
+          "op": "MUL",
+          "args": [
+            4
+          ]
+        },
+        {
+          "op": "SUB",
+          "args": [
+            5
+          ]
+        },
+        {
+          "op": "KEY",
+          "args": []
+        },
+        {
+          "op": "REMEMBER",
+          "args": [
+            4
+          ]
+        },
+        {
+          "op": "ADD",
+          "args": [
+            5
+          ]
+        },
+        {
+          "op": "SUB",
+          "args": [
+            2
+          ]
+        },
+        {
+          "op": "FETCH",
+          "args": [
+            4
+          ]
+        },
+        {
+          "op": "RET",
+          "args": []
+        }
+      ],
+      "table": [
+        [
+          2,
+          11
+        ],
+        [
+          5,
+          99
+        ],
+        [
+          9,
+          7
+        ]
+      ],
+      "facts": [
+        [
+          4,
+          9
+        ]
+      ],
+      "answer": 9,
+      "superseded": [],
+      "query_key": 4,
+      "distance": 2,
+      "conditions": [
+        {
+          "condition": "store",
+          "solved": true,
+          "answer": 9,
+          "outcome": "correct",
+          "store": {
+            "capacity": 8,
+            "slots_allocated": 8,
+            "verify_key": true,
+            "overwrite": true,
+            "retrieval": true,
+            "random_retrieval": false,
+            "bytes": 136,
+            "bytes_per_slot": 17,
+            "writes": 1,
+            "overwritten": 0,
+            "evictions": 0,
+            "hits": 1,
+            "misses": 0,
+            "random_draws": 0
+          },
+          "steps": [
+            {
+              "index": 0,
+              "instruction": "ADD 3",
+              "reads": {
+                "op_code": 3,
+                "arg": 3,
+                "carry": 0.0,
+                "observations": 0
+              },
+              "action": "add",
+              "args": {
+                "a": 0,
+                "b": 3
+              },
+              "result": 3,
+              "error": null
+            },
+            {
+              "index": 1,
+              "instruction": "MUL 4",
+              "reads": {
+                "op_code": 4,
+                "arg": 4,
+                "carry": 3.0,
+                "observations": 1
+              },
+              "action": "mul",
+              "args": {
+                "a": 3,
+                "b": 4
+              },
+              "result": 12,
+              "error": null
+            },
+            {
+              "index": 2,
+              "instruction": "SUB 5",
+              "reads": {
+                "op_code": 5,
+                "arg": 5,
+                "carry": 12.0,
+                "observations": 2
+              },
+              "action": "sub",
+              "args": {
+                "a": 12,
+                "b": 5
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 3,
+              "instruction": "KEY",
+              "reads": {
+                "op_code": 6,
+                "arg": 0,
+                "carry": 7.0,
+                "observations": 3
+              },
+              "action": "lookup",
+              "args": {
+                "value": 7
+              },
+              "result": 9,
+              "error": null
+            },
+            {
+              "index": 4,
+              "instruction": "REMEMBER 4",
+              "reads": {
+                "op_code": 11,
+                "arg": 4,
+                "carry": 9.0,
+                "observations": 4
+              },
+              "action": "remember",
+              "args": {
+                "key": 4,
+                "value": 9
+              },
+              "result": 9,
+              "error": null
+            },
+            {
+              "index": 5,
+              "instruction": "ADD 5",
+              "reads": {
+                "op_code": 3,
+                "arg": 5,
+                "carry": 9.0,
+                "observations": 5
+              },
+              "action": "add",
+              "args": {
+                "a": 9,
+                "b": 5
+              },
+              "result": 14,
+              "error": null
+            },
+            {
+              "index": 6,
+              "instruction": "SUB 2",
+              "reads": {
+                "op_code": 5,
+                "arg": 2,
+                "carry": 14.0,
+                "observations": 6
+              },
+              "action": "sub",
+              "args": {
+                "a": 14,
+                "b": 2
+              },
+              "result": 12,
+              "error": null
+            },
+            {
+              "index": 7,
+              "instruction": "FETCH 4",
+              "reads": {
+                "op_code": 12,
+                "arg": 4,
+                "carry": 12.0,
+                "observations": 7
+              },
+              "action": "fetch",
+              "args": {
+                "key": 4
+              },
+              "result": 9,
+              "error": null
+            },
+            {
+              "index": 8,
+              "instruction": "RET",
+              "reads": {
+                "op_code": 1,
+                "arg": 0,
+                "carry": 9.0,
+                "observations": 8
+              },
+              "action": "finish",
+              "args": {
+                "answer": 9
+              },
+              "result": 9,
+              "error": null
+            }
+          ]
+        },
+        {
+          "condition": "working_state",
+          "solved": false,
+          "answer": 0,
+          "outcome": "wrong_other",
+          "store": null,
+          "steps": [
+            {
+              "index": 0,
+              "instruction": "ADD 3",
+              "reads": {
+                "op_code": 3,
+                "arg": 3,
+                "carry": 0.0,
+                "observations": 0
+              },
+              "action": "add",
+              "args": {
+                "a": 0,
+                "b": 3
+              },
+              "result": 3,
+              "error": null
+            },
+            {
+              "index": 1,
+              "instruction": "MUL 4",
+              "reads": {
+                "op_code": 4,
+                "arg": 4,
+                "carry": 3.0,
+                "observations": 1
+              },
+              "action": "mul",
+              "args": {
+                "a": 3,
+                "b": 4
+              },
+              "result": 12,
+              "error": null
+            },
+            {
+              "index": 2,
+              "instruction": "SUB 5",
+              "reads": {
+                "op_code": 5,
+                "arg": 5,
+                "carry": 12.0,
+                "observations": 2
+              },
+              "action": "sub",
+              "args": {
+                "a": 12,
+                "b": 5
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 3,
+              "instruction": "KEY",
+              "reads": {
+                "op_code": 6,
+                "arg": 0,
+                "carry": 7.0,
+                "observations": 3
+              },
+              "action": "lookup",
+              "args": {
+                "value": 7
+              },
+              "result": 9,
+              "error": null
+            },
+            {
+              "index": 4,
+              "instruction": "REMEMBER 4",
+              "reads": {
+                "op_code": 11,
+                "arg": 4,
+                "carry": 9.0,
+                "observations": 4
+              },
+              "action": "remember",
+              "args": {
+                "key": 4,
+                "value": 9
+              },
+              "result": null,
+              "error": "no_store"
+            },
+            {
+              "index": 5,
+              "instruction": "ADD 5",
+              "reads": {
+                "op_code": 3,
+                "arg": 5,
+                "carry": 0.0,
+                "observations": 5
+              },
+              "action": "add",
+              "args": {
+                "a": 0,
+                "b": 5
+              },
+              "result": 5,
+              "error": null
+            },
+            {
+              "index": 6,
+              "instruction": "SUB 2",
+              "reads": {
+                "op_code": 5,
+                "arg": 2,
+                "carry": 5.0,
+                "observations": 6
+              },
+              "action": "sub",
+              "args": {
+                "a": 5,
+                "b": 2
+              },
+              "result": 3,
+              "error": null
+            },
+            {
+              "index": 7,
+              "instruction": "FETCH 4",
+              "reads": {
+                "op_code": 12,
+                "arg": 4,
+                "carry": 3.0,
+                "observations": 7
+              },
+              "action": "fetch",
+              "args": {
+                "key": 4
+              },
+              "result": null,
+              "error": "no_store"
+            },
+            {
+              "index": 8,
+              "instruction": "RET",
+              "reads": {
+                "op_code": 1,
+                "arg": 0,
+                "carry": 0.0,
+                "observations": 8
+              },
+              "action": "finish",
+              "args": {
+                "answer": 0
+              },
+              "result": 0,
+              "error": null
+            }
+          ]
+        }
+      ]
+    },
+    "stale": {
+      "task_id": "example-stale",
+      "family": "recall_stale",
+      "text": "add 3, then multiply the result by 4, then subtract 5, then report the key whose value equals the result, then remember the result under key 4, then add 5, then add 2, then multiply the result by 3, then subtract 6, then report the key whose value equals the result, then remember the result under key 4, then subtract 2, then fetch the value under key 4, then report the result",
+      "plan": [
+        {
+          "op": "ADD",
+          "args": [
+            3
+          ]
+        },
+        {
+          "op": "MUL",
+          "args": [
+            4
+          ]
+        },
+        {
+          "op": "SUB",
+          "args": [
+            5
+          ]
+        },
+        {
+          "op": "KEY",
+          "args": []
+        },
+        {
+          "op": "REMEMBER",
+          "args": [
+            4
+          ]
+        },
+        {
+          "op": "ADD",
+          "args": [
+            5
+          ]
+        },
+        {
+          "op": "ADD",
+          "args": [
+            2
+          ]
+        },
+        {
+          "op": "MUL",
+          "args": [
+            3
+          ]
+        },
+        {
+          "op": "SUB",
+          "args": [
+            6
+          ]
+        },
+        {
+          "op": "KEY",
+          "args": []
+        },
+        {
+          "op": "REMEMBER",
+          "args": [
+            4
+          ]
+        },
+        {
+          "op": "SUB",
+          "args": [
+            2
+          ]
+        },
+        {
+          "op": "FETCH",
+          "args": [
+            4
+          ]
+        },
+        {
+          "op": "RET",
+          "args": []
+        }
+      ],
+      "table": [
+        [
+          2,
+          11
+        ],
+        [
+          7,
+          42
+        ],
+        [
+          9,
+          7
+        ]
+      ],
+      "facts": [
+        [
+          4,
+          9
+        ],
+        [
+          4,
+          7
+        ]
+      ],
+      "answer": 7,
+      "superseded": [
+        9
+      ],
+      "query_key": 4,
+      "distance": 1,
+      "conditions": [
+        {
+          "condition": "store",
+          "solved": true,
+          "answer": 7,
+          "outcome": "correct",
+          "store": {
+            "capacity": 8,
+            "slots_allocated": 8,
+            "verify_key": true,
+            "overwrite": true,
+            "retrieval": true,
+            "random_retrieval": false,
+            "bytes": 136,
+            "bytes_per_slot": 17,
+            "writes": 2,
+            "overwritten": 0,
+            "evictions": 0,
+            "hits": 1,
+            "misses": 0,
+            "random_draws": 0
+          },
+          "steps": [
+            {
+              "index": 0,
+              "instruction": "ADD 3",
+              "reads": {
+                "op_code": 3,
+                "arg": 3,
+                "carry": 0.0,
+                "observations": 0
+              },
+              "action": "add",
+              "args": {
+                "a": 0,
+                "b": 3
+              },
+              "result": 3,
+              "error": null
+            },
+            {
+              "index": 1,
+              "instruction": "MUL 4",
+              "reads": {
+                "op_code": 4,
+                "arg": 4,
+                "carry": 3.0,
+                "observations": 1
+              },
+              "action": "mul",
+              "args": {
+                "a": 3,
+                "b": 4
+              },
+              "result": 12,
+              "error": null
+            },
+            {
+              "index": 2,
+              "instruction": "SUB 5",
+              "reads": {
+                "op_code": 5,
+                "arg": 5,
+                "carry": 12.0,
+                "observations": 2
+              },
+              "action": "sub",
+              "args": {
+                "a": 12,
+                "b": 5
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 3,
+              "instruction": "KEY",
+              "reads": {
+                "op_code": 6,
+                "arg": 0,
+                "carry": 7.0,
+                "observations": 3
+              },
+              "action": "lookup",
+              "args": {
+                "value": 7
+              },
+              "result": 9,
+              "error": null
+            },
+            {
+              "index": 4,
+              "instruction": "REMEMBER 4",
+              "reads": {
+                "op_code": 11,
+                "arg": 4,
+                "carry": 9.0,
+                "observations": 4
+              },
+              "action": "remember",
+              "args": {
+                "key": 4,
+                "value": 9
+              },
+              "result": 9,
+              "error": null
+            },
+            {
+              "index": 5,
+              "instruction": "ADD 5",
+              "reads": {
+                "op_code": 3,
+                "arg": 5,
+                "carry": 9.0,
+                "observations": 5
+              },
+              "action": "add",
+              "args": {
+                "a": 9,
+                "b": 5
+              },
+              "result": 14,
+              "error": null
+            },
+            {
+              "index": 6,
+              "instruction": "ADD 2",
+              "reads": {
+                "op_code": 3,
+                "arg": 2,
+                "carry": 14.0,
+                "observations": 6
+              },
+              "action": "add",
+              "args": {
+                "a": 14,
+                "b": 2
+              },
+              "result": 16,
+              "error": null
+            },
+            {
+              "index": 7,
+              "instruction": "MUL 3",
+              "reads": {
+                "op_code": 4,
+                "arg": 3,
+                "carry": 16.0,
+                "observations": 7
+              },
+              "action": "mul",
+              "args": {
+                "a": 16,
+                "b": 3
+              },
+              "result": 48,
+              "error": null
+            },
+            {
+              "index": 8,
+              "instruction": "SUB 6",
+              "reads": {
+                "op_code": 5,
+                "arg": 6,
+                "carry": 48.0,
+                "observations": 8
+              },
+              "action": "sub",
+              "args": {
+                "a": 48,
+                "b": 6
+              },
+              "result": 42,
+              "error": null
+            },
+            {
+              "index": 9,
+              "instruction": "KEY",
+              "reads": {
+                "op_code": 6,
+                "arg": 0,
+                "carry": 42.0,
+                "observations": 9
+              },
+              "action": "lookup",
+              "args": {
+                "value": 42
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 10,
+              "instruction": "REMEMBER 4",
+              "reads": {
+                "op_code": 11,
+                "arg": 4,
+                "carry": 7.0,
+                "observations": 10
+              },
+              "action": "remember",
+              "args": {
+                "key": 4,
+                "value": 7
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 11,
+              "instruction": "SUB 2",
+              "reads": {
+                "op_code": 5,
+                "arg": 2,
+                "carry": 7.0,
+                "observations": 11
+              },
+              "action": "sub",
+              "args": {
+                "a": 7,
+                "b": 2
+              },
+              "result": 5,
+              "error": null
+            },
+            {
+              "index": 12,
+              "instruction": "FETCH 4",
+              "reads": {
+                "op_code": 12,
+                "arg": 4,
+                "carry": 5.0,
+                "observations": 12
+              },
+              "action": "fetch",
+              "args": {
+                "key": 4
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 13,
+              "instruction": "RET",
+              "reads": {
+                "op_code": 1,
+                "arg": 0,
+                "carry": 7.0,
+                "observations": 13
+              },
+              "action": "finish",
+              "args": {
+                "answer": 7
+              },
+              "result": 7,
+              "error": null
+            }
+          ]
+        },
+        {
+          "condition": "stale_store",
+          "solved": false,
+          "answer": 9,
+          "outcome": "stale",
+          "store": {
+            "capacity": 8,
+            "slots_allocated": 8,
+            "verify_key": true,
+            "overwrite": false,
+            "retrieval": true,
+            "random_retrieval": false,
+            "bytes": 136,
+            "bytes_per_slot": 17,
+            "writes": 2,
+            "overwritten": 1,
+            "evictions": 0,
+            "hits": 1,
+            "misses": 0,
+            "random_draws": 0
+          },
+          "steps": [
+            {
+              "index": 0,
+              "instruction": "ADD 3",
+              "reads": {
+                "op_code": 3,
+                "arg": 3,
+                "carry": 0.0,
+                "observations": 0
+              },
+              "action": "add",
+              "args": {
+                "a": 0,
+                "b": 3
+              },
+              "result": 3,
+              "error": null
+            },
+            {
+              "index": 1,
+              "instruction": "MUL 4",
+              "reads": {
+                "op_code": 4,
+                "arg": 4,
+                "carry": 3.0,
+                "observations": 1
+              },
+              "action": "mul",
+              "args": {
+                "a": 3,
+                "b": 4
+              },
+              "result": 12,
+              "error": null
+            },
+            {
+              "index": 2,
+              "instruction": "SUB 5",
+              "reads": {
+                "op_code": 5,
+                "arg": 5,
+                "carry": 12.0,
+                "observations": 2
+              },
+              "action": "sub",
+              "args": {
+                "a": 12,
+                "b": 5
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 3,
+              "instruction": "KEY",
+              "reads": {
+                "op_code": 6,
+                "arg": 0,
+                "carry": 7.0,
+                "observations": 3
+              },
+              "action": "lookup",
+              "args": {
+                "value": 7
+              },
+              "result": 9,
+              "error": null
+            },
+            {
+              "index": 4,
+              "instruction": "REMEMBER 4",
+              "reads": {
+                "op_code": 11,
+                "arg": 4,
+                "carry": 9.0,
+                "observations": 4
+              },
+              "action": "remember",
+              "args": {
+                "key": 4,
+                "value": 9
+              },
+              "result": 9,
+              "error": null
+            },
+            {
+              "index": 5,
+              "instruction": "ADD 5",
+              "reads": {
+                "op_code": 3,
+                "arg": 5,
+                "carry": 9.0,
+                "observations": 5
+              },
+              "action": "add",
+              "args": {
+                "a": 9,
+                "b": 5
+              },
+              "result": 14,
+              "error": null
+            },
+            {
+              "index": 6,
+              "instruction": "ADD 2",
+              "reads": {
+                "op_code": 3,
+                "arg": 2,
+                "carry": 14.0,
+                "observations": 6
+              },
+              "action": "add",
+              "args": {
+                "a": 14,
+                "b": 2
+              },
+              "result": 16,
+              "error": null
+            },
+            {
+              "index": 7,
+              "instruction": "MUL 3",
+              "reads": {
+                "op_code": 4,
+                "arg": 3,
+                "carry": 16.0,
+                "observations": 7
+              },
+              "action": "mul",
+              "args": {
+                "a": 16,
+                "b": 3
+              },
+              "result": 48,
+              "error": null
+            },
+            {
+              "index": 8,
+              "instruction": "SUB 6",
+              "reads": {
+                "op_code": 5,
+                "arg": 6,
+                "carry": 48.0,
+                "observations": 8
+              },
+              "action": "sub",
+              "args": {
+                "a": 48,
+                "b": 6
+              },
+              "result": 42,
+              "error": null
+            },
+            {
+              "index": 9,
+              "instruction": "KEY",
+              "reads": {
+                "op_code": 6,
+                "arg": 0,
+                "carry": 42.0,
+                "observations": 9
+              },
+              "action": "lookup",
+              "args": {
+                "value": 42
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 10,
+              "instruction": "REMEMBER 4",
+              "reads": {
+                "op_code": 11,
+                "arg": 4,
+                "carry": 7.0,
+                "observations": 10
+              },
+              "action": "remember",
+              "args": {
+                "key": 4,
+                "value": 7
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 11,
+              "instruction": "SUB 2",
+              "reads": {
+                "op_code": 5,
+                "arg": 2,
+                "carry": 7.0,
+                "observations": 11
+              },
+              "action": "sub",
+              "args": {
+                "a": 7,
+                "b": 2
+              },
+              "result": 5,
+              "error": null
+            },
+            {
+              "index": 12,
+              "instruction": "FETCH 4",
+              "reads": {
+                "op_code": 12,
+                "arg": 4,
+                "carry": 5.0,
+                "observations": 12
+              },
+              "action": "fetch",
+              "args": {
+                "key": 4
+              },
+              "result": 9,
+              "error": null
+            },
+            {
+              "index": 13,
+              "instruction": "RET",
+              "reads": {
+                "op_code": 1,
+                "arg": 0,
+                "carry": 9.0,
+                "observations": 13
+              },
+              "action": "finish",
+              "args": {
+                "answer": 9
+              },
+              "result": 9,
+              "error": null
+            }
+          ]
+        },
+        {
+          "condition": "working_state",
+          "solved": false,
+          "answer": 0,
+          "outcome": "wrong_other",
+          "store": null,
+          "steps": [
+            {
+              "index": 0,
+              "instruction": "ADD 3",
+              "reads": {
+                "op_code": 3,
+                "arg": 3,
+                "carry": 0.0,
+                "observations": 0
+              },
+              "action": "add",
+              "args": {
+                "a": 0,
+                "b": 3
+              },
+              "result": 3,
+              "error": null
+            },
+            {
+              "index": 1,
+              "instruction": "MUL 4",
+              "reads": {
+                "op_code": 4,
+                "arg": 4,
+                "carry": 3.0,
+                "observations": 1
+              },
+              "action": "mul",
+              "args": {
+                "a": 3,
+                "b": 4
+              },
+              "result": 12,
+              "error": null
+            },
+            {
+              "index": 2,
+              "instruction": "SUB 5",
+              "reads": {
+                "op_code": 5,
+                "arg": 5,
+                "carry": 12.0,
+                "observations": 2
+              },
+              "action": "sub",
+              "args": {
+                "a": 12,
+                "b": 5
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 3,
+              "instruction": "KEY",
+              "reads": {
+                "op_code": 6,
+                "arg": 0,
+                "carry": 7.0,
+                "observations": 3
+              },
+              "action": "lookup",
+              "args": {
+                "value": 7
+              },
+              "result": 9,
+              "error": null
+            },
+            {
+              "index": 4,
+              "instruction": "REMEMBER 4",
+              "reads": {
+                "op_code": 11,
+                "arg": 4,
+                "carry": 9.0,
+                "observations": 4
+              },
+              "action": "remember",
+              "args": {
+                "key": 4,
+                "value": 9
+              },
+              "result": null,
+              "error": "no_store"
+            },
+            {
+              "index": 5,
+              "instruction": "ADD 5",
+              "reads": {
+                "op_code": 3,
+                "arg": 5,
+                "carry": 0.0,
+                "observations": 5
+              },
+              "action": "add",
+              "args": {
+                "a": 0,
+                "b": 5
+              },
+              "result": 5,
+              "error": null
+            },
+            {
+              "index": 6,
+              "instruction": "ADD 2",
+              "reads": {
+                "op_code": 3,
+                "arg": 2,
+                "carry": 5.0,
+                "observations": 6
+              },
+              "action": "add",
+              "args": {
+                "a": 5,
+                "b": 2
+              },
+              "result": 7,
+              "error": null
+            },
+            {
+              "index": 7,
+              "instruction": "MUL 3",
+              "reads": {
+                "op_code": 4,
+                "arg": 3,
+                "carry": 7.0,
+                "observations": 7
+              },
+              "action": "mul",
+              "args": {
+                "a": 7,
+                "b": 3
+              },
+              "result": 21,
+              "error": null
+            },
+            {
+              "index": 8,
+              "instruction": "SUB 6",
+              "reads": {
+                "op_code": 5,
+                "arg": 6,
+                "carry": 21.0,
+                "observations": 8
+              },
+              "action": "sub",
+              "args": {
+                "a": 21,
+                "b": 6
+              },
+              "result": 15,
+              "error": null
+            },
+            {
+              "index": 9,
+              "instruction": "KEY",
+              "reads": {
+                "op_code": 6,
+                "arg": 0,
+                "carry": 15.0,
+                "observations": 9
+              },
+              "action": "lookup",
+              "args": {
+                "value": 15
+              },
+              "result": null,
+              "error": "no_key"
+            },
+            {
+              "index": 10,
+              "instruction": "REMEMBER 4",
+              "reads": {
+                "op_code": 11,
+                "arg": 4,
+                "carry": 0.0,
+                "observations": 10
+              },
+              "action": "remember",
+              "args": {
+                "key": 4,
+                "value": 0
+              },
+              "result": null,
+              "error": "no_store"
+            },
+            {
+              "index": 11,
+              "instruction": "SUB 2",
+              "reads": {
+                "op_code": 5,
+                "arg": 2,
+                "carry": 0.0,
+                "observations": 11
+              },
+              "action": "sub",
+              "args": {
+                "a": 0,
+                "b": 2
+              },
+              "result": -2,
+              "error": null
+            },
+            {
+              "index": 12,
+              "instruction": "FETCH 4",
+              "reads": {
+                "op_code": 12,
+                "arg": 4,
+                "carry": -2.0,
+                "observations": 12
+              },
+              "action": "fetch",
+              "args": {
+                "key": 4
+              },
+              "result": null,
+              "error": "no_store"
+            },
+            {
+              "index": 13,
+              "instruction": "RET",
+              "reads": {
+                "op_code": 1,
+                "arg": 0,
+                "carry": 0.0,
+                "observations": 13
+              },
+              "action": "finish",
+              "args": {
+                "answer": 0
+              },
+              "result": 0,
+              "error": null
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "wall_seconds": 5.48
+}

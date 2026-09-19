@@ -90,6 +90,57 @@ jobs:
                 f"white-noise voiced ratio {noise:.3f}")
           PY
 
+      - name: The store remembers past the working state, and the state does not
+        # The long-memory contrast is asserted here rather than only in the tests
+        # because it is the number the memory block's honesty rests on: without
+        # it, "the store buys distance" is a claim with no measurement behind it.
+        # The wide-state control is asserted too, because it is the one that says
+        # the *bytes* are not what does the work. This is a different memory from
+        # the selective family's: an external keyed store, not state slots.
+        run: |
+          python experiments/long_memory.py --out /tmp/long-memory.json
+          cp README.md /tmp/README.memory.md
+          python experiments/render_readme.py --memory /tmp/long-memory.json \
+            --readme /tmp/README.memory.md
+          python - <<'PY'
+          import json, pathlib
+          data = json.loads(pathlib.Path("/tmp/long-memory.json").read_text())
+          distance = data["distance"]
+          longest = str(max(int(key) for key in distance))
+          conditions = distance[longest]["conditions"]
+          assert conditions["store"]["rate"] == 1.0, conditions["store"]
+          for name in ("working_state", "wide_state", "retrieval_disabled"):
+              assert conditions[name]["rate"] == 0.0, (name, conditions[name])
+          cross = data["crossover"]
+          assert cross["working_state_fails_at_distance"] == 1, cross
+          assert cross["wide_state_fails_at_distance"] == 1, cross
+          assert cross["store_exact_to_facts"] == 8, cross
+          assert cross["store_first_failure_at_facts"] == 9, cross
+          stale = data["stale"]["1"]["conditions"]
+          assert stale["store"]["rate"] == 1.0, stale["store"]
+          assert stale["stale_store"]["stale"] > 0, stale["stale_store"]
+          rendered = pathlib.Path("/tmp/README.memory.md").read_text()
+          for marker in ("| episode length |", "### The honest crossover",
+                         "### The stale-fact control"):
+              assert marker in rendered, f"memory render lost {marker!r}"
+          print("long memory ok: the store solves distance %s and the working "
+                "state solves none of it; the crossover is distance 1 and 9 facts"
+                % longest)
+          PY
+
+      - name: Every rendered block is the renderer's output
+        # The README claims every published number is generated, and that claim
+        # was false in one place until this test existed: a hand-written section
+        # inside the results block was deleted by re-rendering it. The test
+        # re-renders every block from its JSON and compares it with the README.
+        run: python -m pytest tests/test_render_readme.py -q
+
+      - name: The dashboard is a render of the committed results
+        # The dashboard is the one artifact whose test needs the committed file
+        # to match a fresh render of the committed JSON, so a stale dashboard is
+        # a test failure rather than something a reader has to notice.
+        run: python -m pytest tests/test_dashboard.py -q
+
       - name: The agent loop carries state, and the gate is what the state is for
         # The no-memory contrast is asserted here rather than only in the tests
         # because it is the number the agent block's honesty rests on: without

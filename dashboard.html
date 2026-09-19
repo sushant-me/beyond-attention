@@ -450,7 +450,7 @@ footer pre { background: var(--accent-soft); border: 1px solid var(--rule);
 <!-- DASHBOARD:AGENT:BEGIN -->
 <section id="agent">
 <h2>Agent: one task, decision by decision</h2>
-<p class="lede">The loop reads the task's instructions as structured events, streams them through the recurrence, decodes the state into the registers <code>carry</code>, <code>observations</code>, <code>op</code>, <code>arg</code>, <code>arg2</code>, <code>miss</code>, <code>kind</code>, <code>instructions</code>, and calls one of <code>add</code>, <code>mul</code>, <code>sub</code>, <code>lookup</code>, <code>finish</code>. Each step below shows what the state held when the choice was made, the call that came out of it, the observation the tool returned, and the carried value the next decision then read — so the operand chain is visible rather than claimed.</p>
+<p class="lede">The loop reads the task's instructions as structured events, streams them through the recurrence, decodes the state into the registers <code>carry</code>, <code>observations</code>, <code>op</code>, <code>arg</code>, <code>arg2</code>, <code>miss</code>, <code>kind</code>, <code>instructions</code>, and calls one of <code>add</code>, <code>mul</code>, <code>sub</code>, <code>lookup</code>, <code>remember</code>, <code>fetch</code>, <code>finish</code>. Each step below shows what the state held when the choice was made, the call that came out of it, the observation the tool returned, and the carried value the next decision then read — so the operand chain is visible rather than claimed.</p>
 <p class="task">add 3, then add 4, then multiply the result by 5, then report the key whose value equals the result, then report the result</p>
 <dl class="kv">
 <dt>task id</dt><dd><code>example</code></dd>
@@ -491,7 +491,7 @@ footer pre { background: var(--accent-soft); border: 1px solid var(--rule);
 <p><strong>scalar_carry</strong> — the same controller with the carried value in one Python int instead of the state — reproduces the agent's rate in 35 of the 36 cells it shares with the agent. The cells where it does not (1): <code>selective@6</code> (agent 1.000 vs control 0.320). So the control ties the agent everywhere except <code>selective</code>.</p>
 <p><strong>fixed_decay</strong> — a state of the same width with a constant, input-independent write gate: every value-carrying event goes into every slot — reproduces the agent's rate in 35 of the 36 cells it shares with the agent. The cells where it does not (1): <code>selective@6</code> (agent 1.000 vs control 0.200). So the control ties the agent everywhere except <code>selective</code>.</p>
 <p><strong>no_memory</strong> — the state is wiped before every decision, and only the current instruction is re-streamed — reproduces the agent's rate in 21 of the 36 cells it shares with the agent. The cells where it does not (15): <code>one_op@2</code> (agent 1.000 vs control 0.000), <code>one_op@3</code> (agent 1.000 vs control 0.000), <code>one_op@4</code> (agent 1.000 vs control 0.000), <code>one_op@5</code> (agent 1.000 vs control 0.000), <code>one_op@6</code> (agent 1.000 vs control 0.000), <code>two_op@3</code> (agent 1.000 vs control 0.000), and 9 more cells, all listed in the control's own grid below. The families where they part: <code>branch</code>, <code>lookup</code>, <code>one_op</code>, <code>selective</code>, <code>two_op</code>.</p>
-<p><strong>random_action</strong> — tools and arguments drawn uniformly; the floor, not a policy — reproduces the agent's rate in 0 of the 6 cells it shares with the agent. The cells where it does not (6): <code>literal@6</code> (agent 1.000 vs control 0.001), <code>one_op@6</code> (agent 1.000 vs control 0.001), <code>two_op@6</code> (agent 1.000 vs control 0.004), <code>branch@6</code> (agent 1.000 vs control 0.005), <code>lookup@6</code> (agent 1.000 vs control 0.006), <code>selective@6</code> (agent 1.000 vs control 0.005). The families where they part: <code>branch</code>, <code>literal</code>, <code>lookup</code>, <code>one_op</code>, <code>selective</code>, <code>two_op</code>.</p> The same table says why the width is not the explanation: a state of the same width with a constant write gate (<code>fixed_decay</code>) reaches 0.200 on <code>selective@6</code> where the agent reaches 1.000 — it is the gating, not the number of slots. The single-register memory fails selectively rather than at random: of 50 selective tasks it solves 16, and 16 of them asked for the key that was stored last. The correspondence holds task for task (<code>True</code> over 50 tasks).
+<p><strong>random_action</strong> — tools and arguments drawn uniformly; the floor, not a policy — reproduces the agent's rate in 0 of the 6 cells it shares with the agent. The cells where it does not (6): <code>literal@6</code> (agent 1.000 vs control 0.001), <code>one_op@6</code> (agent 1.000 vs control 0.001), <code>two_op@6</code> (agent 1.000 vs control 0.003), <code>branch@6</code> (agent 1.000 vs control 0.003), <code>lookup@6</code> (agent 1.000 vs control 0.006), <code>selective@6</code> (agent 1.000 vs control 0.003). The families where they part: <code>branch</code>, <code>literal</code>, <code>lookup</code>, <code>one_op</code>, <code>selective</code>, <code>two_op</code>.</p> The same table says why the width is not the explanation: a state of the same width with a constant write gate (<code>fixed_decay</code>) reaches 0.200 on <code>selective@6</code> where the agent reaches 1.000 — it is the gating, not the number of slots. The single-register memory fails selectively rather than at random: of 50 selective tasks it solves 16, and 16 of them asked for the key that was stored last. The correspondence holds task for task (<code>True</code> over 50 tasks).
 </div>
 <h3>Solve rate by family and step budget</h3>
 <p>300 tasks (50 per family), seed 0. Each family needs a known number of decisions, so the staircase is the step counts rather than a discovery — it is here to show the budget is enforced rather than nominal.</p>
@@ -800,7 +800,7 @@ footer pre { background: var(--accent-soft); border: 1px solid var(--rule);
 <td class="right"><span class="muted">—</span></td>
 <td class="right"><span class="muted">—</span></td>
 <td class="right"><span class="muted">—</span></td>
-<td class="right">0.004</td>
+<td class="right">0.003</td>
 </tr>
 <tr>
 <td class="left"><code>branch</code></td>
@@ -809,7 +809,7 @@ footer pre { background: var(--accent-soft); border: 1px solid var(--rule);
 <td class="right"><span class="muted">—</span></td>
 <td class="right"><span class="muted">—</span></td>
 <td class="right"><span class="muted">—</span></td>
-<td class="right">0.005</td>
+<td class="right">0.003</td>
 </tr>
 <tr>
 <td class="left"><code>lookup</code></td>
@@ -827,7 +827,7 @@ footer pre { background: var(--accent-soft); border: 1px solid var(--rule);
 <td class="right"><span class="muted">—</span></td>
 <td class="right"><span class="muted">—</span></td>
 <td class="right"><span class="muted">—</span></td>
-<td class="right">0.005</td>
+<td class="right">0.003</td>
 </tr>
 </tbody></table></figure>
 </div>
@@ -1062,7 +1062,7 @@ footer pre { background: var(--accent-soft); border: 1px solid var(--rule);
 <ul class="falseclaims">
 <li><em>"The descriptors identify emotion in speech."</em> They identify which of 4 <strong>synthetic</strong> conditions generated a signal. Every utterance was synthesised by this repository, one parameter tuple per condition (<code>neutral</code> = F0 target 150 Hz, swing 0.01, jitter 0.01, amplitude spread 0.03, 2 bursts/s; <code>aroused</code> = F0 target 225 Hz, swing 0.12, jitter 0.05, amplitude spread 0.45, 5 bursts/s; <code>subdued</code> = F0 target 110 Hz, swing 0.004, jitter 0.01, amplitude spread 0.05, 1 burst/s; <code>unsteady</code> = F0 target 255 Hz, swing 0.15, jitter 0.1, amplitude spread 0.15, 3.5 bursts/s), and the labels come from the generator rather than from a listener. No human voice was involved at any point, there is no labelled affect corpus here to validate against, and the 0.969 accuracy is the recovery of synthetic parameters — not emotion.</li>
 <li><em>"The loop learns, or something here was trained."</em> Nothing on this page is in a gradient path: there is no optimiser, no loss and no backward pass anywhere in the agent code. The controller is hand-written branching, the recurrence's decay and its read/write gate are constants chosen by hand, and a seed only decides which tasks are generated. The voice descriptors are analytic measurements of a waveform, not learned features, and the encoder that bridges them to the model is a fixed random projection with no bias and no nonlinearity.</li>
-<li><em>"The agent generalises."</em> It runs one controller over a closed tool set (<code>add</code>, <code>mul</code>, <code>sub</code>, <code>lookup</code>, <code>finish</code>) and a closed task family (<code>literal</code>, <code>one_op</code>, <code>two_op</code>, <code>branch</code>, <code>lookup</code>, <code>selective</code>), emitted by a seeded generator over bounded integers. The "task text" is that instruction grammar delivered as structured events: there is no tokenizer, no parsing and no language understanding anywhere in the path. The solver cannot be asked for a task the generator does not generate or a tool the registry does not hold, so a rate of 1.000 says the controller matches the shapes it was written against and nothing wider.</li>
+<li><em>"The agent generalises."</em> It runs one controller over a closed tool set (<code>add</code>, <code>mul</code>, <code>sub</code>, <code>lookup</code>, <code>remember</code>, <code>fetch</code>, <code>finish</code>) and a closed task family (<code>literal</code>, <code>one_op</code>, <code>two_op</code>, <code>branch</code>, <code>lookup</code>, <code>selective</code>), emitted by a seeded generator over bounded integers. The "task text" is that instruction grammar delivered as structured events: there is no tokenizer, no parsing and no language understanding anywhere in the path. The solver cannot be asked for a task the generator does not generate or a tool the registry does not hold, so a rate of 1.000 says the controller matches the shapes it was written against and nothing wider.</li>
 </ul>
 <p>And the boundaries that a reader should carry away with the numbers:</p>
 <ul class="limits">

@@ -3,6 +3,7 @@
 from .agent import (
     AGENT_DIM,
     FAMILIES,
+    RECALL_FAMILIES,
     REGISTER_NAMES,
     SELECTIVE_DISTRACTORS,
     SELECTIVE_KEYS,
@@ -28,7 +29,13 @@ from .agent import (
     execute,
     instruction,
     new_state,
+    capacity_suite,
+    capacity_task,
+    example_recall_task,
+    example_stale_task,
     read_registers,
+    recall_suite,
+    recall_task,
     replay,
     required_state_width,
     run_agent,
@@ -36,8 +43,18 @@ from .agent import (
     selective_example_task,
     selective_suite,
     slot_value,
+    stale_suite,
+    stale_task,
+    state_bytes,
     task_suite,
     validate_call,
+)
+from .memory import (
+    DEFAULT_CAPACITY,
+    TAGGED_SLOT_BYTES,
+    UNTAGGED_SLOT_BYTES,
+    MemoryStore,
+    store_bytes,
 )
 from .model import (
     AttentionBlock,
@@ -119,7 +136,16 @@ __all__ = [
     "validate_call", "execute", "TOOL_SCHEMAS", "TOOL_NAMES",
     "new_state", "scan_states", "read_registers", "Registers", "Event",
     "choose_action", "carried_value", "bridge_to_selective_scan",
-    "AGENT_DIM", "REGISTER_NAMES", "FAMILIES", "STEP_COUNTS",
+    "AGENT_DIM", "REGISTER_NAMES", "FAMILIES", "STEP_COUNTS", "state_bytes",
+    # The long-context store: an external, keyed, in-process memory the loop
+    # writes with ``remember`` and reads with ``fetch``, plus the recall
+    # families that exercise it over a controllable distance. It is separate
+    # from the selective family's *internal* slots, and named apart from it.
+    "MemoryStore", "store_bytes", "DEFAULT_CAPACITY",
+    "TAGGED_SLOT_BYTES", "UNTAGGED_SLOT_BYTES",
+    "RECALL_FAMILIES", "recall_suite", "recall_task", "capacity_suite",
+    "capacity_task", "stale_suite", "stale_task",
+    "example_recall_task", "example_stale_task",
     "AttentionBlock", "LanguageModel", "RMSNorm", "SelectiveSSMBlock",
     "build_pair", "count_parameters",
     "selective_scan", "selective_scan_associative", "selective_scan_chunked",

@@ -117,24 +117,13 @@ The control below is the same architecture at the same size, with the step budge
 
 ### Does either model read longer than it trained?
 
-The "unseen size" column above is not a clean measure of that, and it took
-building the experiment below to see why. `mqar_batch` sizes its vocabulary from
-the pair count, so a model trained at 2 pairs meets keys 1-8 and values 9-16,
-while a 16-pair batch hands it keys 1-16 and values 17-32 — token ids it has
-never seen, in roles it has never seen them in. Every `0.000` in that column is
-an evaluation at a *longer* length than training, which is precisely the case
-the column was meant to measure. Those zeros are a vocabulary mismatch, not a
-failure to generalise.
+The "unseen size" column above is not a clean measure of that, and it took building the experiment below to see why. `mqar_batch` sizes its key space from the pair count by default: trained at 2 pairs a model meets keys 1–8 and values 9–16, while a 16-pair batch hands it keys 1–16 and values 17–32 — token ids it has never seen, in roles it has never seen them in. Every `0.000` in that column is an evaluation at a *longer* length than training, which is precisely the case the column was meant to measure. Those zeros are a vocabulary mismatch, not a failure to generalise.
 
-Holding the key space fixed so the vocabulary is identical at every length
-changes the picture completely. Both models are trained at **2 pairs (6
-tokens)** — the longest length at which *both* solve the task outright — then
-evaluated with frozen weights at 4, 8 and 16 pairs (10, 18 and 34 tokens, up to
-**5.7x**):
+Holding the key space fixed so the vocabulary is identical at every length changes the picture completely. Both models are trained at **2 pairs (6 tokens)** — the longest length at which *both* solve the task outright — then evaluated with frozen weights at the lengths below (up to **5.7x**):
 
 | pairs | tokens | x train | attention | ssm | chance | a model trained at that length: attention | ssm |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 2 | 6 | 1.0x | **1.000** | **1.000** | 1/16 | 1.000 | 1.000 |
+| 2 | 6 | 1.0x | 1.000 ±0.000 | 1.000 ±0.000 | 1/16 | 1.000 | 1.000 |
 | 4 | 10 | 1.7x | 0.793 ±0.007 | 0.541 ±0.007 | 1/16 | — | — |
 | 8 | 18 | 3.0x | 0.459 ±0.005 | 0.297 ±0.010 | 1/16 | — | — |
 | 16 | 34 | 5.7x | 0.240 ±0.009 | 0.176 ±0.014 | 1/16 | 0.205 | 0.197 |
@@ -143,25 +132,12 @@ Three seeds, spread shown, nothing retrained between rows.
 
 What this says, including the parts that are unflattering:
 
-* **Neither architecture extrapolates here.** Both are perfect at the length
-  they trained on and both decay monotonically as it grows.
-* **Attention decays more slowly than the SSM** at every step — 0.793 against
-  0.541 at 1.7x, 0.240 against 0.176 at 5.7x. On this task the state-space model
-  is the weaker of the two past its training length, which is the opposite of
-  what the architecture's reputation would predict.
-* **The decay is not an extrapolation failure.** At 16 pairs the extrapolated
-  models score about what a model *trained from scratch at 16 pairs* reaches
-  (0.240 against 0.205 for attention; 0.176 against 0.197 for the SSM). Reading
-  down that column is reading how hard MQAR is at that length for a 2-layer,
-  `d_model = 64` model — not how badly the model generalises. Without the
-  reference columns this curve looks like a generalisation result and is not one.
-* The SSM does fit *longer training lengths* better than attention: in the
-  table above it reaches 1.000 at 4 and 8 pairs where attention reaches 0.413
-  and 0.312. So "fits long sequences when trained on them" and "generalises to
-  longer ones when trained short" are separate properties, and the two
-  architectures sit on opposite sides of them.
+* **Neither architecture extrapolates here.** Both are perfect at the length they trained on (2 pairs) and both fall below 1.000 at every longer length — attention to 0.793 and the SSM to 0.541 at 4 pairs, the shortest step past training.
+* **Attention decays more slowly than the SSM** at every step — 0.793 against 0.541 at 4 pairs, 0.459 against 0.297 at 8 pairs, 0.240 against 0.176 at 16 pairs. On this task the state-space model is the weaker of the two past its training length, which is the opposite of what the architecture's reputation would predict.
+* **Part of the decay is task difficulty, and the reference column is what says so.** A model trained from scratch at the longest length reaches attention 0.240 against 0.205 (gap 0.035, three-seed spread ±0.009); ssm 0.176 against 0.197 (gap 0.021, three-seed spread ±0.014). The reference is 1 seed, so a gap smaller than the spread is not a difference and a larger one is part extrapolation and part how hard MQAR is at that length for a two-layer, `d_model`-64 model — which no column here separates. Without it the curve looks like a generalisation result and is not one.
+* The SSM does fit *longer training lengths* better than attention: in the main sweep it reaches 1.000 at 8 pairs where attention reaches 0.312. So "fits long sequences when trained on them" and "generalises to longer ones when trained short" are separate properties, and the two architectures sit on opposite sides of them.
 
-One training length, one task, one model size. This measures MQAR at 2 pairs.
+One training length, one task, one model size. This measures MQAR at 2 pairs, 6 tokens, d_model=64, 2 layers, on three seeds.
 
 ### Length scaling
 
@@ -416,6 +392,7 @@ python experiments/run.py --skip-sweep --causal-mode mask \
 python experiments/render_readme.py --mqar results.json \
     --scaling scaling-final.json --scaling scaling-mask.json \
     --control control-attention.json --scan-inner scan-inner.json \
+    --length-extrapolation length-extrapolation.json \
     --readme README.md
 
 # the voice/affect front end: synthetic prosody conditions, seconds to run
@@ -425,16 +402,28 @@ python experiments/render_readme.py --voice voice-affect.json --readme README.md
 # the agent loop: 300 seeded tasks, six budgets, the controls and two sweeps (~2 s)
 python experiments/agent_loop.py --out agent-loop.json
 python experiments/render_readme.py --agent agent-loop.json --readme README.md
+
+# the long-context store: distances to 1,024 steps, four controls, a byte ledger
+python experiments/long_memory.py --out long-memory.json
+python experiments/render_readme.py --memory long-memory.json --readme README.md
+
+# the dashboard, from the committed results (deterministic, no clock)
+python experiments/render_dashboard.py --voice voice-affect.json \
+    --agent agent-loop.json --out dashboard.html
 ```
 
 `experiments/run.py --help` lists the knobs; `--steps`, `--seeds`, `--pairs`,
 `--queries` and `--blocks` are the ones that cost time.
 
-The voice and agent blocks render on their own (`--voice`, `--agent`) rather than
-as part of the results command. That is deliberate: the results block currently contains one
-hand-written section that `render_readme.py` does not produce, so re-rendering
-it removes that section instead of reproducing it. See the last bullet of the
-limitations.
+The voice, agent and memory blocks render on their own (`--voice`, `--agent`,
+`--memory`) rather than as part of the results command, so each can be
+regenerated without touching the others. The results command takes
+`--length-extrapolation` as well: that section is *inside* the results block, and
+the renderer **refuses** to write the block without the file rather than silently
+dropping a section it cannot produce. That refusal is the fix for a real bug
+described in the limitations, and `tests/test_render_readme.py` holds it in place
+by re-rendering every block from its JSON and comparing it with the README byte
+for byte.
 
 ## Streaming: what it costs to keep reading
 
@@ -721,29 +710,31 @@ recurrence" is a check rather than a claim.
 
 ### What this is, and what it is not
 
-**It is** a working, tested agent loop: five tools with strict schemas and typed
-errors, a step budget that is honoured exactly, a replayable trace of every action
-and result, and a seeded task suite whose answers are analytic — computed in
-Python integers by `evaluate_plan`, so correctness is a property of the task
-rather than of a model. Every number in the block below is generated from
+**It is** a working, tested agent loop: seven tools with strict schemas and typed
+errors (`add`, `mul`, `sub`, `lookup`, `remember`, `fetch`, `finish`), a step
+budget that is honoured exactly, a replayable trace of every action and result,
+and a seeded task suite whose answers are analytic — computed in Python integers
+by `evaluate_plan`, so correctness is a property of the task rather than of a
+model. Every number in the block below is generated from
 `agent-loop.json` by `experiments/render_readme.py`.
 
 **It is not** a language model driving tools, and it is not general. Three claims
 that would be easy to make from the table below, and are all false:
 
 * *"This is an agent that generalises."* It runs one fixed, hand-written
-  controller over a closed tool set — `add`, `mul`, `sub`, `lookup`, `finish`,
-  five functions fixed at import time — and a closed task family: six plan shapes
-  over bounded integers, emitted by a seeded generator. The "task text" is that
+  controller over a closed tool set — `add`, `mul`, `sub`, `lookup`, `remember`,
+  `fetch`, `finish`, seven functions fixed at import time — and a closed task
+  family: six plan shapes emitted by a seeded generator, plus the three recall
+  shapes that use the external store. The "task text" is that
   instruction grammar delivered as structured events; there is no tokenizer, no
   parsing and no language understanding anywhere in the path. The loop cannot be
   asked for a task the generator does not generate, a tool the registry does not
   hold, or an instruction the grammar does not define, and 1.000 says only that
-  the controller matches the six shapes it was written against.
+  the controller matches the shapes it was written against.
 * *"The loop learns."* Nothing is trained. There is no gradient, no optimiser and
   no loss in this path: the recurrence's `A`, its read/write gate and the policy's
   branches are constants chosen by hand. A seed decides which tasks are generated
-  and how the random control draws, and nothing else. The five tools are pure
+  and how the random control draws, and nothing else. The seven tools are pure
   functions of their arguments — no clock, no filesystem, no network — and a test
   reads the module's imports to keep it that way.
 * *"The SSM is what makes it work."* On the five arithmetic families it is not.
@@ -763,7 +754,7 @@ that would be easy to make from the table below, and are all false:
   and nothing anywhere in the path is trained.
 
 <!-- AGENT:BEGIN -->
-**Seeded task suite** — 300 tasks (50 per family), seed 0. Each task is a plan over bounded integers plus a bounded key/value table, and its answer is computed in Python integers by `evaluate_plan`, so correctness is a property of the task. Tools: `add`, `mul`, `sub`, `lookup`, `finish`.
+**Seeded task suite** — 300 tasks (50 per family), seed 0. Each task is a plan over bounded integers plus a bounded key/value table, and its answer is computed in Python integers by `evaluate_plan`, so correctness is a property of the task. Tools: `add`, `mul`, `sub`, `lookup`, `remember`, `fetch`, `finish`.
 
 The memory is a selective-scan state 8 registers wide, one named register per dimension: `carry`, `observations`, `op`, `arg`, `arg2`, `miss`, `kind`, `instructions`.
 
@@ -784,7 +775,7 @@ The memory is a selective-scan state 8 registers wide, one named register per di
 | no memory: the state is wiped before each decision | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | **0.167** |
 | scalar carry: the same controller, one Python int | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 0.320 | **0.887** |
 | fixed decay: the same width, a constant gate | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 0.200 | **0.867** |
-| random action: tools and arguments uniform | 0.001 | 0.001 | 0.004 | 0.005 | 0.006 | 0.005 | **0.003** |
+| random action: tools and arguments uniform | 0.001 | 0.001 | 0.003 | 0.003 | 0.006 | 0.003 | **0.003** |
 
 The budget-1 slice of the agent is the one-step control: **0.167** solved over all 300 tasks. Only the `literal` family, whose answer is written in the task text, is reachable in a single decision — so the suite is not one call deep.
 
@@ -821,7 +812,7 @@ The budget-1 slice of the agent is the one-step control: **0.167** solved over a
 | fixed decay: the same width, a constant gate | 0.200 | the same slots, every value-carrying event written to every one |
 | scalar carry: one Python int | 0.320 | the last keyed value seen; distractors do not move it |
 | no memory: the state is wiped before each decision | 0.000 | nothing survives a step |
-| random action: tools and arguments uniform | 0.005 | the floor |
+| random action: tools and arguments uniform | 0.003 | the floor |
 
 The scalar's failure is exact rather than statistical. It holds the last keyed value it saw, so it must be right precisely when the queried key is the one the last `PUT` named, and wrong otherwise: **16 of 50** tasks solved against **16** tasks whose query named the last store, with the predicted set matching the solved set on **50 of 50** tasks. A rate below 1.000 on its own would be consistent with a merely harder task; the correspondence is what says a second register is what was missing.
 
@@ -920,6 +911,244 @@ previous result out of the state — 3, then 7, then 35 — and the `KEY` step t
 the state the previous step produced, and the register column is printed next to
 the action so that this is checkable rather than asserted.
 
+## Long-context memory: remembering past the working state
+
+Everything above measures memory at two extremes, and both are published. An
+attention model's KV cache *grows with the context* — 1,024 MiB after a million
+tokens, measured — and a state-space model's state does not: 19,456 bytes at
+16,384 tokens and the same 19,456 bytes at 1,048,576. The selective family above
+is the state's *internal* memory and it is bounded by its width: four slots hold
+four keys, retention is a property of the event, and a wide-enough state answers
+the question without anything external. The agent loop's working memory is the
+same shape at a smaller size — eight named float64 registers, 64 bytes, holding
+the last thing it was told.
+
+So "it remembers everything" and "constant memory" are in direct tension, and
+neither extreme is what an agent needs. `src/beyond_attention/memory.py` is the
+third option: an **external**, keyed, in-process store the loop writes facts into
+(`remember`) and reads them out of (`fetch`), at a **constant** byte cost, with
+the state left at its eight registers. The read tool is named `fetch` rather than
+`recall` on purpose: `RECALL` is the selective family's instruction and it reads
+a *state slot*. Two memories with one name would be a bug waiting to happen.
+
+### What this is, and what it is not
+
+**It is** a working, tested episodic store and the task family that exercises it.
+The store is a direct-mapped table — `slot = key % capacity`, each slot holding a
+key, a value and a tag — allocated once as `numpy` arrays. The tasks are
+generated, their answers are analytic, and `evaluate_plan` computes them with a
+plain Python `dict`, deliberately *not* with the store, so a bug in the store
+cannot make a failed retrieval look correct. Two instructions and two tools are
+new (`REMEMBER`/`FETCH`, `remember`/`fetch`); the policy, the register file, the
+loop and the trace are the ones from the section above.
+
+**It is not** associative or semantic memory, and it is not learned. Retrieval is
+integer equality on a key the *plan* supplies: nothing decides what is worth
+remembering, there is no similarity search, no embedding, and no eviction policy
+beyond `key % capacity`. Every number in the block below is generated from
+`long-memory.json` by `experiments/render_readme.py`. Three claims that would be
+easy to make from those tables, and are all false:
+
+* *"It remembers everything."* The store is bounded and the boundedness is the
+  point: eight slots hold eight facts, the ninth write evicts the first, and the
+  byte curve is flat because the memory is a fixed array rather than a growing
+  cache. What it buys over the working state is not capacity but
+  **addressability** — a fact 1,024 steps back is returned exactly as one four
+  steps back. The honest crossover is that the fixed state fails at distance
+  **1**, this store fails at **9 facts**, and an unbounded store fails at neither
+  and pays 17 bytes a write for it.
+* *"More memory is strictly better."* The 64x wider state costs 4,096 bytes and
+  fails in exactly the same place as the 64-byte one, because nothing addresses
+  it; a single 17-byte slot passes every distance measured. Past the point where
+  the key space fits, extra slots do help — linearly, 17 bytes a fact — and below
+  it they buy nothing at all. This is the same conclusion the selective family
+  reaches from the other side, and neither one is a claim about size alone.
+* *"The state-space model gives it long memory."* The recurrence is the working
+  memory, and it contributes exactly what it contributed before: it carries the
+  last value and decodes the current instruction. The long-range result is a
+  `numpy` array and a `%`. The control that settles it is the wide state — 64
+  times the bytes, the same write rule, the same failure at distance 1 — and the
+  trace below shows the call that carries the fact is `remember`, not the
+  recurrence. The selective family's gate is a different capability, measured
+  above; it is not this one, and it does not extend the distance.
+
+<!-- MEMORY:BEGIN -->
+**What each condition carries, and what it solves** — 62 recall tasks at distances 1, 4, 16, 64, 256, 1024 (a plan of `distance + 7` instructions), seed 0. Every cell is **solved/total**, not a rate: the long distances afford fewer tasks, and that is worth seeing. "Bytes carried" is the working state plus the store, measured from the live objects.
+
+| condition | bytes carried | d=1 | d=4 | d=16 | d=64 | d=256 | d=1024 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| the store: 8 tagged slots | 200 | 16/16 | 16/16 | 16/16 | 8/8 | 4/4 | 2/2 |
+| the store: 1 slot | 81 | 16/16 | 16/16 | 16/16 | 8/8 | 4/4 | 2/2 |
+| an unbounded store | 81 | 16/16 | 16/16 | 16/16 | 8/8 | 4/4 | 2/2 |
+| the working state alone (no store) | 64 | 0/16 | 0/16 | 0/16 | 0/8 | 0/4 | 0/2 |
+| a 64x wider state, same write rule | 4,096 | 0/16 | 0/16 | 0/16 | 0/8 | 0/4 | 0/2 |
+| the store, retrieval disabled | 200 | 0/16 | 0/16 | 0/16 | 0/8 | 0/4 | 0/2 |
+| random live value (floor) | 200 | 16/16 | 16/16 | 16/16 | 8/8 | 4/4 | 2/2 |
+
+Three rows need reading carefully. The **random live value** floor is not a floor at all in this table: with one fact written there is one live value, so drawing a live value at random *is* the answer. Its discriminating power appears only where several facts are live — the capacity table below — which is why it is reported in both places. The **unbounded store** costs less than the fixed store at every length here, because the single-fact task writes once: the unbounded alternative is cheap precisely when there is nothing to keep. And the **one-slot store** solves every distance in this table at 81 B, from which the only honest reading is that the *width* of the store is not what carries the fact — the key is. What one slot cannot do is hold two facts, and that is the capacity table.
+
+**Bytes carried against length** — the store's figure is measured from a live `MemoryStore`, the unbounded one after that many writes (which is why it is a staircase: a growing `numpy` array doubles), and the transcript is arithmetic — one int64 per event, the least a replay needs. The run object retains every step whether or not anyone asks it to.
+
+| episode length | working state | store (8 slots) | untagged store | unbounded store | its arithmetic floor | transcript (1 int64/event) | model KV cache |
+|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 64 | 136 | 72 | 17 | 17 | 8 | 1,024 |
+| 8 | 64 | 136 | 72 | 136 | 136 | 64 | 8,192 |
+| 9 | 64 | 136 | 72 | 272 | 153 | 72 | 9,216 |
+| 17 | 64 | 136 | 72 | 544 | 289 | 136 | 17,408 |
+| 64 | 64 | 136 | 72 | 1,088 | 1,088 | 512 | 65,536 |
+| 100 | 64 | 136 | 72 | 2,176 | 1,700 | 800 | 102,400 |
+| 256 | 64 | 136 | 72 | 4,352 | 4,352 | 2,048 | 262,144 |
+| 1,024 | 64 | 136 | 72 | 17,408 | 17,408 | 8,192 | 1,048,576 |
+| 16,384 | 64 | 136 | 72 | 278,528 | 278,528 | 131,072 | 16,777,216 |
+| 1,048,576 | 64 | 136 | 72 | 17,825,792 | 17,825,792 | 8,388,608 | 1,073,741,824 |
+
+For scale: the model's own state is **19,456 B at every length** (`stream-memory.json`), and its attention cache is **1,073,741,824 B at 1,048,576 tokens** (`long-context.json`) — 1,024 B a token, quoted from the streaming measurements rather than recomputed here.
+
+### The honest crossover
+
+* **The working state starts failing at distance 1** — and so does the 4,096-byte state at exactly the same distance, because the write rule puts every observation in the same register. It is 64 B and it holds the last observation; nothing about the *width* of a state that is not addressed by key changes that.
+* **A single 17-byte slot does the same job at every distance measured**, so this trade is not about the store's size: 81 B addressed by key beats 4,096 B that is not. The size starts to matter only when more than one fact is live, which is the capacity table below.
+* **The store does not fail at any distance measured** (to 1024) — it is 136 B and constant. Its failure mode is capacity, not distance: 8 facts fit in the eight slots and the 9th evicts the first. Every extra fact costs 17 B, so holding F facts exactly costs 17×F bytes.
+* **What the unbounded alternative costs.** The unbounded store is 17 B a write and passes the fixed store's 136 B at write 9; a full transcript at 8 B an event passes it at event 18. Below those lengths, keeping everything is *cheaper* than a bounded store — and above them the bounded store is exact only up to its capacity. At the model's scale a single attention token of KV cache is 1,024 B, so the agent's entire store is 1 token of it.
+
+### Capacity: what eight slots hold, and what a cheaper tag costs
+
+Keys are `1..F` against `key % 8`, so the collision is **designed** rather than drawn from a random key space: this is what a bounded store does at a known load, not the birthday-paradox rate a wider key space would give. The oldest fact is queried first because it is the one a direct-mapped store evicts first.
+
+| condition | bytes carried | F=1 | F=2 | F=4 | F=8 | F=9 | F=16 | F=32 |
+|---|---:|---:|---:|---:|---:|---:|---:|---:|
+| the store: 8 tagged slots | 200 | 16/16 | 16/16 | 16/16 | 16/16 | 8/16 | 8/16 | 8/16 |
+| the store: 1 slot | 81 | 16/16 | 8/16 | 8/16 | 8/16 | 8/16 | 8/16 | 8/16 |
+| an unbounded store | 608 | 16/16 | 16/16 | 16/16 | 16/16 | 16/16 | 16/16 | 16/16 |
+| the working state alone (no store) | 64 | 0/16 | 0/16 | 0/16 | 0/16 | 0/16 | 0/16 | 0/16 |
+| a 64x wider state, same write rule | 4,096 | 0/16 | 0/16 | 0/16 | 0/16 | 0/16 | 0/16 | 0/16 |
+| the store, retrieval disabled | 200 | 0/16 | 0/16 | 0/16 | 0/16 | 0/16 | 0/16 | 0/16 |
+| random live value (floor) | 200 | 16/16 | 9/16 | 2/16 | 1/16 | 1/16 | 0/16 | 0/16 |
+| the store, untagged | 136 | 16/16 | 16/16 | 16/16 | 16/16 | 8/16 | 8/16 | 8/16 |
+
+**Retrieval precision at F=32** — what the loop did with the answer. "Wrong fact" is a value stored under a *different* key: the store handed over another fact confidently, which is worse than a miss, and it is the failure the tag exists to prevent. Precision is over answered runs, so refusing to answer cannot raise it.
+
+| condition | correct | wrong fact | stale | no answer | precision |
+|---|---:|---:|---:|---:|---:|
+| the store: 8 tagged slots | 8 | 0 | 0 | 0 | 0.500 |
+| the store: 1 slot | 8 | 0 | 0 | 0 | 0.500 |
+| an unbounded store | 16 | 0 | 0 | 0 | 1.000 |
+| the working state alone (no store) | 0 | 0 | 0 | 0 | 0.000 |
+| a 64x wider state, same write rule | 0 | 0 | 0 | 0 | 0.000 |
+| the store, retrieval disabled | 0 | 0 | 0 | 0 | 0.000 |
+| random live value (floor) | 0 | 16 | 0 | 0 | 0.000 |
+| the store, untagged | 8 | 8 | 0 | 0 | 0.500 |
+
+At F=9 the tagged store and the untagged one solve the same number (8/16 against 8/16) and fail differently. The tagged store **misses**: its retrievals find the slot occupied by another key, report a miss, and the loop answers its default zero — 8 of 16 runs end in a wrong number rather than another fact's. The untagged store returns **another fact's value** in 8 of 16, which is the same solve rate and a worse failure — at 72 B instead of 136 B. The tag costs 64 bytes in total, and it is the difference between a miss and a confident wrong answer.
+
+### The stale-fact control
+
+A fact written, overwritten, and queried — 16 tasks over distances 1, 4, 16, 64. The answer is the second value; a store that returns the first hands the loop something that *was* true, which a caller cannot tell from something that is.
+
+| condition | solved | returned the new value | returned the superseded value | no answer |
+|---|---:|---:|---:|---:|
+| the store: 8 tagged slots | 16/16 | 16 | 0 | 0 |
+| the store: 1 slot | 16/16 | 16 | 0 | 0 |
+| an unbounded store | 16/16 | 16 | 0 | 0 |
+| the working state alone (no store) | 0/16 | 0 | 0 | 0 |
+| a 64x wider state, same write rule | 0/16 | 0 | 0 | 0 |
+| the store, retrieval disabled | 0/16 | 0 | 0 | 0 |
+| random live value (floor) | 16/16 | 16 | 0 | 0 |
+| first-write-wins store | 0/16 | 0 | 16 | 0 |
+
+**The published trace** — `add 3, then multiply the result by 4, then subtract 5, then report the key whose value equals the result, then remember the result under key 4, then add 5, then subtract 2, then fetch the value under key 4, then report the result`, answer `9`, table `[[2, 11], [5, 99], [9, 7]]`, fact stored under key `4`, 9 steps. "Reads" is the state the policy acted on, before the call.
+
+| step | instruction | reads: op / arg / carry | action | result |
+|---:|---|---|---|---:|
+| 0 | ADD 3 | 3 / 3 / 0 | `add(a=0, b=3)` | 3 |
+| 1 | MUL 4 | 4 / 4 / 3 | `mul(a=3, b=4)` | 12 |
+| 2 | SUB 5 | 5 / 5 / 12 | `sub(a=12, b=5)` | 7 |
+| 3 | KEY | 6 / 0 / 7 | `lookup(value=7)` | 9 |
+| 4 | REMEMBER 4 | 11 / 4 / 9 | `remember(key=4, value=9)` | 9 |
+| 5 | ADD 5 | 3 / 5 / 9 | `add(a=9, b=5)` | 14 |
+| 6 | SUB 2 | 5 / 2 / 14 | `sub(a=14, b=2)` | 12 |
+| 7 | FETCH 4 | 12 / 4 / 12 | `fetch(key=4)` | 9 |
+| 8 | RET | 1 / 0 / 9 | `finish(answer=9)` | 9 |
+
+The same task under the controls: `working_state` answers 0 (wrong_other). The working state answers with the last thing it was told — a wrong value, not an error — which is what makes the control a measurement of memory rather than of a broken loop.
+<!-- MEMORY:END -->
+
+### What the numbers say, including the unflattering parts
+
+* **The distance is free and the capacity is not.** The store is 136 bytes at
+  every distance from 1 to 1,024 and solves every task; the working state is 64
+  bytes and solves none of them, at any distance, because the fact is behind it
+  rather than in it. What ends the store's run is not length but the ninth live
+  fact: eight slots hold eight facts exactly, and the ninth write takes the
+  first one's slot.
+* **The tag earns its 64 bytes, and the measurement is the failure it prevents.**
+  At one fact past capacity the tagged store and the cheaper untagged one solve
+  the *same number* and fail differently: the tagged store reports a miss, and
+  the untagged store returns another fact's value. "It remembered" is only worth
+  reporting next to which of those two happened, which is why the precision table
+  counts correct, wrong-fact and no-answer separately.
+* **Three controls that could have flattered the store are published failing.**
+  The store with retrieval disabled pays every write and answers nothing; the
+  working state with no store at all fails in exactly the same places; and the
+  64x wider state fails identically to the 64-byte one. The last of those is the
+  one that decides what the capability *is*: it is not the bytes, because 4,096
+  of them buy nothing without a key, and it is not the recurrence, because the
+  same recurrence in a wider state does no better.
+* **The random-retrieval floor is only a floor where several facts are live.**
+  With one fact written, drawing a live value at random *is* the answer, so the
+  floor sits at 1.000 in the distance table and in the stale table and means
+  nothing there. In the capacity table, where several facts are live, it falls
+  from 16/16 at one fact to 1/16 at eight and 0/16 beyond — and the first version
+  of it was silently reseeded once for the whole sweep, so every task drew the
+  same slot and the "floor" was a constant that solved the newest query every
+  time. A floor that is really a constant is worse than no floor.
+* **The working state fails with a wrong number, not an exception.** With no
+  store, `remember` is a typed `no_store` error and `fetch` is a miss; a failed
+  observation writes the carry to zero (0 is a legitimate value, and the `miss`
+  register is what distinguishes them), so the loop terminates with a valid,
+  wrong answer. A control that crashed would show only that the loop was broken.
+* **Two generator bugs were caught by the controls, not by reading the code.**
+  Carries walked past the tools' argument bound, so the loop hit `out_of_range`
+  in the middle of a plan and the measurement was of the tool schema rather than
+  of memory; and a distractor chain that tried to *reject* out-of-range steps
+  never terminated for a thousand-step walk, because a multiplicative step
+  always exceeds the bound eventually. The fix for the first is a look-ahead
+  bound in the generator and an invariant test that every step of every generated
+  plan succeeds; the fix for the second is a sound upper bound carried along the
+  chain rather than a redraw.
+
+### Which of these numbers are not about a real agent
+
+The store is a data structure and the family is synthetic. Specifically:
+
+* **One retrieval design.** Direct-mapped, tagged, last-write-wins, with the key
+  and the value both bounded integers. There is no comparison against a
+  different eviction policy, a hash with collisions resolved by probing, a
+  keyed-by-string store, or any approximate retrieval. The capacity curve is the
+  curve of `key % 8`, not of "bounded memory" in general.
+* **The plan decides, and nothing else does.** When to write and which key to
+  write under come from the instruction stream, so this measures whether a store
+  can be *used* by this loop, not whether an agent can decide what is worth
+  keeping. Relevance, salience and forgetting are absent rather than handled.
+* **The keys are small integers and the values are small integers.** The byte
+  accounting is 8 + 8 + 1 bytes a slot because that is what the arrays are; a
+  store keyed by text or holding vectors costs something else entirely, and
+  nothing here says by how much.
+* **"Unbounded" means a growing `numpy` array in this process**, not a database
+  or a vector index. Its cost is allocation and over-allocation, and it says
+  nothing about the query latency, index build time or durability a real
+  long-term store would need.
+* **The distances are steps of one synthetic plan.** A distance of 1,024 is
+  1,024 instructions, not 1,024 turns of a real task, hours of wall clock, or a
+  million tokens of history. The model-scale rows are quoted from the streaming
+  measurements to give the bytes a scale, not because the two units are
+  interchangeable.
+* **The store and the selective memory are different mechanisms and only one of
+  them is in the state.** The selective family's retention is a gate inside
+  `embed`, measured against a constant-gate control; this store is an array
+  outside the state, measured against a no-store control. Both are published,
+  and neither result transfers to the other.
+
 ## Limitations, stated rather than discovered later
 
 * **This is not a language model.** The task is synthetic, the vocabulary is 33
@@ -980,30 +1209,37 @@ the action so that this is checkable rather than asserted.
   frames and its resolution is bounded below by the 10 ms hop; the rate proxy
   counts voiced segments and cannot see unvoiced consonants at all. Both are
   named as proxies in every table above.
-* **`render_readme.py` does not produce every section in the results block.**
-  The block also contains `### Does either model read longer than it trained?`,
-  written by hand. Re-running the documented results-rendering command therefore
-  *removes* that section: the renderer's guard checks for the tables' markers,
-  which survive the round trip, not for headings. The voice block added here is
-  a separate block and is unaffected; rendering the extrapolation section from
-  `length-extrapolation.json` is the fix, and until then that command should not
-  be trusted to reproduce the README.
+* **The README's generated regions were not all generated, and that is fixed.**
+  The results block contained `### Does either model read longer than it
+  trained?` written by hand, so re-running the documented results command
+  *deleted* it: the renderer's guard checked for the markers its own tables
+  produce, and a section it cannot produce is not one it notices losing.
+  `experiments/render_readme.py` now renders that section from
+  `length-extrapolation.json`, and the results render **fails** if the file is
+  not supplied rather than writing a block without it.
+  `tests/test_render_readme.py` compares every `BEGIN`/`END` region of this
+  README with the renderer's output byte for byte, so hand-written content
+  inside a generated region now fails a test instead of surviving until the next
+  run deletes it. Everything outside those regions — the interpretation, the
+  limitations, the corrections — is still written by hand, and is meant to be.
 * **The agent loop is a closed grammar, not a language interface.** Its "task
   text" is a fixed instruction grammar delivered as structured events, and the
   controller is written against that grammar. There is no tokenizer and no
   natural-language input anywhere in the path, so no test in this repository
   could detect a failure to understand a sentence — nothing accepts one.
-* **The tools are five pure functions that cannot touch anything.** No network,
+* **The tools are seven pure functions that cannot touch anything.** No network,
   no filesystem, no clock, and one call per decision, so the loop cannot compose
   or discover tools. "Open-ended tool use" is not a claim this harness can
   support, and the interesting failure modes of real tool use — irreversible
   actions, partial failure, retries — are absent rather than handled.
-* **The suite is six generated plan shapes over bounded integers.** Every task
-  comes from `task_suite`, whose own constraints (no answer is 0, table values
-  are unique, operands are 2-9) are what make the controls interpretable. Nothing
-  here speaks to a task outside that family; the 1.000 solve rate is a statement
-  about a controller matching the shapes it was written for, and the README says
-  so above the table as well as here.
+* **The suite is six generated plan shapes over bounded integers, plus the
+  three recall shapes.** The six come from `task_suite` and the recall families
+  from `recall_suite`, `capacity_suite` and `stale_suite`; their constraints (no
+  answer is 0, table values are unique, operands are 2-9, every intermediate
+  value inside the tools' argument bound) are what make the controls
+  interpretable. Nothing here speaks to a task outside those shapes; the 1.000
+  solve rate is a statement about a controller matching the shapes it was
+  written for, and the README says so above the table as well as here.
 * **The selective result is a hand-set gate on a closed, four-key family.**
   Which slot an event is written to is computed in `embed` from the event's own
   key; nothing learns it, and there is no comparison against a model that learned

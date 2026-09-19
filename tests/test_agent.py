@@ -336,6 +336,9 @@ def test_the_state_is_deterministic_and_the_wipe_changes_it() -> None:
         (ToolCall("add", {"a": None, "b": 2}), "bad_type"),
         (ToolCall("add", {"a": 10_001, "b": 0}), "out_of_range"),
         (ToolCall("lookup", {"value": -10_001}), "out_of_range"),
+        (ToolCall("remember", {"key": 1}), "bad_params"),
+        (ToolCall("fetch", {"key": True}), "bad_type"),
+        (ToolCall("fetch", {"key": 1, "value": 2}), "bad_params"),
         (ToolCall("finish", {}), "bad_params"),
     ],
 )
@@ -403,13 +406,17 @@ def test_the_module_reads_nothing_but_numpy() -> None:
         elif isinstance(node, ast.ImportFrom) and node.module:
             imported.add(node.module.split(".")[0])
 
-    assert imported <= {"numpy", "dataclasses", "typing", "__future__"}, imported
+    # ``memory`` is the one sibling import, and it is itself numpy-only --
+    # ``tests/test_memory.py`` reads its imports the same way. Anything else,
+    # and the store could reach a clock or a socket without this test noticing.
+    assert imported <= {"numpy", "dataclasses", "typing", "__future__",
+                        "memory"}, imported
     for forbidden in ("time", "random", "os", "socket", "pathlib", "json"):
         assert forbidden not in imported
     # Every tool is a pure function of its arguments: none of them is handed a
     # generator, and the only RNG in the module is the one ``run_agent`` builds
     # for the random-action control.
-    for name in ("add", "mul", "sub", "lookup", "finish"):
+    for name in ("add", "mul", "sub", "lookup", "remember", "fetch", "finish"):
         assert name in source.read_text()
 
 

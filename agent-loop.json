@@ -31,6 +31,8 @@
       "mul",
       "sub",
       "lookup",
+      "remember",
+      "fetch",
       "finish"
     ],
     "registers": [
@@ -816,14 +818,14 @@
         "rate": 0.0008
       },
       "two_op@6": {
-        "solved": 5,
+        "solved": 4,
         "total": 1250,
-        "rate": 0.004
+        "rate": 0.0032
       },
       "branch@6": {
-        "solved": 6,
+        "solved": 4,
         "total": 1250,
-        "rate": 0.0048
+        "rate": 0.0032
       },
       "lookup@6": {
         "solved": 7,
@@ -831,9 +833,9 @@
         "rate": 0.0056
       },
       "selective@6": {
-        "solved": 6,
+        "solved": 4,
         "total": 1250,
-        "rate": 0.0048
+        "rate": 0.0032
       }
     },
     "one_step": {
@@ -1566,5 +1568,5 @@
       }
     ]
   },
-  "wall_seconds": 1.75
+  "wall_seconds": 3.4
 }
