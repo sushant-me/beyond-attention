@@ -1,0 +1,1157 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>beyond-attention — generated dashboard</title>
+<style>
+:root {
+  --ink: #171a21; --body: #2b3038; --muted: #6a7381; --rule: #e2e6ec;
+  --bg: #f7f8fa; --card: #ffffff; --accent: #1d5b86; --accent-soft: #eef4f9;
+  --warn: #8a3d10; --warn-bg: #fdf4ee; --line-f0: #1d5b86; --line-rms: #b06a1f;
+  --line-conf: #1d5b86; --band: #2f7d4f;
+}
+* { box-sizing: border-box; }
+body {
+  margin: 0; background: var(--bg); color: var(--body);
+  font: 15px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+        "Helvetica Neue", Arial, sans-serif;
+}
+main { max-width: 1080px; margin: 0 auto; padding: 32px 22px 64px; }
+h1 { font-size: 27px; line-height: 1.2; margin: 0 0 6px; color: var(--ink); }
+h2 { font-size: 20px; margin: 0 0 10px; color: var(--ink); }
+h3 { font-size: 16px; margin: 26px 0 8px; color: var(--ink); }
+h4 { font-size: 14px; margin: 18px 0 6px; color: var(--ink); }
+p { margin: 0 0 12px; }
+a { color: var(--accent); }
+code, pre, .mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12.5px;
+}
+header.top { border-bottom: 2px solid var(--ink); padding-bottom: 14px;
+             margin-bottom: 8px; }
+header.top .sub { color: var(--muted); max-width: 62ch; }
+nav.toc { margin: 14px 0 26px; font-size: 13px; color: var(--muted); }
+nav.toc a { margin-right: 14px; text-decoration: none;
+            border-bottom: 1px solid var(--rule); }
+section, footer { background: var(--card); border: 1px solid var(--rule);
+                  border-radius: 6px; padding: 20px 22px; margin: 0 0 22px; }
+.lede { color: var(--body); max-width: 76ch; }
+.note { color: var(--muted); font-size: 12.5px; max-width: 86ch; }
+.muted { color: var(--muted); font-weight: 400; font-size: 12px; }
+table { border-collapse: collapse; width: 100%; margin: 10px 0 14px;
+        font-variant-numeric: tabular-nums; }
+th, td { border-bottom: 1px solid var(--rule); padding: 5px 8px; font-size: 13px;
+         text-align: left; }
+th { background: var(--accent-soft); color: var(--ink); font-weight: 600;
+     font-size: 12px; }
+td.right, th.right { text-align: right; }
+.grid { display: grid; gap: 16px; }
+.grid.two { grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); }
+figure.card { margin: 0; background: var(--card); border: 1px solid var(--rule);
+              border-radius: 6px; padding: 12px 14px 14px; }
+figcaption { margin-bottom: 8px; font-size: 13px; color: var(--ink); }
+figcaption .cond { font-weight: 600; margin-right: 8px; }
+figcaption .muted { display: block; margin-top: 2px; }
+svg.chart { width: 100%; height: auto; display: block; overflow: visible; }
+svg text { font-family: inherit; font-size: 9.5px; fill: var(--muted); }
+svg .axis-title { fill: var(--ink); font-size: 10px; }
+svg .grid { stroke: var(--rule); stroke-width: 1; }
+svg .axis { stroke: #b9c1cc; stroke-width: 1; }
+svg .shade { fill: #eef4f9; }
+svg .voiced-band { fill: var(--band); opacity: 0.75; }
+svg .threshold { stroke: var(--warn); stroke-width: 1.2; stroke-dasharray: 5 4; }
+svg .line { fill: none; stroke-width: 1.6; stroke-linejoin: round; }
+svg .line.f0, svg .line.conf { stroke: var(--line-f0); }
+svg .line.rms { stroke: var(--line-rms); }
+.readout { margin: 8px 0 0; font-size: 12px; color: var(--muted);
+           font-variant-numeric: tabular-nums; min-height: 1.2em; }
+dl.kv { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px;
+        margin: 10px 0 0; font-size: 12.5px; }
+dl.kv dt { color: var(--muted); }
+dl.kv dd { margin: 0; font-variant-numeric: tabular-nums; }
+.callout { background: var(--warn-bg); border: 1px solid #edd9c8;
+           border-left: 3px solid var(--warn); border-radius: 4px;
+           padding: 12px 16px; margin: 0 0 18px; }
+.callout p { margin: 0 0 10px; }
+.callout p:last-child { margin-bottom: 0; }
+ol.trace { list-style: none; margin: 12px 0 0; padding: 0;
+           border-top: 1px solid var(--rule); }
+ol.trace li { padding: 9px 0; border-bottom: 1px solid var(--rule); }
+.trace-head { display: flex; flex-wrap: wrap; gap: 10px; align-items: baseline;
+              font-size: 13px; }
+.trace-head .step { color: var(--muted); font-size: 11.5px; min-width: 52px; }
+.trace-head .instr { font-weight: 600; color: var(--ink); min-width: 74px; }
+.trace-head code.act { background: var(--accent-soft); padding: 1px 6px;
+                       border-radius: 3px; }
+.trace-head .obs { font-variant-numeric: tabular-nums; }
+.trace-sub { color: var(--muted); font-size: 12px; margin-top: 3px;
+             font-variant-numeric: tabular-nums; }
+p.task { font-size: 15px; color: var(--ink); background: var(--accent-soft);
+         border-radius: 4px; padding: 10px 14px; }
+ul.falseclaims, ul.limits { padding-left: 20px; }
+ul.falseclaims li, ul.limits li { margin-bottom: 9px; max-width: 88ch; }
+footer pre { background: var(--accent-soft); border: 1px solid var(--rule);
+             border-radius: 4px; padding: 12px 14px; overflow-x: auto; }
+.bad { color: var(--warn); }
+</style>
+</head>
+<body>
+<main>
+<header class="top">
+<h1>beyond-attention — generated dashboard</h1><p class="sub">A selective state-space model, its prosody front end and its agent loop, drawn from the JSON the experiments write. Every number, chart and sentence about what a control did is produced by <code>experiments/render_dashboard.py</code> from <code>voice-affect.json</code> and <code>agent-loop.json</code>; re-running the experiments and the renderer reproduces this file byte for byte. Nothing on the page is typed in by hand, and nothing on it was measured twice.</p>
+<p class="sub">voice: seed 0, 16 utterances per condition · agent: seed 0, 300 tasks, budgets 1, 2, 3, 4, 5, 6</p>
+</header>
+<nav class="toc"><a href="#voice">Voice</a><a href="#voicing-control">Voiced/unvoiced control</a><a href="#agent">Agent</a><a href="#results">Results and controls</a><a href="#limitations">What this does not show</a><a href="#regenerate">Regenerating</a></nav>
+<!-- DASHBOARD:VOICE:BEGIN -->
+<section id="voice">
+<h2>Voice: four synthetic prosody conditions, one frame per 10 ms</h2>
+<p class="lede">Every condition below was synthesised from one parameter tuple that sets pitch level, pitch movement, loudness movement and burst rate. The charts are the measured F0 and energy contours; the numbers beside them are the descriptors the same run produced. Look at them together: the descriptor is a summary of the curve, not a second opinion about it.</p>
+<p>Separability in descriptor space — leave-one-out nearest centroid over 64 synthetic utterances, chance 0.250: <strong>0.969</strong> (96.9%, 13.3σ against chance). The closest pair of condition centroids is 1.50 against a mean within-condition spread of 1.09 — a ratio of <strong>1.37×</strong>.</p>
+<table>
+<thead><tr>
+<th class="left">descriptor</th>
+<th class="right">unit</th>
+<th class="right">neutral</th>
+<th class="right">aroused</th>
+<th class="right">subdued</th>
+<th class="right">unsteady</th>
+</tr></thead><tbody>
+<tr>
+<td class="left"><code>f0_mean</code></td>
+<td class="right">Hz</td>
+<td class="right">151.7</td>
+<td class="right">225.3</td>
+<td class="right">111.5</td>
+<td class="right">250.7</td>
+</tr>
+<tr>
+<td class="left"><code>f0_std</code></td>
+<td class="right">Hz</td>
+<td class="right">1.68</td>
+<td class="right">21.38</td>
+<td class="right">0.91</td>
+<td class="right">35.51</td>
+</tr>
+<tr>
+<td class="left"><code>energy_mean</code></td>
+<td class="right">a.u.</td>
+<td class="right">0.1750</td>
+<td class="right">0.1845</td>
+<td class="right">0.1722</td>
+<td class="right">0.1759</td>
+</tr>
+<tr>
+<td class="left"><code>energy_std</code></td>
+<td class="right">a.u.</td>
+<td class="right">0.1347</td>
+<td class="right">0.1571</td>
+<td class="right">0.1371</td>
+<td class="right">0.1305</td>
+</tr>
+<tr>
+<td class="left"><code>energy_mean_voiced</code></td>
+<td class="right">a.u.</td>
+<td class="right">0.2819</td>
+<td class="right">0.2746</td>
+<td class="right">0.2831</td>
+<td class="right">0.2682</td>
+</tr>
+<tr>
+<td class="left"><code>energy_std_voiced</code></td>
+<td class="right">a.u.</td>
+<td class="right">0.0138</td>
+<td class="right">0.1151</td>
+<td class="right">0.0094</td>
+<td class="right">0.0468</td>
+</tr>
+<tr>
+<td class="left"><code>energy_flux_mean</code></td>
+<td class="right">a.u.</td>
+<td class="right">0.0466</td>
+<td class="right">0.1274</td>
+<td class="right">0.0255</td>
+<td class="right">0.0959</td>
+</tr>
+<tr>
+<td class="left"><code>voiced_ratio</code></td>
+<td class="right">share</td>
+<td class="right">0.601</td>
+<td class="right">0.649</td>
+<td class="right">0.596</td>
+<td class="right">0.641</td>
+</tr>
+<tr>
+<td class="left"><code>speaking_rate</code></td>
+<td class="right">runs/s</td>
+<td class="right">2.02</td>
+<td class="right">5.05</td>
+<td class="right">1.01</td>
+<td class="right">3.54</td>
+</tr>
+<tr>
+<td class="left"><code>jitter</code></td>
+<td class="right">Hz</td>
+<td class="right">0.307</td>
+<td class="right">4.476</td>
+<td class="right">0.299</td>
+<td class="right">5.655</td>
+</tr>
+<tr>
+<td class="left"><code>flatness_mean</code></td>
+<td class="right">ratio</td>
+<td class="right">0.00049</td>
+<td class="right">0.00122</td>
+<td class="right">0.00023</td>
+<td class="right">0.00317</td>
+</tr>
+</tbody></table>
+<div class="grid two">
+<figure class="card"><figcaption><span class="cond">neutral</span><span class="muted">generator: F0 target 150 Hz, 2 bursts/s, panel 60% voiced</span></figcaption><svg class="chart" viewBox="0 0 460 244" role="img" data-readout="readout-voice-neutral" data-frames="198" data-x0="58.00" data-x1="446.00" data-times="0,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.1,0.11,0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.2,0.21,0.22,0.23,0.24,0.25,0.26,0.27,0.28,0.29,0.3,0.31,0.32,0.33,0.34,0.35,0.36,0.37,0.38,0.39,0.4,0.41,0.42,0.43,0.44,0.45,0.46,0.47,0.48,0.49,0.5,0.51,0.52,0.53,0.54,0.55,0.56,0.57,0.58,0.59,0.6,0.61,0.62,0.63,0.64,0.65,0.66,0.67,0.68,0.69,0.7,0.71,0.72,0.73,0.74,0.75,0.76,0.77,0.78,0.79,0.8,0.81,0.82,0.83,0.84,0.85,0.86,0.87,0.88,0.89,0.9,0.91,0.92,0.93,0.94,0.95,0.96,0.97,0.98,0.99,1,1.01,1.02,1.03,1.04,1.05,1.06,1.07,1.08,1.09,1.1,1.11,1.12,1.13,1.14,1.15,1.16,1.17,1.18,1.19,1.2,1.21,1.22,1.23,1.24,1.25,1.26,1.27,1.28,1.29,1.3,1.31,1.32,1.33,1.34,1.35,1.36,1.37,1.38,1.39,1.4,1.41,1.42,1.43,1.44,1.45,1.46,1.47,1.48,1.49,1.5,1.51,1.52,1.53,1.54,1.55,1.56,1.57,1.58,1.59,1.6,1.61,1.62,1.63,1.64,1.65,1.66,1.67,1.68,1.69,1.7,1.71,1.72,1.73,1.74,1.75,1.76,1.77,1.78,1.79,1.8,1.81,1.82,1.83,1.84,1.85,1.86,1.87,1.88,1.89,1.9,1.91,1.92,1.93,1.94,1.95,1.96,1.97">
+<g class="frame">
+<rect class="shade" x="58.00" y="12.00" width="55.15" height="96.00"/>
+<rect class="shade" x="154.51" y="12.00" width="57.12" height="96.00"/>
+<rect class="shade" x="252.98" y="12.00" width="57.12" height="96.00"/>
+<rect class="shade" x="351.46" y="12.00" width="57.12" height="96.00"/>
+<line class="grid" x1="58.0" x2="446.0" y1="105.67" y2="105.67"/>
+<text class="tick" x="52.0" y="109.07" text-anchor="end">100</text>
+<line class="grid" x1="58.0" x2="446.0" y1="64.47" y2="64.47"/>
+<text class="tick" x="52.0" y="67.87" text-anchor="end">200</text>
+<line class="grid" x1="58.0" x2="446.0" y1="23.26" y2="23.26"/>
+<text class="tick" x="52.0" y="26.66" text-anchor="end">300</text>
+<line class="axis" x1="58.0" x2="446.0" y1="108.00" y2="108.00"/>
+<line class="axis" x1="58.0" x2="58.0" y1="12.00" y2="108.00"/>
+<text class="axis-title" x="58.0" y="7.0">F0 (Hz)</text>
+<path class="line f0" d="M58.00,83.82 L59.97,83.90 L61.94,84.01 L63.91,84.20 L65.88,84.31 L67.85,84.42 L69.82,84.56 L71.79,84.63 L73.76,84.75 L75.73,84.86 L77.70,84.93 L79.66,84.93 L81.63,84.93 L83.60,84.89 L85.57,84.78 L87.54,84.64 L89.51,84.60 L91.48,84.42 L93.45,84.19 L95.42,84.12 L97.39,84.01 L99.36,83.97 L101.33,83.89 L103.30,83.70 L105.27,83.74 L107.24,83.74 L109.21,83.78 L111.18,83.97 L113.15,83.85 M154.51,83.21 L156.48,83.78 L158.45,83.97 L160.42,84.16 L162.39,84.23 L164.36,84.31 L166.32,84.42 L168.29,84.60 L170.26,84.78 L172.23,84.86 L174.20,84.86 L176.17,84.93 L178.14,85.00 L180.11,85.00 L182.08,84.86 L184.05,84.82 L186.02,84.75 L187.99,84.60 L189.96,84.34 L191.93,84.23 L193.90,84.08 L195.87,84.04 L197.84,83.97 L199.81,83.89 L201.78,83.86 L203.75,83.89 L205.72,83.93 L207.69,84.01 L209.65,84.01 L211.62,83.58 M252.98,83.56 L254.95,84.08 L256.92,84.16 L258.89,84.34 L260.86,84.53 L262.83,84.63 L264.80,84.67 L266.77,84.93 L268.74,85.15 L270.71,85.15 L272.68,85.18 L274.65,85.26 L276.62,85.33 L278.59,85.33 L280.56,85.25 L282.53,85.18 L284.50,85.11 L286.47,84.96 L288.44,84.67 L290.41,84.56 L292.38,84.52 L294.35,84.27 L296.31,84.27 L298.28,84.16 L300.25,84.04 L302.22,84.12 L304.19,84.16 L306.16,84.16 L308.13,84.23 L310.10,84.11 M351.46,83.36 L353.43,83.89 L355.40,84.01 L357.37,84.12 L359.34,84.23 L361.31,84.34 L363.28,84.53 L365.25,84.63 L367.22,84.78 L369.19,84.89 L371.16,84.93 L373.13,85.07 L375.10,85.07 L377.07,85.07 L379.04,84.93 L381.01,84.86 L382.97,84.71 L384.94,84.63 L386.91,84.45 L388.88,84.23 L390.85,84.15 L392.82,84.00 L394.79,83.97 L396.76,83.89 L398.73,83.81 L400.70,83.86 L402.67,83.89 L404.64,83.89 L406.61,84.01 L408.58,83.96" data-label="F0" data-unit="Hz" data-digits="1" data-lo="94.3412" data-hi="327.339" data-top="12.00" data-bottom="108.00"/>
+<line class="grid" x1="58.0" x2="446.0" y1="210.00" y2="210.00"/>
+<text class="tick" x="52.0" y="213.40" text-anchor="end">0</text>
+<line class="grid" x1="58.0" x2="446.0" y1="169.48" y2="169.48"/>
+<text class="tick" x="52.0" y="172.88" text-anchor="end">0.2</text>
+<line class="axis" x1="58.0" x2="446.0" y1="210.00" y2="210.00"/>
+<line class="axis" x1="58.0" x2="58.0" y1="136.00" y2="210.00"/>
+<text class="axis-title" x="58.0" y="131.0">energy (RMS amplitude, a.u.)</text>
+<path class="line rms" d="M58.00,152.28 L59.97,152.10 L61.94,151.96 L63.91,151.87 L65.88,151.87 L67.85,151.92 L69.82,151.98 L71.79,152.06 L73.76,152.16 L75.73,152.26 L77.70,152.32 L79.66,152.38 L81.63,152.42 L83.60,152.44 L85.57,152.44 L87.54,152.44 L89.51,152.42 L91.48,152.40 L93.45,152.38 L95.42,152.38 L97.39,152.36 L99.36,152.38 L101.33,152.38 L103.30,152.42 L105.27,152.44 L107.24,152.48 L109.21,152.50 L111.18,152.50 L113.15,158.60 L115.12,173.65 L117.09,210.00 L119.06,210.00 L121.03,210.00 L122.99,210.00 L124.96,210.00 L126.93,210.00 L128.90,210.00 L130.87,210.00 L132.84,210.00 L134.81,210.00 L136.78,210.00 L138.75,210.00 L140.72,210.00 L142.69,210.00 L144.66,210.00 L146.63,210.00 L148.60,210.00 L150.57,210.00 L152.54,184.53 L154.51,165.71 L156.48,152.83 L158.45,152.66 L160.42,152.54 L162.39,152.50 L164.36,152.54 L166.32,152.60 L168.29,152.73 L170.26,152.83 L172.23,152.95 L174.20,153.05 L176.17,153.11 L178.14,153.15 L180.11,153.15 L182.08,153.13 L184.05,153.11 L186.02,153.09 L187.99,153.05 L189.96,153.01 L191.93,152.97 L193.90,152.93 L195.87,152.87 L197.84,152.81 L199.81,152.77 L201.78,152.75 L203.75,152.77 L205.72,152.81 L207.69,152.89 L209.65,152.97 L211.62,158.93 L213.59,173.90 L215.56,210.00 L217.53,210.00 L219.50,210.00 L221.47,210.00 L223.44,210.00 L225.41,210.00 L227.38,210.00 L229.35,210.00 L231.32,210.00 L233.29,210.00 L235.26,210.00 L237.23,210.00 L239.20,210.00 L241.17,210.00 L243.14,210.00 L245.11,210.00 L247.08,210.00 L249.05,210.00 L251.02,184.43 L252.98,165.53 L254.95,152.54 L256.92,152.46 L258.89,152.40 L260.86,152.38 L262.83,152.38 L264.80,152.40 L266.77,152.44 L268.74,152.50 L270.71,152.54 L272.68,152.62 L274.65,152.71 L276.62,152.81 L278.59,152.93 L280.56,153.01 L282.53,153.07 L284.50,153.07 L286.47,153.05 L288.44,152.99 L290.41,152.93 L292.38,152.85 L294.35,152.77 L296.31,152.73 L298.28,152.66 L300.25,152.64 L302.22,152.62 L304.19,152.64 L306.16,152.66 L308.13,152.71 L310.10,158.60 L312.07,173.65 L314.04,210.00 L316.01,210.00 L317.98,210.00 L319.95,210.00 L321.92,210.00 L323.89,210.00 L325.86,210.00 L327.83,210.00 L329.80,210.00 L331.77,210.00 L333.74,210.00 L335.71,210.00 L337.68,210.00 L339.64,210.00 L341.61,210.00 L343.58,210.00 L345.55,210.00 L347.52,210.00 L349.49,183.97 L351.46,164.72 L353.43,151.53 L355.40,151.37 L357.37,151.29 L359.34,151.25 L361.31,151.29 L363.28,151.37 L365.25,151.47 L367.22,151.59 L369.19,151.67 L371.16,151.73 L373.13,151.73 L375.10,151.73 L377.07,151.69 L379.04,151.65 L381.01,151.61 L382.97,151.59 L384.94,151.61 L386.91,151.61 L388.88,151.63 L390.85,151.65 L392.82,151.65 L394.79,151.63 L396.76,151.61 L398.73,151.59 L400.70,151.59 L402.67,151.59 L404.64,151.61 L406.61,151.65 L408.58,157.81 L410.55,173.09 L412.52,210.00 L414.49,210.00 L416.46,210.00 L418.43,210.00 L420.40,210.00 L422.37,210.00 L424.34,210.00 L426.30,210.00 L428.27,210.00 L430.24,210.00 L432.21,210.00 L434.18,210.00 L436.15,210.00 L438.12,210.00 L440.09,210.00 L442.06,210.00 L444.03,210.00 L446.00,210.00" data-label="energy" data-unit="a.u." data-digits="4" data-lo="0" data-hi="0.365256" data-top="136.00" data-bottom="210.00"/>
+<line class="grid" x1="58.00" x2="58.00" y1="210.00" y2="214.00"/>
+<text class="tick" x="58.00" y="225.00" text-anchor="middle">0</text>
+<line class="grid" x1="156.48" x2="156.48" y1="210.00" y2="214.00"/>
+<text class="tick" x="156.48" y="225.00" text-anchor="middle">0.5</text>
+<line class="grid" x1="254.95" x2="254.95" y1="210.00" y2="214.00"/>
+<text class="tick" x="254.95" y="225.00" text-anchor="middle">1</text>
+<line class="grid" x1="353.43" x2="353.43" y1="210.00" y2="214.00"/>
+<text class="tick" x="353.43" y="225.00" text-anchor="middle">1.5</text>
+<text class="tick axis-title" x="252.0" y="239.00" text-anchor="middle">time (s)</text>
+</g>
+</svg><p class="readout" id="readout-voice-neutral" data-idle="hover the chart to read one frame">hover the chart to read one frame</p><dl class="kv">
+<dt>f0_mean</dt><dd>151.7 Hz</dd>
+<dt>f0_std</dt><dd>1.68 Hz</dd>
+<dt>energy_std_voiced</dt><dd>0.0138 a.u.</dd>
+<dt>voiced_ratio</dt><dd>60.1%</dd>
+<dt>speaking_rate</dt><dd>2.02 runs/s</dd>
+<dt>jitter</dt><dd>0.31 Hz</dd>
+</dl></figure>
+<figure class="card"><figcaption><span class="cond">aroused</span><span class="muted">generator: F0 target 225 Hz, 5 bursts/s, panel 60% voiced</span></figcaption><svg class="chart" viewBox="0 0 460 244" role="img" data-readout="readout-voice-aroused" data-frames="198" data-x0="58.00" data-x1="446.00" data-times="0,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.1,0.11,0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.2,0.21,0.22,0.23,0.24,0.25,0.26,0.27,0.28,0.29,0.3,0.31,0.32,0.33,0.34,0.35,0.36,0.37,0.38,0.39,0.4,0.41,0.42,0.43,0.44,0.45,0.46,0.47,0.48,0.49,0.5,0.51,0.52,0.53,0.54,0.55,0.56,0.57,0.58,0.59,0.6,0.61,0.62,0.63,0.64,0.65,0.66,0.67,0.68,0.69,0.7,0.71,0.72,0.73,0.74,0.75,0.76,0.77,0.78,0.79,0.8,0.81,0.82,0.83,0.84,0.85,0.86,0.87,0.88,0.89,0.9,0.91,0.92,0.93,0.94,0.95,0.96,0.97,0.98,0.99,1,1.01,1.02,1.03,1.04,1.05,1.06,1.07,1.08,1.09,1.1,1.11,1.12,1.13,1.14,1.15,1.16,1.17,1.18,1.19,1.2,1.21,1.22,1.23,1.24,1.25,1.26,1.27,1.28,1.29,1.3,1.31,1.32,1.33,1.34,1.35,1.36,1.37,1.38,1.39,1.4,1.41,1.42,1.43,1.44,1.45,1.46,1.47,1.48,1.49,1.5,1.51,1.52,1.53,1.54,1.55,1.56,1.57,1.58,1.59,1.6,1.61,1.62,1.63,1.64,1.65,1.66,1.67,1.68,1.69,1.7,1.71,1.72,1.73,1.74,1.75,1.76,1.77,1.78,1.79,1.8,1.81,1.82,1.83,1.84,1.85,1.86,1.87,1.88,1.89,1.9,1.91,1.92,1.93,1.94,1.95,1.96,1.97">
+<g class="frame">
+<rect class="shade" x="58.00" y="12.00" width="21.66" height="96.00"/>
+<rect class="shade" x="95.42" y="12.00" width="23.63" height="96.00"/>
+<rect class="shade" x="134.81" y="12.00" width="23.63" height="96.00"/>
+<rect class="shade" x="174.20" y="12.00" width="23.63" height="96.00"/>
+<rect class="shade" x="213.59" y="12.00" width="23.63" height="96.00"/>
+<rect class="shade" x="252.98" y="12.00" width="23.63" height="96.00"/>
+<rect class="shade" x="292.38" y="12.00" width="23.63" height="96.00"/>
+<rect class="shade" x="331.77" y="12.00" width="23.63" height="96.00"/>
+<rect class="shade" x="371.16" y="12.00" width="23.63" height="96.00"/>
+<rect class="shade" x="410.55" y="12.00" width="23.63" height="96.00"/>
+<line class="grid" x1="58.0" x2="446.0" y1="105.67" y2="105.67"/>
+<text class="tick" x="52.0" y="109.07" text-anchor="end">100</text>
+<line class="grid" x1="58.0" x2="446.0" y1="64.47" y2="64.47"/>
+<text class="tick" x="52.0" y="67.87" text-anchor="end">200</text>
+<line class="grid" x1="58.0" x2="446.0" y1="23.26" y2="23.26"/>
+<text class="tick" x="52.0" y="26.66" text-anchor="end">300</text>
+<line class="axis" x1="58.0" x2="446.0" y1="108.00" y2="108.00"/>
+<line class="axis" x1="58.0" x2="58.0" y1="12.00" y2="108.00"/>
+<text class="axis-title" x="58.0" y="7.0">F0 (Hz)</text>
+<path class="line f0" d="M58.00,44.05 L59.97,45.03 L61.94,46.71 L63.91,48.93 L65.88,51.39 L67.85,54.15 L69.82,57.06 L71.79,59.45 L73.76,61.72 L75.73,63.32 L77.70,64.32 L79.66,62.71 M95.42,42.52 L97.39,43.16 L99.36,44.27 L101.33,45.92 L103.30,48.21 L105.27,50.69 L107.24,53.51 L109.21,56.32 L111.18,58.74 L113.15,60.91 L115.12,62.67 L117.09,63.47 L119.06,62.25 M134.81,40.94 L136.78,41.92 L138.75,42.63 L140.72,44.09 L142.69,46.78 L144.66,49.33 L146.63,51.88 L148.60,55.01 L150.57,57.43 L152.54,59.65 L154.51,61.29 L156.48,62.32 L158.45,61.88 M174.20,43.05 L176.17,43.76 L178.14,44.52 L180.11,46.62 L182.08,48.59 L184.05,51.25 L186.02,53.79 L187.99,56.80 L189.96,59.13 L191.93,61.48 L193.90,63.09 L195.87,63.89 L197.84,63.18 M213.59,44.08 L215.56,44.86 L217.53,45.55 L219.50,47.22 L221.47,49.69 L223.44,52.14 L225.41,54.76 L227.38,57.48 L229.35,59.99 L231.32,62.23 L233.29,64.00 L235.26,64.85 L237.23,62.78 M252.98,46.28 L254.95,46.90 L256.92,47.71 L258.89,49.37 L260.86,51.64 L262.83,54.18 L264.80,56.62 L266.77,59.24 L268.74,61.71 L270.71,63.89 L272.68,65.80 L274.65,66.77 L276.62,65.70 M292.38,43.46 L294.35,44.07 L296.31,45.05 L298.28,46.59 L300.25,48.91 L302.22,51.64 L304.19,54.25 L306.16,57.14 L308.13,59.49 L310.10,61.66 L312.07,63.40 L314.04,64.14 L316.01,62.23 M331.77,43.09 L333.74,43.84 L335.71,44.72 L337.68,46.18 L339.64,48.66 L341.61,51.17 L343.58,53.87 L345.55,56.73 L347.52,59.20 L349.49,61.20 L351.46,63.02 L353.43,63.89 L355.40,62.55 M371.16,41.90 L373.13,42.86 L375.10,43.63 L377.07,45.47 L379.04,47.55 L381.01,50.39 L382.97,53.05 L384.94,55.88 L386.91,58.39 L388.88,60.55 L390.85,62.55 L392.82,63.30 L394.79,62.13 M410.55,44.89 L412.52,45.49 L414.49,46.57 L416.46,48.16 L418.43,50.42 L420.40,52.81 L422.37,55.50 L424.34,58.27 L426.30,60.58 L428.27,62.98 L430.24,64.75 L432.21,65.37 L434.18,63.83" data-label="F0" data-unit="Hz" data-digits="1" data-lo="94.3412" data-hi="327.339" data-top="12.00" data-bottom="108.00"/>
+<line class="grid" x1="58.0" x2="446.0" y1="210.00" y2="210.00"/>
+<text class="tick" x="52.0" y="213.40" text-anchor="end">0</text>
+<line class="grid" x1="58.0" x2="446.0" y1="169.48" y2="169.48"/>
+<text class="tick" x="52.0" y="172.88" text-anchor="end">0.2</text>
+<line class="axis" x1="58.0" x2="446.0" y1="210.00" y2="210.00"/>
+<line class="axis" x1="58.0" x2="58.0" y1="136.00" y2="210.00"/>
+<text class="axis-title" x="58.0" y="131.0">energy (RMS amplitude, a.u.)</text>
+<path class="line rms" d="M58.00,151.67 L59.97,151.59 L61.94,151.81 L63.91,151.57 L65.88,151.49 L67.85,151.65 L69.82,151.71 L71.79,151.63 L73.76,151.63 L75.73,151.59 L77.70,157.69 L79.66,173.01 L81.63,210.00 L83.60,210.00 L85.57,210.00 L87.54,210.00 L89.51,210.00 L91.48,210.00 L93.45,185.28 L95.42,166.97 L97.39,154.51 L99.36,154.57 L101.33,154.51 L103.30,154.55 L105.27,154.45 L107.24,154.65 L109.21,154.53 L111.18,154.41 L113.15,154.25 L115.12,154.63 L117.09,160.65 L119.06,174.91 L121.03,210.00 L122.99,210.00 L124.96,210.00 L126.93,210.00 L128.90,210.00 L130.87,210.00 L132.84,185.06 L134.81,167.03 L136.78,154.71 L138.75,154.49 L140.72,154.69 L142.69,154.65 L144.66,154.73 L146.63,154.69 L148.60,154.75 L150.57,154.51 L152.54,154.59 L154.51,154.77 L156.48,160.57 L158.45,174.95 L160.42,210.00 L162.39,210.00 L164.36,210.00 L166.32,210.00 L168.29,210.00 L170.26,210.00 L172.23,182.77 L174.20,162.75 L176.17,148.92 L178.14,148.98 L180.11,148.92 L182.08,148.77 L184.05,149.04 L186.02,148.73 L187.99,148.96 L189.96,148.77 L191.93,148.88 L193.90,148.86 L195.87,155.42 L197.84,171.47 L199.81,210.00 L201.78,210.00 L203.75,210.00 L205.72,210.00 L207.69,210.00 L209.65,210.00 L211.62,184.41 L213.59,165.35 L215.56,152.32 L217.53,152.34 L219.50,152.20 L221.47,152.32 L223.44,152.04 L225.41,152.46 L227.38,152.26 L229.35,152.22 L231.32,152.18 L233.29,152.26 L235.26,158.52 L237.23,173.74 L239.20,210.00 L241.17,210.00 L243.14,210.00 L245.11,210.00 L247.08,210.00 L249.05,210.00 L251.02,179.91 L252.98,157.16 L254.95,141.58 L256.92,141.70 L258.89,141.70 L260.86,141.48 L262.83,141.68 L264.80,141.93 L266.77,141.83 L268.74,141.68 L270.71,141.68 L272.68,141.50 L274.65,148.37 L276.62,166.06 L278.59,210.00 L280.56,210.00 L282.53,210.00 L284.50,210.00 L286.47,210.00 L288.44,210.00 L290.41,185.18 L292.38,166.68 L294.35,154.04 L296.31,154.10 L298.28,153.86 L300.25,154.08 L302.22,154.04 L304.19,154.18 L306.16,154.10 L308.13,153.96 L310.10,153.98 L312.07,154.22 L314.04,160.18 L316.01,174.87 L317.98,210.00 L319.95,210.00 L321.92,210.00 L323.89,210.00 L325.86,210.00 L327.83,210.00 L329.80,183.12 L331.77,163.12 L333.74,149.44 L335.71,149.48 L337.68,149.38 L339.64,149.40 L341.61,149.32 L343.58,149.50 L345.55,149.34 L347.52,149.32 L349.49,149.40 L351.46,149.59 L353.43,156.09 L355.40,171.91 L357.37,210.00 L359.34,210.00 L361.31,210.00 L363.28,210.00 L365.25,210.00 L367.22,210.00 L369.19,183.74 L371.16,164.64 L373.13,151.25 L375.10,151.23 L377.07,151.33 L379.04,151.39 L381.01,151.25 L382.97,151.41 L384.94,151.35 L386.91,151.33 L388.88,151.27 L390.85,151.17 L392.82,157.39 L394.79,173.01 L396.76,210.00 L398.73,210.00 L400.70,210.00 L402.67,210.00 L404.64,210.00 L406.61,210.00 L408.58,185.77 L410.55,167.66 L412.52,155.20 L414.49,155.26 L416.46,155.10 L418.43,155.32 L420.40,154.99 L422.37,154.93 L424.34,155.08 L426.30,155.18 L428.27,155.06 L430.24,155.10 L432.21,161.01 L434.18,175.38 L436.15,210.00 L438.12,210.00 L440.09,210.00 L442.06,210.00 L444.03,210.00 L446.00,210.00" data-label="energy" data-unit="a.u." data-digits="4" data-lo="0" data-hi="0.365256" data-top="136.00" data-bottom="210.00"/>
+<line class="grid" x1="58.00" x2="58.00" y1="210.00" y2="214.00"/>
+<text class="tick" x="58.00" y="225.00" text-anchor="middle">0</text>
+<line class="grid" x1="156.48" x2="156.48" y1="210.00" y2="214.00"/>
+<text class="tick" x="156.48" y="225.00" text-anchor="middle">0.5</text>
+<line class="grid" x1="254.95" x2="254.95" y1="210.00" y2="214.00"/>
+<text class="tick" x="254.95" y="225.00" text-anchor="middle">1</text>
+<line class="grid" x1="353.43" x2="353.43" y1="210.00" y2="214.00"/>
+<text class="tick" x="353.43" y="225.00" text-anchor="middle">1.5</text>
+<text class="tick axis-title" x="252.0" y="239.00" text-anchor="middle">time (s)</text>
+</g>
+</svg><p class="readout" id="readout-voice-aroused" data-idle="hover the chart to read one frame">hover the chart to read one frame</p><dl class="kv">
+<dt>f0_mean</dt><dd>225.3 Hz</dd>
+<dt>f0_std</dt><dd>21.38 Hz</dd>
+<dt>energy_std_voiced</dt><dd>0.1151 a.u.</dd>
+<dt>voiced_ratio</dt><dd>64.9%</dd>
+<dt>speaking_rate</dt><dd>5.05 runs/s</dd>
+<dt>jitter</dt><dd>4.48 Hz</dd>
+</dl></figure>
+<figure class="card"><figcaption><span class="cond">subdued</span><span class="muted">generator: F0 target 110 Hz, 1 burst/s, panel 60% voiced</span></figcaption><svg class="chart" viewBox="0 0 460 244" role="img" data-readout="readout-voice-subdued" data-frames="198" data-x0="58.00" data-x1="446.00" data-times="0,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.1,0.11,0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.2,0.21,0.22,0.23,0.24,0.25,0.26,0.27,0.28,0.29,0.3,0.31,0.32,0.33,0.34,0.35,0.36,0.37,0.38,0.39,0.4,0.41,0.42,0.43,0.44,0.45,0.46,0.47,0.48,0.49,0.5,0.51,0.52,0.53,0.54,0.55,0.56,0.57,0.58,0.59,0.6,0.61,0.62,0.63,0.64,0.65,0.66,0.67,0.68,0.69,0.7,0.71,0.72,0.73,0.74,0.75,0.76,0.77,0.78,0.79,0.8,0.81,0.82,0.83,0.84,0.85,0.86,0.87,0.88,0.89,0.9,0.91,0.92,0.93,0.94,0.95,0.96,0.97,0.98,0.99,1,1.01,1.02,1.03,1.04,1.05,1.06,1.07,1.08,1.09,1.1,1.11,1.12,1.13,1.14,1.15,1.16,1.17,1.18,1.19,1.2,1.21,1.22,1.23,1.24,1.25,1.26,1.27,1.28,1.29,1.3,1.31,1.32,1.33,1.34,1.35,1.36,1.37,1.38,1.39,1.4,1.41,1.42,1.43,1.44,1.45,1.46,1.47,1.48,1.49,1.5,1.51,1.52,1.53,1.54,1.55,1.56,1.57,1.58,1.59,1.6,1.61,1.62,1.63,1.64,1.65,1.66,1.67,1.68,1.69,1.7,1.71,1.72,1.73,1.74,1.75,1.76,1.77,1.78,1.79,1.8,1.81,1.82,1.83,1.84,1.85,1.86,1.87,1.88,1.89,1.9,1.91,1.92,1.93,1.94,1.95,1.96,1.97">
+<g class="frame">
+<rect class="shade" x="58.00" y="12.00" width="114.23" height="96.00"/>
+<rect class="shade" x="254.95" y="12.00" width="114.23" height="96.00"/>
+<line class="grid" x1="58.0" x2="446.0" y1="105.67" y2="105.67"/>
+<text class="tick" x="52.0" y="109.07" text-anchor="end">100</text>
+<line class="grid" x1="58.0" x2="446.0" y1="64.47" y2="64.47"/>
+<text class="tick" x="52.0" y="67.87" text-anchor="end">200</text>
+<line class="grid" x1="58.0" x2="446.0" y1="23.26" y2="23.26"/>
+<text class="tick" x="52.0" y="26.66" text-anchor="end">300</text>
+<line class="axis" x1="58.0" x2="446.0" y1="108.00" y2="108.00"/>
+<line class="axis" x1="58.0" x2="58.0" y1="12.00" y2="108.00"/>
+<text class="axis-title" x="58.0" y="7.0">F0 (Hz)</text>
+<path class="line f0" d="M58.00,100.56 L59.97,100.75 L61.94,100.63 L63.91,100.42 L65.88,100.56 L67.85,100.77 L69.82,100.87 L71.79,100.74 L73.76,100.70 L75.73,100.81 L77.70,100.93 L79.66,100.91 L81.63,100.77 L83.60,100.81 L85.57,100.85 L87.54,100.85 L89.51,100.77 L91.48,100.67 L93.45,100.67 L95.42,100.67 L97.39,100.63 L99.36,100.46 L101.33,100.50 L103.30,100.58 L105.27,100.53 L107.24,100.42 L109.21,100.52 L111.18,100.60 L113.15,100.65 L115.12,100.63 L117.09,100.63 L119.06,100.73 L121.03,100.79 L122.99,100.85 L124.96,100.81 L126.93,100.87 L128.90,100.87 L130.87,100.87 L132.84,100.83 L134.81,100.81 L136.78,100.83 L138.75,100.77 L140.72,100.73 L142.69,100.68 L144.66,100.67 L146.63,100.60 L148.60,100.52 L150.57,100.48 L152.54,100.50 L154.51,100.55 L156.48,100.49 L158.45,100.48 L160.42,100.52 L162.39,100.69 L164.36,100.65 L166.32,100.63 L168.29,100.67 L170.26,100.83 L172.23,100.63 M254.95,101.00 L256.92,101.11 L258.89,101.07 L260.86,100.96 L262.83,101.00 L264.80,101.17 L266.77,101.26 L268.74,101.30 L270.71,101.24 L272.68,101.26 L274.65,101.36 L276.62,101.36 L278.59,101.32 L280.56,101.30 L282.53,101.26 L284.50,101.22 L286.47,101.24 L288.44,101.22 L290.41,101.14 L292.38,101.02 L294.35,101.07 L296.31,100.96 L298.28,101.05 L300.25,100.98 L302.22,100.96 L304.19,101.00 L306.16,101.00 L308.13,101.10 L310.10,101.05 L312.07,101.05 L314.04,101.08 L316.01,101.24 L317.98,101.24 L319.95,101.30 L321.92,101.30 L323.89,101.38 L325.86,101.34 L327.83,101.32 L329.80,101.26 L331.77,101.22 L333.74,101.26 L335.71,101.22 L337.68,101.24 L339.64,101.10 L341.61,101.06 L343.58,101.07 L345.55,101.02 L347.52,100.94 L349.49,100.91 L351.46,100.96 L353.43,101.02 L355.40,101.02 L357.37,100.98 L359.34,101.06 L361.31,101.10 L363.28,101.12 L365.25,101.18 L367.22,101.24 L369.19,101.05" data-label="F0" data-unit="Hz" data-digits="1" data-lo="94.3412" data-hi="327.339" data-top="12.00" data-bottom="108.00"/>
+<line class="grid" x1="58.0" x2="446.0" y1="210.00" y2="210.00"/>
+<text class="tick" x="52.0" y="213.40" text-anchor="end">0</text>
+<line class="grid" x1="58.0" x2="446.0" y1="169.48" y2="169.48"/>
+<text class="tick" x="52.0" y="172.88" text-anchor="end">0.2</text>
+<line class="axis" x1="58.0" x2="446.0" y1="210.00" y2="210.00"/>
+<line class="axis" x1="58.0" x2="58.0" y1="136.00" y2="210.00"/>
+<text class="axis-title" x="58.0" y="131.0">energy (RMS amplitude, a.u.)</text>
+<path class="line rms" d="M58.00,152.42 L59.97,150.98 L61.94,151.92 L63.91,153.70 L65.88,153.62 L67.85,152.04 L69.82,151.37 L71.79,152.36 L73.76,153.35 L75.73,153.07 L77.70,152.20 L79.66,152.02 L81.63,152.54 L83.60,152.81 L85.57,152.56 L87.54,152.40 L89.51,152.60 L91.48,152.71 L93.45,152.40 L95.42,152.24 L97.39,152.60 L99.36,152.91 L101.33,152.58 L103.30,152.14 L105.27,152.34 L107.24,152.87 L109.21,152.81 L111.18,152.30 L113.15,152.18 L115.12,152.64 L117.09,152.89 L119.06,152.56 L121.03,152.22 L122.99,152.36 L124.96,152.75 L126.93,152.79 L128.90,152.48 L130.87,152.30 L132.84,152.42 L134.81,152.62 L136.78,152.69 L138.75,152.60 L140.72,152.48 L142.69,152.38 L144.66,152.40 L146.63,152.64 L148.60,152.79 L150.57,152.56 L152.54,152.22 L154.51,152.30 L156.48,152.81 L158.45,152.93 L160.42,152.40 L162.39,152.04 L164.36,152.44 L166.32,153.03 L168.29,152.85 L170.26,152.18 L172.23,158.01 L174.20,173.29 L176.17,210.00 L178.14,210.00 L180.11,210.00 L182.08,210.00 L184.05,210.00 L186.02,210.00 L187.99,210.00 L189.96,210.00 L191.93,210.00 L193.90,210.00 L195.87,210.00 L197.84,210.00 L199.81,210.00 L201.78,210.00 L203.75,210.00 L205.72,210.00 L207.69,210.00 L209.65,210.00 L211.62,210.00 L213.59,210.00 L215.56,210.00 L217.53,210.00 L219.50,210.00 L221.47,210.00 L223.44,210.00 L225.41,210.00 L227.38,210.00 L229.35,210.00 L231.32,210.00 L233.29,210.00 L235.26,210.00 L237.23,210.00 L239.20,210.00 L241.17,210.00 L243.14,210.00 L245.11,210.00 L247.08,210.00 L249.05,210.00 L251.02,185.40 L252.98,166.62 L254.95,152.77 L256.92,151.23 L258.89,151.53 L260.86,153.09 L262.83,153.82 L264.80,152.93 L266.77,151.79 L268.74,151.79 L270.71,152.77 L272.68,153.41 L274.65,153.05 L276.62,152.22 L278.59,151.92 L280.56,152.36 L282.53,152.97 L284.50,153.05 L286.47,152.64 L288.44,152.28 L290.41,152.38 L292.38,152.77 L294.35,152.89 L296.31,152.58 L298.28,152.28 L300.25,152.38 L302.22,152.75 L304.19,152.89 L306.16,152.69 L308.13,152.48 L310.10,152.52 L312.07,152.62 L314.04,152.52 L316.01,152.40 L317.98,152.52 L319.95,152.81 L321.92,152.91 L323.89,152.64 L325.86,152.38 L327.83,152.40 L329.80,152.60 L331.77,152.66 L333.74,152.52 L335.71,152.48 L337.68,152.73 L339.64,152.91 L341.61,152.69 L343.58,152.30 L345.55,152.30 L347.52,152.71 L349.49,152.93 L351.46,152.64 L353.43,152.30 L355.40,152.40 L357.37,152.77 L359.34,152.91 L361.31,152.69 L363.28,152.42 L365.25,152.38 L367.22,152.46 L369.19,158.62 L371.16,173.69 L373.13,210.00 L375.10,210.00 L377.07,210.00 L379.04,210.00 L381.01,210.00 L382.97,210.00 L384.94,210.00 L386.91,210.00 L388.88,210.00 L390.85,210.00 L392.82,210.00 L394.79,210.00 L396.76,210.00 L398.73,210.00 L400.70,210.00 L402.67,210.00 L404.64,210.00 L406.61,210.00 L408.58,210.00 L410.55,210.00 L412.52,210.00 L414.49,210.00 L416.46,210.00 L418.43,210.00 L420.40,210.00 L422.37,210.00 L424.34,210.00 L426.30,210.00 L428.27,210.00 L430.24,210.00 L432.21,210.00 L434.18,210.00 L436.15,210.00 L438.12,210.00 L440.09,210.00 L442.06,210.00 L444.03,210.00 L446.00,210.00" data-label="energy" data-unit="a.u." data-digits="4" data-lo="0" data-hi="0.365256" data-top="136.00" data-bottom="210.00"/>
+<line class="grid" x1="58.00" x2="58.00" y1="210.00" y2="214.00"/>
+<text class="tick" x="58.00" y="225.00" text-anchor="middle">0</text>
+<line class="grid" x1="156.48" x2="156.48" y1="210.00" y2="214.00"/>
+<text class="tick" x="156.48" y="225.00" text-anchor="middle">0.5</text>
+<line class="grid" x1="254.95" x2="254.95" y1="210.00" y2="214.00"/>
+<text class="tick" x="254.95" y="225.00" text-anchor="middle">1</text>
+<line class="grid" x1="353.43" x2="353.43" y1="210.00" y2="214.00"/>
+<text class="tick" x="353.43" y="225.00" text-anchor="middle">1.5</text>
+<text class="tick axis-title" x="252.0" y="239.00" text-anchor="middle">time (s)</text>
+</g>
+</svg><p class="readout" id="readout-voice-subdued" data-idle="hover the chart to read one frame">hover the chart to read one frame</p><dl class="kv">
+<dt>f0_mean</dt><dd>111.5 Hz</dd>
+<dt>f0_std</dt><dd>0.91 Hz</dd>
+<dt>energy_std_voiced</dt><dd>0.0094 a.u.</dd>
+<dt>voiced_ratio</dt><dd>59.6%</dd>
+<dt>speaking_rate</dt><dd>1.01 runs/s</dd>
+<dt>jitter</dt><dd>0.30 Hz</dd>
+</dl></figure>
+<figure class="card"><figcaption><span class="cond">unsteady</span><span class="muted">generator: F0 target 255 Hz, 3.5 bursts/s, panel 60% voiced</span></figcaption><svg class="chart" viewBox="0 0 460 244" role="img" data-readout="readout-voice-unsteady" data-frames="198" data-x0="58.00" data-x1="446.00" data-times="0,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.1,0.11,0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.2,0.21,0.22,0.23,0.24,0.25,0.26,0.27,0.28,0.29,0.3,0.31,0.32,0.33,0.34,0.35,0.36,0.37,0.38,0.39,0.4,0.41,0.42,0.43,0.44,0.45,0.46,0.47,0.48,0.49,0.5,0.51,0.52,0.53,0.54,0.55,0.56,0.57,0.58,0.59,0.6,0.61,0.62,0.63,0.64,0.65,0.66,0.67,0.68,0.69,0.7,0.71,0.72,0.73,0.74,0.75,0.76,0.77,0.78,0.79,0.8,0.81,0.82,0.83,0.84,0.85,0.86,0.87,0.88,0.89,0.9,0.91,0.92,0.93,0.94,0.95,0.96,0.97,0.98,0.99,1,1.01,1.02,1.03,1.04,1.05,1.06,1.07,1.08,1.09,1.1,1.11,1.12,1.13,1.14,1.15,1.16,1.17,1.18,1.19,1.2,1.21,1.22,1.23,1.24,1.25,1.26,1.27,1.28,1.29,1.3,1.31,1.32,1.33,1.34,1.35,1.36,1.37,1.38,1.39,1.4,1.41,1.42,1.43,1.44,1.45,1.46,1.47,1.48,1.49,1.5,1.51,1.52,1.53,1.54,1.55,1.56,1.57,1.58,1.59,1.6,1.61,1.62,1.63,1.64,1.65,1.66,1.67,1.68,1.69,1.7,1.71,1.72,1.73,1.74,1.75,1.76,1.77,1.78,1.79,1.8,1.81,1.82,1.83,1.84,1.85,1.86,1.87,1.88,1.89,1.9,1.91,1.92,1.93,1.94,1.95,1.96,1.97">
+<g class="frame">
+<rect class="shade" x="58.00" y="12.00" width="31.51" height="96.00"/>
+<rect class="shade" x="111.18" y="12.00" width="35.45" height="96.00"/>
+<rect class="shade" x="168.29" y="12.00" width="33.48" height="96.00"/>
+<rect class="shade" x="223.44" y="12.00" width="35.45" height="96.00"/>
+<rect class="shade" x="280.56" y="12.00" width="33.48" height="96.00"/>
+<rect class="shade" x="335.71" y="12.00" width="35.45" height="96.00"/>
+<rect class="shade" x="392.82" y="12.00" width="33.48" height="96.00"/>
+<line class="grid" x1="58.0" x2="446.0" y1="105.67" y2="105.67"/>
+<text class="tick" x="52.0" y="109.07" text-anchor="end">100</text>
+<line class="grid" x1="58.0" x2="446.0" y1="64.47" y2="64.47"/>
+<text class="tick" x="52.0" y="67.87" text-anchor="end">200</text>
+<line class="grid" x1="58.0" x2="446.0" y1="23.26" y2="23.26"/>
+<text class="tick" x="52.0" y="26.66" text-anchor="end">300</text>
+<line class="axis" x1="58.0" x2="446.0" y1="108.00" y2="108.00"/>
+<line class="axis" x1="58.0" x2="58.0" y1="12.00" y2="108.00"/>
+<text class="axis-title" x="58.0" y="7.0">F0 (Hz)</text>
+<path class="line f0" d="M58.00,25.09 L59.97,26.33 L61.94,28.78 L63.91,32.25 L65.88,36.08 L67.85,39.80 L69.82,43.86 L71.79,47.59 L73.76,50.75 L75.73,53.04 L77.70,54.87 L79.66,55.48 L81.63,55.33 L83.60,54.10 L85.57,52.04 L87.54,49.66 L89.51,47.57 M111.18,23.39 L113.15,24.32 L115.12,25.24 L117.09,27.00 L119.06,30.00 L121.03,33.55 L122.99,37.44 L124.96,41.31 L126.93,45.08 L128.90,48.50 L130.87,51.65 L132.84,53.93 L134.81,55.25 L136.78,55.74 L138.75,54.55 L140.72,53.24 L142.69,50.59 L144.66,48.49 L146.63,37.45 M168.29,23.25 L170.26,24.28 L172.23,25.31 L174.20,27.55 L176.17,31.14 L178.14,34.41 L180.11,38.40 L182.08,42.62 L184.05,46.31 L186.02,49.53 L187.99,52.28 L189.96,54.12 L191.93,54.85 L193.90,54.94 L195.87,53.88 L197.84,51.56 L199.81,49.19 L201.78,46.94 M223.44,27.12 L225.41,30.38 L227.38,30.96 L229.35,32.72 L231.32,35.40 L233.29,38.66 L235.26,42.23 L237.23,45.88 L239.20,49.75 L241.17,52.90 L243.14,55.90 L245.11,58.07 L247.08,59.62 L249.05,59.89 L251.02,59.51 L252.98,57.97 L254.95,55.95 L256.92,53.69 L258.89,47.32 M280.56,26.14 L282.53,26.96 L284.50,28.11 L286.47,30.34 L288.44,33.23 L290.41,36.77 L292.38,40.70 L294.35,44.41 L296.31,48.32 L298.28,51.41 L300.25,54.24 L302.22,56.13 L304.19,57.07 L306.16,57.16 L308.13,56.27 L310.10,54.29 L312.07,51.83 L314.04,49.58 M335.71,18.62 L337.68,23.50 L339.64,24.41 L341.61,26.01 L343.58,28.45 L345.55,31.81 L347.52,35.95 L349.49,39.89 L351.46,43.73 L353.43,47.19 L355.40,50.47 L357.37,53.01 L359.34,54.59 L361.31,55.13 L363.28,54.53 L365.25,53.60 L367.22,51.08 L369.19,48.67 L371.16,46.07 M392.82,24.04 L394.79,24.99 L396.76,26.14 L398.73,27.97 L400.70,31.47 L402.67,34.50 L404.64,38.38 L406.61,42.34 L408.58,46.30 L410.55,49.76 L412.52,52.46 L414.49,54.50 L416.46,55.77 L418.43,56.11 L420.40,55.22 L422.37,53.39 L424.34,50.93 L426.30,49.12" data-label="F0" data-unit="Hz" data-digits="1" data-lo="94.3412" data-hi="327.339" data-top="12.00" data-bottom="108.00"/>
+<line class="grid" x1="58.0" x2="446.0" y1="210.00" y2="210.00"/>
+<text class="tick" x="52.0" y="213.40" text-anchor="end">0</text>
+<line class="grid" x1="58.0" x2="446.0" y1="169.48" y2="169.48"/>
+<text class="tick" x="52.0" y="172.88" text-anchor="end">0.2</text>
+<line class="axis" x1="58.0" x2="446.0" y1="210.00" y2="210.00"/>
+<line class="axis" x1="58.0" x2="58.0" y1="136.00" y2="210.00"/>
+<text class="axis-title" x="58.0" y="131.0">energy (RMS amplitude, a.u.)</text>
+<path class="line rms" d="M58.00,154.10 L59.97,153.92 L61.94,154.00 L63.91,153.92 L65.88,153.94 L67.85,154.00 L69.82,154.04 L71.79,153.96 L73.76,154.08 L75.73,154.04 L77.70,153.86 L79.66,154.12 L81.63,154.10 L83.60,153.92 L85.57,154.00 L87.54,158.20 L89.51,172.01 L91.48,196.34 L93.45,210.00 L95.42,210.00 L97.39,210.00 L99.36,210.00 L101.33,210.00 L103.30,210.00 L105.27,210.00 L107.24,210.00 L109.21,210.00 L111.18,176.47 L113.15,161.38 L115.12,154.71 L117.09,154.57 L119.06,154.73 L121.03,154.63 L122.99,154.83 L124.96,154.63 L126.93,154.71 L128.90,154.69 L130.87,154.71 L132.84,154.71 L134.81,154.63 L136.78,154.75 L138.75,154.75 L140.72,154.71 L142.69,154.65 L144.66,164.21 L146.63,180.54 L148.60,210.00 L150.57,210.00 L152.54,210.00 L154.51,210.00 L156.48,210.00 L158.45,210.00 L160.42,210.00 L162.39,210.00 L164.36,210.00 L166.32,189.56 L168.29,169.50 L170.26,156.80 L172.23,155.14 L174.20,155.24 L176.17,155.08 L178.14,155.32 L180.11,155.10 L182.08,155.06 L184.05,155.18 L186.02,155.02 L187.99,155.26 L189.96,155.16 L191.93,155.14 L193.90,155.14 L195.87,155.12 L197.84,155.04 L199.81,157.53 L201.78,170.64 L203.75,191.26 L205.72,210.00 L207.69,210.00 L209.65,210.00 L211.62,210.00 L213.59,210.00 L215.56,210.00 L217.53,210.00 L219.50,210.00 L221.47,210.00 L223.44,178.27 L225.41,161.80 L227.38,153.11 L229.35,153.03 L231.32,153.07 L233.29,152.97 L235.26,153.11 L237.23,153.27 L239.20,153.05 L241.17,153.03 L243.14,152.99 L245.11,153.05 L247.08,153.03 L249.05,152.95 L251.02,153.25 L252.98,153.19 L254.95,152.99 L256.92,160.87 L258.89,176.75 L260.86,210.00 L262.83,210.00 L264.80,210.00 L266.77,210.00 L268.74,210.00 L270.71,210.00 L272.68,210.00 L274.65,210.00 L276.62,210.00 L278.59,193.71 L280.56,168.87 L282.53,154.25 L284.50,150.60 L286.47,150.72 L288.44,150.74 L290.41,150.64 L292.38,150.56 L294.35,150.70 L296.31,150.60 L298.28,150.92 L300.25,150.64 L302.22,150.66 L304.19,150.82 L306.16,150.70 L308.13,150.82 L310.10,150.86 L312.07,151.43 L314.04,164.96 L316.01,185.55 L317.98,210.00 L319.95,210.00 L321.92,210.00 L323.89,210.00 L325.86,210.00 L327.83,210.00 L329.80,210.00 L331.77,210.00 L333.74,210.00 L335.71,180.93 L337.68,163.81 L339.64,153.31 L341.61,153.09 L343.58,153.05 L345.55,153.07 L347.52,153.01 L349.49,153.23 L351.46,153.05 L353.43,153.13 L355.40,153.01 L357.37,152.99 L359.34,152.93 L361.31,153.11 L363.28,153.01 L365.25,152.95 L367.22,153.09 L369.19,159.09 L371.16,173.96 L373.13,210.00 L375.10,210.00 L377.07,210.00 L379.04,210.00 L381.01,210.00 L382.97,210.00 L384.94,210.00 L386.91,210.00 L388.88,210.00 L390.85,202.06 L392.82,172.54 L394.79,157.85 L396.76,152.69 L398.73,152.71 L400.70,152.56 L402.67,152.62 L404.64,152.58 L406.61,152.60 L408.58,152.79 L410.55,152.58 L412.52,152.73 L414.49,152.71 L416.46,152.66 L418.43,152.62 L420.40,152.64 L422.37,152.62 L424.34,152.48 L426.30,164.72 L428.27,182.91 L430.24,210.00 L432.21,210.00 L434.18,210.00 L436.15,210.00 L438.12,210.00 L440.09,210.00 L442.06,210.00 L444.03,210.00 L446.00,210.00" data-label="energy" data-unit="a.u." data-digits="4" data-lo="0" data-hi="0.365256" data-top="136.00" data-bottom="210.00"/>
+<line class="grid" x1="58.00" x2="58.00" y1="210.00" y2="214.00"/>
+<text class="tick" x="58.00" y="225.00" text-anchor="middle">0</text>
+<line class="grid" x1="156.48" x2="156.48" y1="210.00" y2="214.00"/>
+<text class="tick" x="156.48" y="225.00" text-anchor="middle">0.5</text>
+<line class="grid" x1="254.95" x2="254.95" y1="210.00" y2="214.00"/>
+<text class="tick" x="254.95" y="225.00" text-anchor="middle">1</text>
+<line class="grid" x1="353.43" x2="353.43" y1="210.00" y2="214.00"/>
+<text class="tick" x="353.43" y="225.00" text-anchor="middle">1.5</text>
+<text class="tick axis-title" x="252.0" y="239.00" text-anchor="middle">time (s)</text>
+</g>
+</svg><p class="readout" id="readout-voice-unsteady" data-idle="hover the chart to read one frame">hover the chart to read one frame</p><dl class="kv">
+<dt>f0_mean</dt><dd>250.7 Hz</dd>
+<dt>f0_std</dt><dd>35.51 Hz</dd>
+<dt>energy_std_voiced</dt><dd>0.0468 a.u.</dd>
+<dt>voiced_ratio</dt><dd>64.1%</dd>
+<dt>speaking_rate</dt><dd>3.54 runs/s</dd>
+<dt>jitter</dt><dd>5.65 Hz</dd>
+</dl></figure>
+</div>
+<p class="note">Source: <code>voice-affect.json</code> — 16 utterances per condition (2.0 s each) at 16,000 Hz, seed 0, framed at 25 ms window / 10 ms hop (198 frames). The F0 line is the mean over the condition's utterances, counted frame by frame and only over the utterances voiced in that frame; the shaded band marks frames where at least one was voiced, and the line breaks where none was. Both axes are shared by all four panels, so the levels can be compared by eye. Rounding: f0_hz to 0.01 Hz, rms to 1e-4, voiced_share to 0.01, confidence to 1e-4, times_s to 1e-3 s.</p>
+</section>
+<!-- DASHBOARD:VOICE:END -->
+<!-- DASHBOARD:CONTROL:BEGIN -->
+<section id="voicing-control">
+<h2>The voiced/unvoiced control, drawn rather than asserted</h2>
+<p class="lede">Two signals through the same framing and the same autocorrelation decision: a block of white noise and a 220 Hz tone of the same length. The curve is the estimator's own normalised autocorrelation peak — the number the voiced/unvoiced decision was made on — so what is drawn is the decision variable, not a summary of it. The dashed line is the 0.45 threshold; the band along the floor marks the frames the decision called voiced.</p>
+<div class="grid two">
+<figure class="card"><figcaption><span class="cond">white noise</span><span class="muted">voiced share 0.000, largest confidence 0.1643</span></figcaption><svg class="chart" viewBox="0 0 460 178" role="img" data-readout="readout-probe-white_noise" data-frames="198" data-x0="58.00" data-x1="446.00" data-times="0,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.1,0.11,0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.2,0.21,0.22,0.23,0.24,0.25,0.26,0.27,0.28,0.29,0.3,0.31,0.32,0.33,0.34,0.35,0.36,0.37,0.38,0.39,0.4,0.41,0.42,0.43,0.44,0.45,0.46,0.47,0.48,0.49,0.5,0.51,0.52,0.53,0.54,0.55,0.56,0.57,0.58,0.59,0.6,0.61,0.62,0.63,0.64,0.65,0.66,0.67,0.68,0.69,0.7,0.71,0.72,0.73,0.74,0.75,0.76,0.77,0.78,0.79,0.8,0.81,0.82,0.83,0.84,0.85,0.86,0.87,0.88,0.89,0.9,0.91,0.92,0.93,0.94,0.95,0.96,0.97,0.98,0.99,1,1.01,1.02,1.03,1.04,1.05,1.06,1.07,1.08,1.09,1.1,1.11,1.12,1.13,1.14,1.15,1.16,1.17,1.18,1.19,1.2,1.21,1.22,1.23,1.24,1.25,1.26,1.27,1.28,1.29,1.3,1.31,1.32,1.33,1.34,1.35,1.36,1.37,1.38,1.39,1.4,1.41,1.42,1.43,1.44,1.45,1.46,1.47,1.48,1.49,1.5,1.51,1.52,1.53,1.54,1.55,1.56,1.57,1.58,1.59,1.6,1.61,1.62,1.63,1.64,1.65,1.66,1.67,1.68,1.69,1.7,1.71,1.72,1.73,1.74,1.75,1.76,1.77,1.78,1.79,1.8,1.81,1.82,1.83,1.84,1.85,1.86,1.87,1.88,1.89,1.9,1.91,1.92,1.93,1.94,1.95,1.96,1.97">
+<g class="frame">
+<line class="grid" x1="58.0" x2="446.0" y1="126.79" y2="126.79"/>
+<text class="tick" x="52.0" y="130.19" text-anchor="end">0</text>
+<line class="grid" x1="58.0" x2="446.0" y1="69.39" y2="69.39"/>
+<text class="tick" x="52.0" y="72.79" text-anchor="end">0.5</text>
+<line class="grid" x1="58.0" x2="446.0" y1="12.00" y2="12.00"/>
+<text class="tick" x="52.0" y="15.40" text-anchor="end">1</text>
+<line class="axis" x1="58.0" x2="446.0" y1="144.00" y2="144.00"/>
+<line class="axis" x1="58.0" x2="58.0" y1="12.00" y2="144.00"/>
+<text class="axis-title" x="58.0" y="7.0">voiced confidence (normalised autocorrelation peak)</text>
+<line class="threshold" x1="58.0" x2="446.0" y1="75.13" y2="75.13"/>
+<text class="tick" x="446.0" y="71.13" text-anchor="end">threshold 0.45</text>
+<path class="line conf" d="M58.00,132.86 L59.97,125.02 L61.94,124.95 L63.91,132.36 L65.88,121.46 L67.85,130.45 L69.82,107.94 L71.79,125.15 L73.76,124.87 L75.73,129.78 L77.70,124.18 L79.66,124.33 L81.63,128.71 L83.60,130.19 L85.57,118.58 L87.54,126.36 L89.51,120.15 L91.48,122.19 L93.45,127.49 L95.42,128.07 L97.39,124.92 L99.36,132.69 L101.33,127.32 L103.30,124.79 L105.27,135.09 L107.24,134.89 L109.21,127.90 L111.18,133.43 L113.15,132.21 L115.12,131.75 L117.09,127.49 L119.06,126.90 L121.03,120.72 L122.99,129.53 L124.96,123.83 L126.93,121.81 L128.90,132.64 L130.87,118.87 L132.84,127.08 L134.81,124.37 L136.78,124.55 L138.75,120.49 L140.72,118.26 L142.69,128.61 L144.66,123.98 L146.63,126.63 L148.60,122.68 L150.57,133.27 L152.54,126.00 L154.51,128.83 L156.48,138.18 L158.45,126.91 L160.42,123.34 L162.39,124.14 L164.36,117.98 L166.32,127.70 L168.29,116.72 L170.26,129.56 L172.23,129.37 L174.20,118.70 L176.17,123.96 L178.14,119.07 L180.11,132.13 L182.08,122.00 L184.05,133.43 L186.02,116.58 L187.99,126.82 L189.96,128.10 L191.93,134.01 L193.90,128.33 L195.87,132.48 L197.84,132.05 L199.81,120.48 L201.78,128.99 L203.75,125.89 L205.72,121.21 L207.69,117.54 L209.65,119.99 L211.62,128.83 L213.59,124.71 L215.56,129.61 L217.53,119.20 L219.50,113.58 L221.47,126.02 L223.44,128.65 L225.41,123.65 L227.38,127.09 L229.35,121.73 L231.32,124.78 L233.29,123.93 L235.26,134.09 L237.23,124.96 L239.20,125.96 L241.17,130.16 L243.14,121.84 L245.11,121.62 L247.08,119.55 L249.05,121.74 L251.02,117.07 L252.98,117.35 L254.95,123.92 L256.92,121.51 L258.89,132.29 L260.86,121.61 L262.83,126.98 L264.80,130.81 L266.77,132.69 L268.74,118.59 L270.71,126.18 L272.68,126.72 L274.65,123.83 L276.62,128.13 L278.59,125.19 L280.56,125.77 L282.53,129.13 L284.50,130.84 L286.47,126.21 L288.44,126.73 L290.41,134.85 L292.38,123.23 L294.35,135.36 L296.31,120.20 L298.28,130.16 L300.25,129.86 L302.22,123.52 L304.19,126.62 L306.16,135.13 L308.13,127.89 L310.10,124.16 L312.07,123.85 L314.04,127.16 L316.01,129.56 L317.98,120.27 L319.95,125.64 L321.92,124.09 L323.89,129.99 L325.86,124.69 L327.83,116.73 L329.80,127.65 L331.77,107.93 L333.74,118.41 L335.71,131.77 L337.68,133.17 L339.64,128.81 L341.61,116.81 L343.58,126.38 L345.55,124.79 L347.52,120.48 L349.49,128.63 L351.46,128.96 L353.43,119.20 L355.40,129.35 L357.37,122.22 L359.34,124.09 L361.31,126.55 L363.28,136.91 L365.25,130.39 L367.22,134.38 L369.19,131.53 L371.16,125.56 L373.13,131.54 L375.10,128.97 L377.07,130.70 L379.04,131.10 L381.01,130.62 L382.97,129.38 L384.94,133.64 L386.91,121.70 L388.88,123.29 L390.85,130.09 L392.82,132.30 L394.79,129.43 L396.76,126.96 L398.73,135.83 L400.70,121.47 L402.67,123.09 L404.64,133.42 L406.61,136.74 L408.58,122.36 L410.55,121.52 L412.52,130.60 L414.49,137.95 L416.46,137.06 L418.43,126.85 L420.40,125.07 L422.37,134.15 L424.34,138.72 L426.30,125.27 L428.27,128.95 L430.24,137.14 L432.21,127.35 L434.18,130.76 L436.15,123.67 L438.12,123.08 L440.09,128.41 L442.06,123.94 L444.03,136.02 L446.00,132.14" data-label="confidence" data-unit="" data-digits="3" data-lo="-0.14994" data-hi="1" data-top="12.00" data-bottom="144.00"/>
+<line class="grid" x1="58.00" x2="58.00" y1="144.00" y2="148.00"/>
+<text class="tick" x="58.00" y="159.00" text-anchor="middle">0</text>
+<line class="grid" x1="156.48" x2="156.48" y1="144.00" y2="148.00"/>
+<text class="tick" x="156.48" y="159.00" text-anchor="middle">0.5</text>
+<line class="grid" x1="254.95" x2="254.95" y1="144.00" y2="148.00"/>
+<text class="tick" x="254.95" y="159.00" text-anchor="middle">1</text>
+<line class="grid" x1="353.43" x2="353.43" y1="144.00" y2="148.00"/>
+<text class="tick" x="353.43" y="159.00" text-anchor="middle">1.5</text>
+<text class="tick axis-title" x="252.0" y="173.00" text-anchor="middle">time (s)</text>
+</g>
+</svg><p class="readout" id="readout-probe-white_noise" data-idle="hover the chart to read one frame">hover the chart to read one frame</p></figure>
+<figure class="card"><figcaption><span class="cond">220 Hz tone</span><span class="muted">voiced share 1.000, largest confidence 0.8169</span><span class="muted">mean estimated F0 221.6 Hz against 220 Hz asked for (0.73% error)</span></figcaption><svg class="chart" viewBox="0 0 460 178" role="img" data-readout="readout-probe-tone" data-frames="198" data-x0="58.00" data-x1="446.00" data-times="0,0.01,0.02,0.03,0.04,0.05,0.06,0.07,0.08,0.09,0.1,0.11,0.12,0.13,0.14,0.15,0.16,0.17,0.18,0.19,0.2,0.21,0.22,0.23,0.24,0.25,0.26,0.27,0.28,0.29,0.3,0.31,0.32,0.33,0.34,0.35,0.36,0.37,0.38,0.39,0.4,0.41,0.42,0.43,0.44,0.45,0.46,0.47,0.48,0.49,0.5,0.51,0.52,0.53,0.54,0.55,0.56,0.57,0.58,0.59,0.6,0.61,0.62,0.63,0.64,0.65,0.66,0.67,0.68,0.69,0.7,0.71,0.72,0.73,0.74,0.75,0.76,0.77,0.78,0.79,0.8,0.81,0.82,0.83,0.84,0.85,0.86,0.87,0.88,0.89,0.9,0.91,0.92,0.93,0.94,0.95,0.96,0.97,0.98,0.99,1,1.01,1.02,1.03,1.04,1.05,1.06,1.07,1.08,1.09,1.1,1.11,1.12,1.13,1.14,1.15,1.16,1.17,1.18,1.19,1.2,1.21,1.22,1.23,1.24,1.25,1.26,1.27,1.28,1.29,1.3,1.31,1.32,1.33,1.34,1.35,1.36,1.37,1.38,1.39,1.4,1.41,1.42,1.43,1.44,1.45,1.46,1.47,1.48,1.49,1.5,1.51,1.52,1.53,1.54,1.55,1.56,1.57,1.58,1.59,1.6,1.61,1.62,1.63,1.64,1.65,1.66,1.67,1.68,1.69,1.7,1.71,1.72,1.73,1.74,1.75,1.76,1.77,1.78,1.79,1.8,1.81,1.82,1.83,1.84,1.85,1.86,1.87,1.88,1.89,1.9,1.91,1.92,1.93,1.94,1.95,1.96,1.97">
+<g class="frame">
+<line class="grid" x1="58.0" x2="446.0" y1="126.79" y2="126.79"/>
+<text class="tick" x="52.0" y="130.19" text-anchor="end">0</text>
+<line class="grid" x1="58.0" x2="446.0" y1="69.39" y2="69.39"/>
+<text class="tick" x="52.0" y="72.79" text-anchor="end">0.5</text>
+<line class="grid" x1="58.0" x2="446.0" y1="12.00" y2="12.00"/>
+<text class="tick" x="52.0" y="15.40" text-anchor="end">1</text>
+<line class="axis" x1="58.0" x2="446.0" y1="144.00" y2="144.00"/>
+<line class="axis" x1="58.0" x2="58.0" y1="12.00" y2="144.00"/>
+<text class="axis-title" x="58.0" y="7.0">voiced confidence (normalised autocorrelation peak)</text>
+<rect class="voiced-band" x="58.00" y="139.00" width="388.00" height="5.00"/>
+<line class="threshold" x1="58.0" x2="446.0" y1="75.13" y2="75.13"/>
+<text class="tick" x="446.0" y="71.13" text-anchor="end">threshold 0.45</text>
+<path class="line conf" d="M58.00,33.34 L59.97,33.09 L61.94,33.71 L63.91,33.81 L65.88,33.02 L67.85,33.34 L69.82,33.09 L71.79,33.71 L73.76,33.81 L75.73,33.02 L77.70,33.34 L79.66,33.09 L81.63,33.71 L83.60,33.81 L85.57,33.02 L87.54,33.34 L89.51,33.09 L91.48,33.71 L93.45,33.81 L95.42,33.02 L97.39,33.34 L99.36,33.09 L101.33,33.71 L103.30,33.81 L105.27,33.02 L107.24,33.34 L109.21,33.09 L111.18,33.71 L113.15,33.81 L115.12,33.02 L117.09,33.34 L119.06,33.09 L121.03,33.71 L122.99,33.81 L124.96,33.02 L126.93,33.34 L128.90,33.09 L130.87,33.71 L132.84,33.81 L134.81,33.02 L136.78,33.34 L138.75,33.09 L140.72,33.71 L142.69,33.81 L144.66,33.02 L146.63,33.34 L148.60,33.09 L150.57,33.71 L152.54,33.81 L154.51,33.02 L156.48,33.34 L158.45,33.09 L160.42,33.71 L162.39,33.81 L164.36,33.02 L166.32,33.34 L168.29,33.09 L170.26,33.71 L172.23,33.81 L174.20,33.02 L176.17,33.34 L178.14,33.09 L180.11,33.71 L182.08,33.81 L184.05,33.02 L186.02,33.34 L187.99,33.09 L189.96,33.71 L191.93,33.81 L193.90,33.02 L195.87,33.34 L197.84,33.09 L199.81,33.71 L201.78,33.81 L203.75,33.02 L205.72,33.34 L207.69,33.09 L209.65,33.71 L211.62,33.81 L213.59,33.02 L215.56,33.34 L217.53,33.09 L219.50,33.71 L221.47,33.81 L223.44,33.02 L225.41,33.34 L227.38,33.09 L229.35,33.71 L231.32,33.81 L233.29,33.02 L235.26,33.34 L237.23,33.09 L239.20,33.71 L241.17,33.81 L243.14,33.02 L245.11,33.34 L247.08,33.09 L249.05,33.71 L251.02,33.81 L252.98,33.02 L254.95,33.34 L256.92,33.09 L258.89,33.71 L260.86,33.81 L262.83,33.02 L264.80,33.34 L266.77,33.09 L268.74,33.71 L270.71,33.81 L272.68,33.02 L274.65,33.34 L276.62,33.09 L278.59,33.71 L280.56,33.81 L282.53,33.02 L284.50,33.34 L286.47,33.09 L288.44,33.71 L290.41,33.81 L292.38,33.02 L294.35,33.34 L296.31,33.09 L298.28,33.71 L300.25,33.81 L302.22,33.02 L304.19,33.34 L306.16,33.09 L308.13,33.71 L310.10,33.81 L312.07,33.02 L314.04,33.34 L316.01,33.09 L317.98,33.71 L319.95,33.81 L321.92,33.02 L323.89,33.34 L325.86,33.09 L327.83,33.71 L329.80,33.81 L331.77,33.02 L333.74,33.34 L335.71,33.09 L337.68,33.71 L339.64,33.81 L341.61,33.02 L343.58,33.34 L345.55,33.09 L347.52,33.71 L349.49,33.81 L351.46,33.02 L353.43,33.34 L355.40,33.09 L357.37,33.71 L359.34,33.81 L361.31,33.02 L363.28,33.34 L365.25,33.09 L367.22,33.71 L369.19,33.81 L371.16,33.02 L373.13,33.34 L375.10,33.09 L377.07,33.71 L379.04,33.81 L381.01,33.02 L382.97,33.34 L384.94,33.09 L386.91,33.71 L388.88,33.81 L390.85,33.02 L392.82,33.34 L394.79,33.09 L396.76,33.71 L398.73,33.81 L400.70,33.02 L402.67,33.34 L404.64,33.09 L406.61,33.71 L408.58,33.81 L410.55,33.02 L412.52,33.34 L414.49,33.09 L416.46,33.71 L418.43,33.81 L420.40,33.02 L422.37,33.34 L424.34,33.09 L426.30,33.71 L428.27,33.81 L430.24,33.02 L432.21,33.34 L434.18,33.09 L436.15,33.71 L438.12,33.81 L440.09,33.02 L442.06,33.34 L444.03,33.09 L446.00,33.71" data-label="confidence" data-unit="" data-digits="3" data-lo="-0.14994" data-hi="1" data-top="12.00" data-bottom="144.00"/>
+<line class="grid" x1="58.00" x2="58.00" y1="144.00" y2="148.00"/>
+<text class="tick" x="58.00" y="159.00" text-anchor="middle">0</text>
+<line class="grid" x1="156.48" x2="156.48" y1="144.00" y2="148.00"/>
+<text class="tick" x="156.48" y="159.00" text-anchor="middle">0.5</text>
+<line class="grid" x1="254.95" x2="254.95" y1="144.00" y2="148.00"/>
+<text class="tick" x="254.95" y="159.00" text-anchor="middle">1</text>
+<line class="grid" x1="353.43" x2="353.43" y1="144.00" y2="148.00"/>
+<text class="tick" x="353.43" y="159.00" text-anchor="middle">1.5</text>
+<text class="tick axis-title" x="252.0" y="173.00" text-anchor="middle">time (s)</text>
+</g>
+</svg><p class="readout" id="readout-probe-tone" data-idle="hover the chart to read one frame">hover the chart to read one frame</p></figure>
+</div>
+<p>White noise keeps its largest confidence at <strong>0.1643</strong> against a threshold of 0.45, and is judged voiced in <strong>0.000</strong> of frames; the tone sits near 0.817 and is voiced in 1.000 of them. The tone's estimated pitch is 221.6 Hz for the 220 Hz asked for — a 0.73% error, inside the 2% the tests assert; the search band in the module is 60–400 Hz, which is wider than the range it works over. A detector that answered "voiced" to everything would pass every tone test ever written and would make every pitch number on this page meaningless, which is why the noise case is on the page and not only in a table.</p>
+<p class="note">Over the noise draws summarised in <code>voice-affect.json</code>, the largest voiced ratio is 0.000 and the largest confidence 0.1396. The probe above is one further draw from its own seed stream, so it could not shift those numbers. Framing: 16,000 Hz, 198 frames of 25 ms every 10 ms.</p>
+</section>
+<!-- DASHBOARD:CONTROL:END -->
+<!-- DASHBOARD:AGENT:BEGIN -->
+<section id="agent">
+<h2>Agent: one task, decision by decision</h2>
+<p class="lede">The loop reads the task's instructions as structured events, streams them through the recurrence, decodes the state into the registers <code>carry</code>, <code>observations</code>, <code>op</code>, <code>arg</code>, <code>arg2</code>, <code>miss</code>, <code>kind</code>, <code>instructions</code>, and calls one of <code>add</code>, <code>mul</code>, <code>sub</code>, <code>lookup</code>, <code>finish</code>. Each step below shows what the state held when the choice was made, the call that came out of it, the observation the tool returned, and the carried value the next decision then read — so the operand chain is visible rather than claimed.</p>
+<p class="task">add 3, then add 4, then multiply the result by 5, then report the key whose value equals the result, then report the result</p>
+<dl class="kv">
+<dt>task id</dt><dd><code>example</code></dd>
+<dt>plan</dt><dd><code>ADD 3, ADD 4, MUL 5, KEY, RET</code></dd>
+<dt>key/value table</dt><dd>2 → 11, 3 → 42, 5 → 99, 7 → 35</dd>
+<dt>answer (analytic)</dt><dd><strong>7</strong></dd>
+<dt>loop steps</dt><dd>5 of budget 6</dd>
+<dt>stop reason</dt><dd><code>finish</code>, solved <strong>True</strong></dd>
+<dt>replay check</dt><dd>the trace replays to the same observations: 3, 7, 35, 7, 7</dd>
+</dl><ol class="trace"><li><div class="trace-head"><span class="step">step 0</span><span class="instr">ADD 3</span><code class="act">add(a=0, b=3)</code><span class="obs">→ 3</span></div><div class="trace-sub">state read: op 3, arg 3, carry 0, observations 0 · the next decision read carry <strong>3</strong></div></li>
+<li><div class="trace-head"><span class="step">step 1</span><span class="instr">ADD 4</span><code class="act">add(a=3, b=4)</code><span class="obs">→ 7</span></div><div class="trace-sub">state read: op 3, arg 4, carry 3, observations 1 · the next decision read carry <strong>7</strong></div></li>
+<li><div class="trace-head"><span class="step">step 2</span><span class="instr">MUL 5</span><code class="act">mul(a=7, b=5)</code><span class="obs">→ 35</span></div><div class="trace-sub">state read: op 4, arg 5, carry 7, observations 2 · the next decision read carry <strong>35</strong></div></li>
+<li><div class="trace-head"><span class="step">step 3</span><span class="instr">KEY</span><code class="act">lookup(value=35)</code><span class="obs">→ 7</span></div><div class="trace-sub">state read: op 6, arg 0, carry 35, observations 3 · the next decision read carry <strong>7</strong></div></li>
+<li><div class="trace-head"><span class="step">step 4</span><span class="instr">RET</span><code class="act">finish(answer=7)</code><span class="obs">→ 7</span></div><div class="trace-sub">state read: op 1, arg 0, carry 7, observations 4 · the loop stopped here: finish, answer <strong>7</strong></div></li></ol>
+<h3>The same loop on the selective family, where the state has to choose what to keep</h3>
+<p>Here the task is a stream of keyed values and distractors, and the memory has to retain the one that is asked for. Retention and address are decided by the event's own content — a <code>PUT</code> goes to the slot its key addresses, a <code>NOISE</code> goes nowhere — so the memory row below is the measurement, not a description of one. 3 stores, 2 distractors, 4 keys, state width 4 slots.</p>
+<p class="task">note that key 1 holds 40, then ignore 70, then note that key 3 holds 60, then note that key 2 holds 90, then report the value of key 3</p>
+<dl class="kv">
+<dt>task id</dt><dd><code>selective-example</code></dd>
+<dt>plan</dt><dd><code>PUT 1 40, NOISE 70, PUT 3 60, PUT 2 90, RECALL 3</code></dd>
+<dt>key/value table</dt><dd>empty — this family has no key/value table</dd>
+<dt>answer (analytic)</dt><dd><strong>60</strong></dd>
+<dt>loop steps</dt><dd>5 of budget 5</dd>
+<dt>stop reason</dt><dd><code>finish</code>, solved <strong>True</strong></dd>
+<dt>replay check</dt><dd>the trace replays to the same observations: 0, 0, 0, 0, 60</dd>
+</dl><ol class="trace"><li><div class="trace-head"><span class="step">step 0</span><span class="instr">PUT 1</span><code class="act">add(a=0, b=0)</code><span class="obs">→ 0</span></div><div class="trace-sub">state read: op 8, arg 1, carry 0, observations 0 · the next decision read carry <strong>0</strong></div><div class="trace-sub">memory slots read: [0, 40, 0, 0]</div></li>
+<li><div class="trace-head"><span class="step">step 1</span><span class="instr">NOISE 70</span><code class="act">add(a=0, b=0)</code><span class="obs">→ 0</span></div><div class="trace-sub">state read: op 9, arg 70, carry 0, observations 1 · the next decision read carry <strong>0</strong></div><div class="trace-sub">memory slots read: [0, 40, 0, 0]</div></li>
+<li><div class="trace-head"><span class="step">step 2</span><span class="instr">PUT 3</span><code class="act">add(a=0, b=0)</code><span class="obs">→ 0</span></div><div class="trace-sub">state read: op 8, arg 3, carry 0, observations 2 · the next decision read carry <strong>0</strong></div><div class="trace-sub">memory slots read: [0, 40, 0, 60]</div></li>
+<li><div class="trace-head"><span class="step">step 3</span><span class="instr">PUT 2</span><code class="act">add(a=0, b=0)</code><span class="obs">→ 0</span></div><div class="trace-sub">state read: op 8, arg 2, carry 0, observations 3 · the next decision read carry <strong>0</strong></div><div class="trace-sub">memory slots read: [0, 40, 90, 60]</div></li>
+<li><div class="trace-head"><span class="step">step 4</span><span class="instr">RECALL 3</span><code class="act">finish(answer=60)</code><span class="obs">→ 60</span></div><div class="trace-sub">state read: op 10, arg 3, carry 0, observations 4 · the loop stopped here: finish, answer <strong>60</strong></div><div class="trace-sub">memory slots read: [0, 40, 90, 60]</div></li></ol>
+</section>
+<!-- DASHBOARD:AGENT:END -->
+<!-- DASHBOARD:RESULTS:BEGIN -->
+<section id="results">
+<h2>Results, and the controls that decide what they mean</h2>
+<p class="lede">The solve rate is a number about the person who wrote the tasks unless the controls are published next to it. They are, including the one that costs the increment its most flattering reading.</p>
+<div class="callout">
+<p><strong>scalar_carry</strong> — the same controller with the carried value in one Python int instead of the state — reproduces the agent's rate in 35 of the 36 cells it shares with the agent. The cells where it does not (1): <code>selective@6</code> (agent 1.000 vs control 0.320). So the control ties the agent everywhere except <code>selective</code>.</p>
+<p><strong>fixed_decay</strong> — a state of the same width with a constant, input-independent write gate: every value-carrying event goes into every slot — reproduces the agent's rate in 35 of the 36 cells it shares with the agent. The cells where it does not (1): <code>selective@6</code> (agent 1.000 vs control 0.200). So the control ties the agent everywhere except <code>selective</code>.</p>
+<p><strong>no_memory</strong> — the state is wiped before every decision, and only the current instruction is re-streamed — reproduces the agent's rate in 21 of the 36 cells it shares with the agent. The cells where it does not (15): <code>one_op@2</code> (agent 1.000 vs control 0.000), <code>one_op@3</code> (agent 1.000 vs control 0.000), <code>one_op@4</code> (agent 1.000 vs control 0.000), <code>one_op@5</code> (agent 1.000 vs control 0.000), <code>one_op@6</code> (agent 1.000 vs control 0.000), <code>two_op@3</code> (agent 1.000 vs control 0.000), and 9 more cells, all listed in the control's own grid below. The families where they part: <code>branch</code>, <code>lookup</code>, <code>one_op</code>, <code>selective</code>, <code>two_op</code>.</p>
+<p><strong>random_action</strong> — tools and arguments drawn uniformly; the floor, not a policy — reproduces the agent's rate in 0 of the 6 cells it shares with the agent. The cells where it does not (6): <code>literal@6</code> (agent 1.000 vs control 0.001), <code>one_op@6</code> (agent 1.000 vs control 0.001), <code>two_op@6</code> (agent 1.000 vs control 0.004), <code>branch@6</code> (agent 1.000 vs control 0.005), <code>lookup@6</code> (agent 1.000 vs control 0.006), <code>selective@6</code> (agent 1.000 vs control 0.005). The families where they part: <code>branch</code>, <code>literal</code>, <code>lookup</code>, <code>one_op</code>, <code>selective</code>, <code>two_op</code>.</p> The same table says why the width is not the explanation: a state of the same width with a constant write gate (<code>fixed_decay</code>) reaches 0.200 on <code>selective@6</code> where the agent reaches 1.000 — it is the gating, not the number of slots. The single-register memory fails selectively rather than at random: of 50 selective tasks it solves 16, and 16 of them asked for the key that was stored last. The correspondence holds task for task (<code>True</code> over 50 tasks).
+</div>
+<h3>Solve rate by family and step budget</h3>
+<p>300 tasks (50 per family), seed 0. Each family needs a known number of decisions, so the staircase is the step counts rather than a discovery — it is here to show the budget is enforced rather than nominal.</p>
+<table>
+<thead><tr>
+<th class="left">task family</th>
+<th class="right">steps needed</th>
+<th class="right">budget 1</th>
+<th class="right">budget 2</th>
+<th class="right">budget 3</th>
+<th class="right">budget 4</th>
+<th class="right">budget 5</th>
+<th class="right">budget 6</th>
+</tr></thead><tbody>
+<tr>
+<td class="left"><code>literal</code></td>
+<td class="right">1</td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>one_op</code></td>
+<td class="right">2</td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>two_op</code></td>
+<td class="right">3</td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>branch</code></td>
+<td class="right">4</td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>lookup</code></td>
+<td class="right">5</td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>selective</code></td>
+<td class="right">6</td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+</tr>
+</tbody></table>
+<h3>Every control, in full</h3>
+<p>Each control's whole grid, not a selected row: a slice chosen after the fact is how an unflattering cell goes missing. Cells here are rates; the counts behind them are in the staircase above (50 attempts each) and in each control's own totals below. Random action is measured at budget 6 only, over 25 draws per task with arguments spanning ±100.</p>
+<div class="grid two">
+<figure class="card"><figcaption><span class="cond">no_memory</span><span class="muted">the state is wiped before every decision, and only the current instruction is re-streamed</span></figcaption><table>
+<thead><tr>
+<th class="left">family</th>
+<th class="right">b1</th>
+<th class="right">b2</th>
+<th class="right">b3</th>
+<th class="right">b4</th>
+<th class="right">b5</th>
+<th class="right">b6</th>
+</tr></thead><tbody>
+<tr>
+<td class="left"><code>literal</code></td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>one_op</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+</tr>
+<tr>
+<td class="left"><code>two_op</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+</tr>
+<tr>
+<td class="left"><code>branch</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+</tr>
+<tr>
+<td class="left"><code>lookup</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+</tr>
+<tr>
+<td class="left"><code>selective</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+</tr>
+</tbody></table></figure>
+<figure class="card"><figcaption><span class="cond">scalar_carry</span><span class="muted">the same controller with the carried value in one Python int instead of the state</span></figcaption><table>
+<thead><tr>
+<th class="left">family</th>
+<th class="right">b1</th>
+<th class="right">b2</th>
+<th class="right">b3</th>
+<th class="right">b4</th>
+<th class="right">b5</th>
+<th class="right">b6</th>
+</tr></thead><tbody>
+<tr>
+<td class="left"><code>literal</code></td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>one_op</code></td>
+<td class="right">0.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>two_op</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>branch</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>lookup</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>selective</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.320</td>
+</tr>
+</tbody></table></figure>
+<figure class="card"><figcaption><span class="cond">fixed_decay</span><span class="muted">a state of the same width with a constant, input-independent write gate: every value-carrying event goes into every slot</span></figcaption><table>
+<thead><tr>
+<th class="left">family</th>
+<th class="right">b1</th>
+<th class="right">b2</th>
+<th class="right">b3</th>
+<th class="right">b4</th>
+<th class="right">b5</th>
+<th class="right">b6</th>
+</tr></thead><tbody>
+<tr>
+<td class="left"><code>literal</code></td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>one_op</code></td>
+<td class="right">0.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>two_op</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>branch</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>lookup</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">1.000</td>
+<td class="right">1.000</td>
+</tr>
+<tr>
+<td class="left"><code>selective</code></td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.000</td>
+<td class="right">0.200</td>
+</tr>
+</tbody></table></figure>
+<figure class="card"><figcaption><span class="cond">random_action</span><span class="muted">tools and arguments drawn uniformly; the floor, not a policy</span></figcaption><table>
+<thead><tr>
+<th class="left">family</th>
+<th class="right">b1</th>
+<th class="right">b2</th>
+<th class="right">b3</th>
+<th class="right">b4</th>
+<th class="right">b5</th>
+<th class="right">b6</th>
+</tr></thead><tbody>
+<tr>
+<td class="left"><code>literal</code></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right">0.001</td>
+</tr>
+<tr>
+<td class="left"><code>one_op</code></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right">0.001</td>
+</tr>
+<tr>
+<td class="left"><code>two_op</code></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right">0.004</td>
+</tr>
+<tr>
+<td class="left"><code>branch</code></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right">0.005</td>
+</tr>
+<tr>
+<td class="left"><code>lookup</code></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right">0.006</td>
+</tr>
+<tr>
+<td class="left"><code>selective</code></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right"><span class="muted">—</span></td>
+<td class="right">0.005</td>
+</tr>
+</tbody></table></figure>
+</div>
+<h4>Sweep: <code>state_width</code></h4><table>
+<thead><tr>
+<th class="left">value</th>
+<th class="right">slots</th>
+<th class="right">total_width</th>
+<th class="right">agent</th>
+<th class="right">scalar</th>
+<th class="right">fixed</th>
+<th class="right">none</th>
+</tr></thead><tbody>
+<tr>
+<td class="left"><code>0</code></td>
+<td class="right">0</td>
+<td class="right">8</td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.320<span class="muted"> (16/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>1</code></td>
+<td class="right">1</td>
+<td class="right">9</td>
+<td class="right">0.320<span class="muted"> (16/50)</span></td>
+<td class="right">0.320<span class="muted"> (16/50)</span></td>
+<td class="right">0.200<span class="muted"> (10/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>2</code></td>
+<td class="right">2</td>
+<td class="right">10</td>
+<td class="right">0.700<span class="muted"> (35/50)</span></td>
+<td class="right">0.320<span class="muted"> (16/50)</span></td>
+<td class="right">0.200<span class="muted"> (10/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>3</code></td>
+<td class="right">3</td>
+<td class="right">11</td>
+<td class="right">0.800<span class="muted"> (40/50)</span></td>
+<td class="right">0.320<span class="muted"> (16/50)</span></td>
+<td class="right">0.200<span class="muted"> (10/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>4</code></td>
+<td class="right">4</td>
+<td class="right">12</td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">0.320<span class="muted"> (16/50)</span></td>
+<td class="right">0.200<span class="muted"> (10/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>8</code></td>
+<td class="right">8</td>
+<td class="right">16</td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">0.320<span class="muted"> (16/50)</span></td>
+<td class="right">0.200<span class="muted"> (10/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+</tbody></table>
+<h4>Sweep: <code>distractor_rate</code></h4><table>
+<thead><tr>
+<th class="left">value</th>
+<th class="right">distractors</th>
+<th class="right">events</th>
+<th class="right">rate</th>
+<th class="right">budget</th>
+<th class="right">agent</th>
+<th class="right">scalar</th>
+<th class="right">fixed</th>
+<th class="right">none</th>
+</tr></thead><tbody>
+<tr>
+<td class="left"><code>0</code></td>
+<td class="right">0</td>
+<td class="right">3</td>
+<td class="right">0.000</td>
+<td class="right">4</td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">0.340<span class="muted"> (17/50)</span></td>
+<td class="right">0.340<span class="muted"> (17/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>1</code></td>
+<td class="right">1</td>
+<td class="right">4</td>
+<td class="right">0.250</td>
+<td class="right">5</td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">0.320<span class="muted"> (16/50)</span></td>
+<td class="right">0.280<span class="muted"> (14/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>2</code></td>
+<td class="right">2</td>
+<td class="right">5</td>
+<td class="right">0.400</td>
+<td class="right">6</td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">0.320<span class="muted"> (16/50)</span></td>
+<td class="right">0.200<span class="muted"> (10/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>4</code></td>
+<td class="right">4</td>
+<td class="right">7</td>
+<td class="right">0.571</td>
+<td class="right">8</td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">0.360<span class="muted"> (18/50)</span></td>
+<td class="right">0.140<span class="muted"> (7/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>6</code></td>
+<td class="right">6</td>
+<td class="right">9</td>
+<td class="right">0.667</td>
+<td class="right">10</td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">0.440<span class="muted"> (22/50)</span></td>
+<td class="right">0.120<span class="muted"> (6/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>8</code></td>
+<td class="right">8</td>
+<td class="right">11</td>
+<td class="right">0.727</td>
+<td class="right">12</td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+<td class="right">0.320<span class="muted"> (16/50)</span></td>
+<td class="right">0.100<span class="muted"> (5/50)</span></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+</tbody></table>
+<h4><code>one_step</code> — the budget-1 control: is the suite one call deep?</h4><table>
+<thead><tr>
+<th class="left">task family</th>
+<th class="right">solve rate at one decision</th>
+</tr></thead><tbody>
+<tr>
+<td class="left"><code>literal</code></td>
+<td class="right">1.000<span class="muted"> (50/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>one_op</code></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>two_op</code></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>branch</code></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>lookup</code></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><code>selective</code></td>
+<td class="right">0.000<span class="muted"> (0/50)</span></td>
+</tr>
+<tr>
+<td class="left"><em>all families</em></td>
+<td class="right">0.167<span class="muted"> (50/300)</span></td>
+</tr>
+</tbody></table>
+<p><code>zero_carry_branch</code> — where the first version's residual bit: of the 50 <code>branch</code> tasks, 8 arrive at the <code>IFPOS</code> decision (step 2) carrying exactly 0 — the value a write residual turns positive.</p>
+<h4><code>write_exactness</code> — register write exactness</h4><p>A residual above zero is not a rounding detail: <code>IFPOS</code> branches on the sign of this number. What a register holds after being written 9 and then 0:</p><table>
+<thead><tr>
+<th class="left">A</th>
+<th class="right">exp(A)</th>
+<th class="right">residual</th>
+<th class="right">sign test holds</th>
+</tr></thead><tbody>
+<tr>
+<td class="left"><code>-800</code></td>
+<td class="right">0.000e+00</td>
+<td class="right">0.000e+00</td>
+<td class="right">yes</td>
+</tr>
+<tr>
+<td class="left"><code>-745</code></td>
+<td class="right">4.941e-324</td>
+<td class="right">4.447e-323</td>
+<td class="right">no</td>
+</tr>
+<tr>
+<td class="left"><code>-400</code></td>
+<td class="right">1.915e-174</td>
+<td class="right">1.724e-173</td>
+<td class="right">no</td>
+</tr>
+<tr>
+<td class="left"><code>-50</code></td>
+<td class="right">1.929e-22</td>
+<td class="right">1.736e-21</td>
+<td class="right">no</td>
+</tr>
+</tbody></table>
+<h3>Other recorded controls</h3>
+<h4><code>scalar_selective</code></h4><dl class="kv">
+<dt>tasks</dt><dd>50</dd>
+<dt>solved</dt><dd>16</dd>
+<dt>queried_the_last_store</dt><dd>16</dd>
+<dt>exact_matches</dt><dd>50</dd>
+<dt>correspondence_holds</dt><dd>True</dd>
+</dl>
+<dl class="kv">
+<dt>fixed_equals_scalar_at_zero_distractors</dt><dd><code>True</code></dd>
+</dl></section>
+<!-- DASHBOARD:RESULTS:END -->
+<!-- DASHBOARD:LIMITS:BEGIN -->
+<section id="limitations">
+<h2>What this page does not show</h2>
+<p class="lede">The same pattern the README uses, because the failure mode is the same: a page of generated numbers is persuasive whether or not the numbers mean what a glance says they mean.</p>
+<p><strong>It is not</strong> an emotion recogniser, and it is not a learning result. Three claims that would be easy to make from this page, and are all false:</p>
+<ul class="falseclaims">
+<li><em>"The descriptors identify emotion in speech."</em> They identify which of 4 <strong>synthetic</strong> conditions generated a signal. Every utterance was synthesised by this repository, one parameter tuple per condition (<code>neutral</code> = F0 target 150 Hz, swing 0.01, jitter 0.01, amplitude spread 0.03, 2 bursts/s; <code>aroused</code> = F0 target 225 Hz, swing 0.12, jitter 0.05, amplitude spread 0.45, 5 bursts/s; <code>subdued</code> = F0 target 110 Hz, swing 0.004, jitter 0.01, amplitude spread 0.05, 1 burst/s; <code>unsteady</code> = F0 target 255 Hz, swing 0.15, jitter 0.1, amplitude spread 0.15, 3.5 bursts/s), and the labels come from the generator rather than from a listener. No human voice was involved at any point, there is no labelled affect corpus here to validate against, and the 0.969 accuracy is the recovery of synthetic parameters — not emotion.</li>
+<li><em>"The loop learns, or something here was trained."</em> Nothing on this page is in a gradient path: there is no optimiser, no loss and no backward pass anywhere in the agent code. The controller is hand-written branching, the recurrence's decay and its read/write gate are constants chosen by hand, and a seed only decides which tasks are generated. The voice descriptors are analytic measurements of a waveform, not learned features, and the encoder that bridges them to the model is a fixed random projection with no bias and no nonlinearity.</li>
+<li><em>"The agent generalises."</em> It runs one controller over a closed tool set (<code>add</code>, <code>mul</code>, <code>sub</code>, <code>lookup</code>, <code>finish</code>) and a closed task family (<code>literal</code>, <code>one_op</code>, <code>two_op</code>, <code>branch</code>, <code>lookup</code>, <code>selective</code>), emitted by a seeded generator over bounded integers. The "task text" is that instruction grammar delivered as structured events: there is no tokenizer, no parsing and no language understanding anywhere in the path. The solver cannot be asked for a task the generator does not generate or a tool the registry does not hold, so a rate of 1.000 says the controller matches the shapes it was written against and nothing wider.</li>
+</ul>
+<p>And the boundaries that a reader should carry away with the numbers:</p>
+<ul class="limits">
+<li><strong>No generalisation beyond the closed task family.</strong> Every task comes from the generator's own constraints, and those constraints are what make the controls interpretable. Nothing here speaks to a task outside the family.</li>
+<li><strong>The affect descriptors are synthetic-parameter recovery, not human emotion, and there is no real-speech validation.</strong> There is no corpus, no listener labels and no trained classifier; the conditions were built to differ along exactly the axes the descriptors measure, so the separation on this page is partly a property of the design.</li>
+<li><strong>The F0 numbers are bounded by the estimator, not by the signal.</strong> The module's 60–400 Hz band is a <em>search</em> range, not a working range: with the 25 ms window used here the tests assert a 2% tolerance at 150, 220 and 300 Hz and nothing below about 100 Hz. An unchanged clause from the README, repeated here because the chart makes the estimate look more authoritative than it is.</li>
+<li><strong>Jitter and speaking rate are frame-level proxies.</strong> Jitter is a successive-frame pitch difference between adjacent voiced frames and is bounded below by the 10 ms hop; "speaking rate" counts voiced segments and cannot see unvoiced consonants at all. Neither is a phonetics measurement.</li>
+<li><strong>The charts are averages of generated signals at one seed.</strong> Each F0 line is the mean over that condition's utterances, so it shows the shared burst structure and not the spread within the condition — the descriptor table is where the spread lives.</li>
+<li><strong>This page adds no measurements.</strong> It draws the numbers in the two JSON files. Its own arithmetic is axis scaling, percentages, and the comparison of each control's cells against the agent's; it fits nothing, infers nothing and estimates nothing.</li>
+<li><strong>Only the controls that were run are shown, and only at the budgets that were run.</strong> A missing cell in a control grid is a measurement that was not taken, printed as an em dash rather than filled in. Random action was measured at budget 6 only.</li>
+<li><strong>The selective family's advantage is narrow and its gate is hand-set.</strong> The gated state reaches 1.000 on <code>selective@6</code> while a fixed, input-independent decay of the same width reaches 0.200 and one Python int reaches 0.320 — but the gate is chosen, not learned, the family is closed and synthetic, and the arithmetic families are unaffected, which is why the scalar-carry control still ties the agent there.</li>
+<li><strong>The page is only as fresh as its last render.</strong> Changing a results file without re-running the renderer leaves this page describing an older run; <code>tests/test_dashboard.py</code> fails if the committed page and the committed results files disagree, which is the point of publishing a generated surface.</li>
+</ul>
+</section>
+<!-- DASHBOARD:LIMITS:END -->
+<!-- DASHBOARD:FOOTER:BEGIN -->
+<footer id="regenerate">
+<h2>Regenerating this page</h2>
+<pre><code>python experiments/voice_affect.py --out voice-affect.json
+python experiments/agent_loop.py --out agent-loop.json
+python experiments/render_dashboard.py --voice voice-affect.json \
+    --agent agent-loop.json --out dashboard.html</code></pre>
+<dl class="kv">
+<dt>voice-affect.json</dt><dd>16 utterances per condition × 4 conditions at 16,000 Hz, seed 0; written by <code>experiments/voice_affect.py</code>. Frame tracks: 198 frames of 10 ms.</dd>
+<dt>agent-loop.json</dt><dd>300 tasks (50 per family) over 6 families, budgets [1, 2, 3, 4, 5, 6], seed 0; written by <code>experiments/agent_loop.py</code>.</dd>
+<dt>dashboard.html</dt><dd>this file, written by <code>experiments/render_dashboard.py</code>; it is one file with no external references — the styles, the script and every chart are inline — so it renders from disk with no server and no network, and it carries no timestamp, so two renders of the same inputs are byte-identical.</dd>
+</dl>
+</footer>
+<!-- DASHBOARD:FOOTER:END -->
+</main>
+<script>
+(function () {
+  var charts = document.querySelectorAll('svg.chart[data-frames]');
+  Array.prototype.forEach.call(charts, function (svg) {
+    var out = document.getElementById(svg.getAttribute('data-readout'));
+    if (!out) { return; }
+    var idle = out.getAttribute('data-idle') || '';
+    var n = parseInt(svg.getAttribute('data-frames'), 10);
+    var x0 = parseFloat(svg.getAttribute('data-x0'));
+    var x1 = parseFloat(svg.getAttribute('data-x1'));
+    var times = (svg.getAttribute('data-times') || '').split(',');
+    var series = [];
+    Array.prototype.forEach.call(svg.querySelectorAll('path[data-label]'),
+      function (path) {
+        var lo = parseFloat(path.getAttribute('data-lo'));
+        var hi = parseFloat(path.getAttribute('data-hi'));
+        var top = parseFloat(path.getAttribute('data-top'));
+        var bottom = parseFloat(path.getAttribute('data-bottom'));
+        var values = new Array(n);
+        var re = /[ML](-?[0-9.]+),(-?[0-9.]+)/g;
+        var match;
+        while ((match = re.exec(path.getAttribute('d') || '')) !== null) {
+          var x = parseFloat(match[1]);
+          var y = parseFloat(match[2]);
+          var i = Math.round((x - x0) / (x1 - x0) * (n - 1));
+          if (i < 0 || i > n - 1 || bottom === top) { continue; }
+          values[i] = lo + (bottom - y) / (bottom - top) * (hi - lo);
+        }
+        series.push({
+          label: path.getAttribute('data-label'),
+          unit: path.getAttribute('data-unit'),
+          digits: parseInt(path.getAttribute('data-digits'), 10),
+          values: values
+        });
+      });
+    function read(event) {
+      var point = svg.createSVGPoint();
+      point.x = event.clientX;
+      point.y = event.clientY;
+      var local = point.matrixTransform(svg.getScreenCTM().inverse());
+      var fraction = (local.x - x0) / (x1 - x0);
+      var index = Math.round(fraction * (n - 1));
+      if (index < 0 || index > n - 1) { return; }
+      var parts = [];
+      for (var s = 0; s < series.length; s++) {
+        var value = series[s].values[index];
+        if (value === undefined || value === null) { continue; }
+        var shown = value.toFixed(series[s].digits) +
+                    (series[s].unit ? ' ' + series[s].unit : '');
+        parts.push(series[s].label + ' ' + shown);
+      }
+      var stamp = times[index] !== undefined ? times[index] + ' s' : 'frame ' + index;
+      out.textContent = 'frame ' + index + ' (' + stamp + '): ' +
+        (parts.length ? parts.join('  ·  ') : 'no value at this frame');
+    }
+    svg.addEventListener('mousemove', read);
+    svg.addEventListener('mouseleave', function () { out.textContent = idle; });
+  });
+})();
+</script>
+</body>
+</html>

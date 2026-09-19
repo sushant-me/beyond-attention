@@ -86,6 +86,16 @@ from .voice import (
     hann_window,
     waveform_to_model_input,
 )
+# The one-call surface sits on top of both: it is imported last because it is the
+# layer that depends on the others, and it adds no measurement of its own.
+from .api import (
+    AFFECT_FRAMING,
+    AffectSummary,
+    affect_summary,
+    prosody_reading,
+    run_task,
+    trace_lines,
+)
 
 __version__ = "0.1.0"
 
@@ -124,5 +134,10 @@ __all__ = [
     "frame_count", "frame_features", "frame_signal", "hann_window",
     "waveform_to_model_input",
     "FEATURE_NAMES", "F0_MAX_HZ", "F0_MIN_HZ",
+    # The two one-call entry points: a waveform to a prosody summary, and a task
+    # to its whole trace. Both return the measured object rather than a rendering
+    # of it, so a caller can compute on exactly what the dashboard draws.
+    "affect_summary", "prosody_reading", "AffectSummary", "AFFECT_FRAMING",
+    "run_task", "trace_lines",
     "__version__",
 ]
