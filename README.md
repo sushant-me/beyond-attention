@@ -388,7 +388,7 @@ when only a label had changed.
 uv venv && uv pip install --index-url https://download.pytorch.org/whl/cpu torch
 uv pip install -e . pytest
 
-python -m pytest tests/ -q                     # 144 correctness tests
+python -m pytest tests/ -q                     # 181 correctness tests
 
 python experiments/run.py --pairs 2 4 8 16 --steps 3000 --seeds 0 \
     --out results.json                         # main sweep    (~30 min, CPU)
@@ -421,13 +421,17 @@ python experiments/render_readme.py --mqar results.json \
 # the voice/affect front end: synthetic prosody conditions, seconds to run
 python experiments/voice_affect.py --out voice-affect.json
 python experiments/render_readme.py --voice voice-affect.json --readme README.md
+
+# the agent loop: 250 seeded tasks, six budgets, four controls (~1 s)
+python experiments/agent_loop.py --out agent-loop.json
+python experiments/render_readme.py --agent agent-loop.json --readme README.md
 ```
 
 `experiments/run.py --help` lists the knobs; `--steps`, `--seeds`, `--pairs`,
 `--queries` and `--blocks` are the ones that cost time.
 
-The voice block renders on its own (`--voice`) rather than as part of the
-results command. That is deliberate: the results block currently contains one
+The voice and agent blocks render on their own (`--voice`, `--agent`) rather than
+as part of the results command. That is deliberate: the results block currently contains one
 hand-written section that `render_readme.py` does not produce, so re-rendering
 it removes that section instead of reproducing it. See the last bullet of the
 limitations.
@@ -647,6 +651,108 @@ Each descriptor on its own, same classifier:
 | bridge output | `(1, 198, 32)` | a front end that never reaches the model's `(B, L, D)` layout |
 <!-- VOICE:END -->
 
+### What the numbers say, including the unflattering parts
+
+* **The four conditions are separable, and not cleanly.** Leave-one-out nearest
+  centroid gets most of the 64 utterances right against a chance of 0.250, but
+  the closest pair of condition centroids is only about **1.4×** the mean
+  within-condition spread apart, and the confusion is real: two of the sixteen
+  "neutral" utterances sit closer to the "unsteady" centroid than to their own.
+  An accuracy read without the margin would overstate how far apart these are.
+* **The axis the design varied is not always the axis the obvious descriptor
+  carries.** `energy_std` — the frame-RMS spread over *all* frames — recovers
+  the condition 0.625 of the time on its own, because it mostly measures where
+  the pauses are rather than how loud the speech is. Restricting the same
+  statistic to voiced frames lifts that to 0.953. Both are reported; the second
+  exists because the first was measured and found wanting.
+* **The label-shuffle control is what makes the accuracy mean anything.** The
+  same classifier on permuted labels averages 0.261 against a chance of 0.250,
+  and the pair of conditions generated from *identical* parameters is classified
+  at 0.562 — about +0.7σ, which is noise, and is the right answer for two groups
+  that differ in nothing but the random stream.
+* **The F0 estimator is checked against the generator, and its advertised
+  range is wider than its working range.** Mean absolute error against the
+  synthesised pitch is about 1%, and a 10 Hz sweep from 100 Hz to 380 Hz stays
+  inside 1.6%. Below that it fails rather than degrading: at 70 Hz the estimate
+  is 3.2% high and only 40% of frames are called voiced, and at 60 Hz the
+  strongest peak inside the lag range is a short-lag artifact, so the frame is
+  reported near the 400 Hz end of the band. A 25 ms window does not hold the two
+  periods a 60 Hz fundamental needs, and the fix is a longer window rather than
+  a different threshold. The tests accordingly assert a 2% tolerance at 150, 220
+  and 300 Hz rather than across the advertised 60–400 Hz range.
+
+None of this is a result about emotion. It is a result about whether a front end
+measures the four prosodic axes it claims to, on signals where those axes are
+known because they were set by hand.
+
+The tests were mutation-checked the same way the scan's were, because a test
+that passes is not evidence until something that should break it does. Ten
+deliberate faults in `voice.py` — accepting every frame as voiced, removing the
+energy gate, swapping the frame and hop, giving the encoder a bias, collapsing
+the voiced-frame energy spread back onto all frames, counting voiced frames
+instead of runs, letting jitter span the pauses, moving the rolloff threshold to
+5% of the power, and weighting the spectral centroid by power instead of
+magnitude — each fail a specific test, and seven of the ten fail exactly one.
+The voicing fault is caught by the white-noise control, which is the reason that
+control exists: it is the fault a pure-tone test cannot see.
+
+## Agent: acting, not only reading
+
+Everything above reads: a waveform or a token sequence goes in and a number comes
+out. `src/beyond_attention/agent.py` is the other direction — a loop that chooses
+a tool, runs it, reads the result and chooses again, with an explicit step budget
+and a trace that replays.
+
+The memory is the part worth describing exactly, because it is where the
+temptation to overclaim is strongest. The trajectory's events — the task's
+instructions and each observation — are embedded into the `(x, delta)` pair
+`build_scan_terms` consumes, and streamed through the S6 recurrence the rest of
+this repository implements. The resulting state *is* the agent's working memory:
+an eight-wide register file whose dimensions are named (`carry`, `observations`,
+`op`, `arg`, `arg2`, `miss`, `kind`, `instructions`) and which the policy decodes
+into an opcode, an operand and the carried value. `A` is chosen by hand so that a
+write (`delta = 1`) replaces a register exactly and a hold (`delta = 0`) leaves it
+bit-for-bit alone. A test runs the repository's own `selective_scan` on the same
+input and requires it to reproduce this state exactly, so "the memory is the SSM's
+recurrence" is a check rather than a claim.
+
+### What this is, and what it is not
+
+**It is** a working, tested agent loop: five tools with strict schemas and typed
+errors, a step budget that is honoured exactly, a replayable trace of every action
+and result, and a seeded task suite whose answers are analytic — computed in
+Python integers by `evaluate_plan`, so correctness is a property of the task
+rather than of a model. Every number in the block below is generated from
+`agent-loop.json` by `experiments/render_readme.py`.
+
+**It is not** a language model driving tools, and it is not general. Three claims
+that would be easy to make from the table below, and are all false:
+
+* *"This is an agent that generalises."* It runs one fixed, hand-written
+  controller over a closed tool set — `add`, `mul`, `sub`, `lookup`, `finish`,
+  five functions fixed at import time — and a closed task family: five plan shapes
+  over bounded integers, emitted by a seeded generator. The "task text" is that
+  instruction grammar delivered as structured events; there is no tokenizer, no
+  parsing and no language understanding anywhere in the path. The loop cannot be
+  asked for a task the generator does not generate, a tool the registry does not
+  hold, or an instruction the grammar does not define, and 1.000 says only that
+  the controller matches the five shapes it was written against.
+* *"The loop learns."* Nothing is trained. There is no gradient, no optimiser and
+  no loss in this path: the recurrence's `A`, its read/write gate and the policy's
+  branches are constants chosen by hand. A seed decides which tasks are generated
+  and how the random control draws, and nothing else. The five tools are pure
+  functions of their arguments — no clock, no filesystem, no network — and a test
+  reads the module's imports to keep it that way.
+* *"The SSM is what makes it work."* The controls say the opposite, and they are
+  in the table rather than in a footnote. The no-memory control — the state wiped
+  before every decision, with only the current instruction re-streamed — keeps
+  every task whose answer is written in the task text and loses every task whose
+  answer is an intermediate result. That is evidence that *carrying the value* is
+  necessary. It is not evidence that the recurrence is: the same controller with
+  the carried value in one Python `int` solves exactly the same tasks, in the same
+  number of steps, calling the same tools in the same order. The state carries the
+  value; a variable would too.
+
 <!-- AGENT:BEGIN -->
 **Seeded task suite** — 250 tasks (50 per family), seed 0. Each task is a plan over bounded integers plus a bounded key/value table, and its answer is computed in Python integers by `evaluate_plan`, so correctness is a property of the task. Tools: `add`, `mul`, `sub`, `lookup`, `finish`.
 
@@ -695,48 +801,49 @@ The budget-1 slice of the agent is the one-step control: **0.200** solved over a
 
 ### What the numbers say, including the unflattering parts
 
-* **The four conditions are separable, and not cleanly.** Leave-one-out nearest
-  centroid gets most of the 64 utterances right against a chance of 0.250, but
-  the closest pair of condition centroids is only about **1.4×** the mean
-  within-condition spread apart, and the confusion is real: two of the sixteen
-  "neutral" utterances sit closer to the "unsteady" centroid than to their own.
-  An accuracy read without the margin would overstate how far apart these are.
-* **The axis the design varied is not always the axis the obvious descriptor
-  carries.** `energy_std` — the frame-RMS spread over *all* frames — recovers
-  the condition 0.625 of the time on its own, because it mostly measures where
-  the pauses are rather than how loud the speech is. Restricting the same
-  statistic to voiced frames lifts that to 0.953. Both are reported; the second
-  exists because the first was measured and found wanting.
-* **The label-shuffle control is what makes the accuracy mean anything.** The
-  same classifier on permuted labels averages 0.261 against a chance of 0.250,
-  and the pair of conditions generated from *identical* parameters is classified
-  at 0.562 — about +0.7σ, which is noise, and is the right answer for two groups
-  that differ in nothing but the random stream.
-* **The F0 estimator is checked against the generator, and its advertised
-  range is wider than its working range.** Mean absolute error against the
-  synthesised pitch is about 1%, and a 10 Hz sweep from 100 Hz to 380 Hz stays
-  inside 1.6%. Below that it fails rather than degrading: at 70 Hz the estimate
-  is 3.2% high and only 40% of frames are called voiced, and at 60 Hz the
-  strongest peak inside the lag range is a short-lag artifact, so the frame is
-  reported near the 400 Hz end of the band. A 25 ms window does not hold the two
-  periods a 60 Hz fundamental needs, and the fix is a longer window rather than
-  a different threshold. The tests accordingly assert a 2% tolerance at 150, 220
-  and 300 Hz rather than across the advertised 60–400 Hz range.
+* **Carry-over is necessary, and that is the one thing these controls
+  establish.** Wiping the state before each decision takes the four carry
+  families from 1.000 to **0.000** at every budget, while the `literal` family —
+  whose answer is written in the task text — stays at 1.000. The contrast is the
+  measurement: a control that failed everything would only show the loop was
+  broken, and one that passed everything would be evidence for nothing.
+* **The state-space state is not what earns it.** `scalar carry` reproduces the
+  agent's row exactly: 1.000 in every family, the same calls in the same order.
+  The recurrent state is a faithful and tested way to hold the carried value, and
+  it is not the source of the capability. This is the one place in the repository
+  where the control falsifies the increment's own most flattering reading, so it
+  is published as a row rather than as a caveat.
+* **The budget curve is a ceiling, and mostly arithmetic.** Each family needs a
+  known number of decisions (`literal` 1 through `lookup` 5), so the staircase is
+  what the step counts predict rather than a discovery. It is still worth
+  publishing, because it shows the budget is enforced rather than nominal and
+  says plainly that a family needing five decisions is unsolvable in four.
+* **The first version of the memory had a bug the experiment caught, not the
+  tests.** With `A = -50` a register write left 1.7e-21 of the previous value
+  behind. That is not a rounding detail: `IFPOS` branches on the *sign* of the
+  carry, 1.7e-21 is greater than zero, and 8 of the 50 `branch` tasks — exactly
+  the ones arriving at the branch carrying 0 — took the wrong arm and failed. The
+  fix was to make a write exact (a decay of `exp(-800)`, which underflows to
+  `0.0`) rather than nearly exact, which is why nothing in the readout needs a
+  tolerance and why the write-exactness table shows four values of the decay
+  rather than asserting the chosen one.
+* **Random tool choice is at the floor, and the floor is measured.** Uniform
+  tools and arguments solve 0.001 to 0.006 per family, 0.003 overall — non-zero
+  because a random agent may call `finish` with an answer that happens to be
+  right, which is why the control is bounded rather than asserted to be zero, and
+  why the argument span it drew from is recorded in the results file.
+* **A one-step agent cannot solve the suite.** At a budget of one decision the
+  agent scores **0.200**, and every task it solves is from `literal`. That is the
+  task-difficulty control, and it is also the honest bound on the whole block:
+  one family is trivial by construction, because it has to be for the no-memory
+  contrast to have a surviving arm at all.
 
-None of this is a result about emotion. It is a result about whether a front end
-measures the four prosodic axes it claims to, on signals where those axes are
-known because they were set by hand.
-
-The tests were mutation-checked the same way the scan's were, because a test
-that passes is not evidence until something that should break it does. Ten
-deliberate faults in `voice.py` — accepting every frame as voiced, removing the
-energy gate, swapping the frame and hop, giving the encoder a bias, collapsing
-the voiced-frame energy spread back onto all frames, counting voiced frames
-instead of runs, letting jitter span the pauses, moving the rolloff threshold to
-5% of the power, and weighting the spectral centroid by power instead of
-magnitude — each fail a specific test, and seven of the ten fail exactly one.
-The voicing fault is caught by the white-noise control, which is the reason that
-control exists: it is the fault a pure-tone test cannot see.
+The trace in the block above is the mechanism in five rows. The first call uses a
+carry of 0 because no observation has been written yet; each later call reads the
+previous result out of the state — 3, then 7, then 35 — and the `KEY` step turns
+35 into the key paired with it. Every argument after the first is a function of
+the state the previous step produced, and the register column is printed next to
+the action so that this is checkable rather than asserted.
 
 ## Limitations, stated rather than discovered later
 
@@ -806,6 +913,22 @@ control exists: it is the fault a pure-tone test cannot see.
   a separate block and is unaffected; rendering the extrapolation section from
   `length-extrapolation.json` is the fix, and until then that command should not
   be trusted to reproduce the README.
+* **The agent loop is a closed grammar, not a language interface.** Its "task
+  text" is five instruction shapes delivered as structured events, and the
+  controller is written against those five shapes. There is no tokenizer and no
+  natural-language input anywhere in the path, so no test in this repository
+  could detect a failure to understand a sentence — nothing accepts one.
+* **The tools are five pure functions that cannot touch anything.** No network,
+  no filesystem, no clock, and one call per decision, so the loop cannot compose
+  or discover tools. "Open-ended tool use" is not a claim this harness can
+  support, and the interesting failure modes of real tool use — irreversible
+  actions, partial failure, retries — are absent rather than handled.
+* **The suite is five generated plan shapes over bounded integers.** Every task
+  comes from `task_suite`, whose own constraints (no answer is 0, table values
+  are unique, operands are 2-9) are what make the controls interpretable. Nothing
+  here speaks to a task outside that family; the 1.000 solve rate is a statement
+  about a controller matching the shapes it was written for, and the README says
+  so above the table as well as here.
 
 ## References
 

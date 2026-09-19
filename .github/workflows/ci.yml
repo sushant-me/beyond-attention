@@ -89,3 +89,37 @@ jobs:
           print(f"voice front end ok: accuracy {accuracy:.3f} vs chance {chance:.3f}, "
                 f"white-noise voiced ratio {noise:.3f}")
           PY
+
+      - name: The agent loop carries state, and forgetting collapses it
+        # The no-memory contrast is asserted here rather than only in the tests
+        # because it is the number the agent block's honesty rests on: without
+        # it, "the state carries the result" is a claim with no measurement
+        # behind it. The scalar-carry control is asserted too, because it is the
+        # one that says the recurrence is *not* what makes the loop work --
+        # publishing that row and not guarding it would be the easy half.
+        run: |
+          python experiments/agent_loop.py --tasks-per-family 10 \
+            --random-rounds 5 --out /tmp/agent-loop.json
+          cp README.md /tmp/README.agent.md
+          python experiments/render_readme.py --agent /tmp/agent-loop.json \
+            --readme /tmp/README.agent.md
+          python - <<'PY'
+          import json, pathlib
+          data = json.loads(pathlib.Path("/tmp/agent-loop.json").read_text())
+          solve, controls = data["solve_rate"], data["controls"]
+          carry = [f for f in data["config"]["families"] if f != "literal"]
+          for family in carry:
+              key = f"{family}@6"
+              assert solve[key]["rate"] == 1.0, (family, solve[key])
+              assert controls["no_memory"][key]["rate"] == 0.0, \
+                  (family, controls["no_memory"][key])
+          assert solve["literal@1"]["rate"] == 1.0
+          assert controls["no_memory"]["literal@1"]["rate"] == 1.0
+          for key, cell in solve.items():
+              assert controls["scalar_carry"][key]["rate"] == cell["rate"], key
+          rendered = pathlib.Path("/tmp/README.agent.md").read_text()
+          for marker in ("| task family |", "| condition |", "| A |"):
+              assert marker in rendered, f"agent render lost {marker!r}"
+          print("agent loop ok: carry families 1.000 with the state and 0.000 "
+                "without it; scalar carry identical")
+          PY
