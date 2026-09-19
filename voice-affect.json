@@ -1,0 +1,247 @@
+{
+  "config": {
+    "sample_rate": 16000,
+    "duration_s": 2.0,
+    "utterances_per_condition": 16,
+    "seed": 0,
+    "shuffle_rounds": 200,
+    "classifier": "leave-one-out nearest centroid, z-scored per fold",
+    "chance": 0.25,
+    "cluster_features": [
+      "f0_mean",
+      "f0_std",
+      "f0_range",
+      "jitter",
+      "jitter_relative",
+      "energy_mean",
+      "energy_std",
+      "energy_mean_voiced",
+      "energy_std_voiced",
+      "energy_flux_mean",
+      "voiced_ratio",
+      "speaking_rate",
+      "zcr_mean",
+      "centroid_mean",
+      "flatness_mean"
+    ],
+    "bridge_output_shape": [
+      1,
+      198,
+      32
+    ]
+  },
+  "conditions": {
+    "neutral": {
+      "descriptors": {
+        "f0_mean": 151.65762777760742,
+        "f0_std": 1.6764217196280071,
+        "energy_mean": 0.17496720127852622,
+        "energy_std": 0.13473752711968723,
+        "energy_mean_voiced": 0.28188079319313664,
+        "energy_std_voiced": 0.01383474296384361,
+        "energy_flux_mean": 0.046564728672760486,
+        "voiced_ratio": 0.601010101010101,
+        "speaking_rate": 2.0202020202020203,
+        "jitter": 0.30709311255054494,
+        "flatness_mean": 0.000491348539608024
+      },
+      "parameters": {
+        "name": "neutral",
+        "f0_base": 150.0,
+        "f0_swing": 0.01,
+        "f0_jitter": 0.01,
+        "amp_var": 0.03,
+        "bursts_per_sec": 2.0,
+        "duty": 0.6
+      }
+    },
+    "aroused": {
+      "descriptors": {
+        "f0_mean": 225.2585184161391,
+        "f0_std": 21.384873443216765,
+        "energy_mean": 0.18454833015676414,
+        "energy_std": 0.15710436631834715,
+        "energy_mean_voiced": 0.2746210571251283,
+        "energy_std_voiced": 0.11505597090518606,
+        "energy_flux_mean": 0.12735279715871825,
+        "voiced_ratio": 0.6486742424242424,
+        "speaking_rate": 5.05050505050505,
+        "jitter": 4.47606367927581,
+        "flatness_mean": 0.001224770519247671
+      },
+      "parameters": {
+        "name": "aroused",
+        "f0_base": 225.0,
+        "f0_swing": 0.12,
+        "f0_jitter": 0.05,
+        "amp_var": 0.45,
+        "bursts_per_sec": 5.0,
+        "duty": 0.6
+      }
+    },
+    "subdued": {
+      "descriptors": {
+        "f0_mean": 111.54686167073672,
+        "f0_std": 0.9109502820691566,
+        "energy_mean": 0.17223895365642616,
+        "energy_std": 0.13710997593233396,
+        "energy_mean_voiced": 0.28311335679850774,
+        "energy_std_voiced": 0.009435268076725414,
+        "energy_flux_mean": 0.025510681399922137,
+        "voiced_ratio": 0.5959595959595959,
+        "speaking_rate": 1.0101010101010102,
+        "jitter": 0.29902889618667494,
+        "flatness_mean": 0.00022784189227782292
+      },
+      "parameters": {
+        "name": "subdued",
+        "f0_base": 110.0,
+        "f0_swing": 0.004,
+        "f0_jitter": 0.01,
+        "amp_var": 0.05,
+        "bursts_per_sec": 1.0,
+        "duty": 0.6
+      }
+    },
+    "unsteady": {
+      "descriptors": {
+        "f0_mean": 250.74599622978482,
+        "f0_std": 35.505099011080944,
+        "energy_mean": 0.1759271255760059,
+        "energy_std": 0.13050626428026996,
+        "energy_mean_voiced": 0.2681955707628737,
+        "energy_std_voiced": 0.04680926809210127,
+        "energy_flux_mean": 0.0958793337654577,
+        "voiced_ratio": 0.6414141414141414,
+        "speaking_rate": 3.5353535353535355,
+        "jitter": 5.6549090272960765,
+        "flatness_mean": 0.0031720680436749735
+      },
+      "parameters": {
+        "name": "unsteady",
+        "f0_base": 255.0,
+        "f0_swing": 0.15,
+        "f0_jitter": 0.1,
+        "amp_var": 0.15,
+        "bursts_per_sec": 3.5,
+        "duty": 0.6
+      }
+    }
+  },
+  "separability": {
+    "accuracy": 0.96875,
+    "chance": 0.25,
+    "n_utterances": 64,
+    "z_vs_chance": 13.279056191361393,
+    "confusion": [
+      [
+        14,
+        0,
+        0,
+        2
+      ],
+      [
+        0,
+        16,
+        0,
+        0
+      ],
+      [
+        0,
+        0,
+        16,
+        0
+      ],
+      [
+        0,
+        0,
+        0,
+        16
+      ]
+    ],
+    "classes": [
+      "neutral",
+      "aroused",
+      "subdued",
+      "unsteady"
+    ],
+    "within_spread": 1.0926065773179938,
+    "closest_centroids": 1.4959963897766018,
+    "ratio": 1.3691995095332514
+  },
+  "single_descriptor": {
+    "f0_mean": {
+      "accuracy": 0.984375
+    },
+    "f0_std": {
+      "accuracy": 0.953125
+    },
+    "f0_range": {
+      "accuracy": 0.96875
+    },
+    "jitter": {
+      "accuracy": 0.71875
+    },
+    "jitter_relative": {
+      "accuracy": 0.84375
+    },
+    "energy_mean": {
+      "accuracy": 0.40625
+    },
+    "energy_std": {
+      "accuracy": 0.625
+    },
+    "energy_mean_voiced": {
+      "accuracy": 0.390625
+    },
+    "energy_std_voiced": {
+      "accuracy": 0.953125
+    },
+    "energy_flux_mean": {
+      "accuracy": 1.0
+    },
+    "voiced_ratio": {
+      "accuracy": 0.90625
+    },
+    "speaking_rate": {
+      "accuracy": 1.0
+    },
+    "zcr_mean": {
+      "accuracy": 0.96875
+    },
+    "centroid_mean": {
+      "accuracy": 0.859375
+    },
+    "flatness_mean": {
+      "accuracy": 0.90625
+    }
+  },
+  "controls": {
+    "label_shuffle": {
+      "rounds": 200.0,
+      "mean": 0.26109375,
+      "p95": 0.359375,
+      "max": 0.421875
+    },
+    "identical_parameters": {
+      "accuracy": 0.5625,
+      "chance": 0.5,
+      "n_utterances": 32,
+      "z_vs_chance": 0.7071067811865475,
+      "note": "same Condition tuple, different RNG stream; nothing was manipulated between the two groups"
+    },
+    "white_noise_voicing": {
+      "voiced_ratio_mean": 0.0,
+      "voiced_ratio_max": 0.0,
+      "max_confidence": 0.13960181376605396,
+      "threshold": 0.45
+    },
+    "f0_recovery": {
+      "mean_abs_error_pct": 1.0736142285081378,
+      "worst_abs_error_pct": 1.6682367726334024,
+      "note": "descriptor f0_mean against the generator's base pitch; per-burst jitter moves the true mean, so this bounds the error rather than measuring it exactly"
+    },
+    "encoder_separates_two_utterances": 0.10578948583333919
+  },
+  "wall_seconds": 12.35
+}
