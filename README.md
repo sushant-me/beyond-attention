@@ -544,6 +544,128 @@ python experiments/stream_cost.py --out stream-cost.json
 python -u experiments/long_context.py --out long-context.json
 ```
 
+## Voice: hearing *how* something is said
+
+`src/beyond_attention/voice.py` is a front end for a different question from the
+one the rest of this repository asks. The operator wanted the model to
+understand **how** something was said — the feeling in a voice — rather than
+what words were said. That is the direction this module works in: a raw waveform
+goes in, framed prosodic features come out, and a seeded projection puts them in
+the `(B, L, D)` layout `selective_scan` consumes.
+
+### What this is, and what it is not
+
+**It is** a working, tested measurement of prosody. F0 per frame by
+autocorrelation over a bounded 60–400 Hz lag range with a voiced/unvoiced
+decision; frame energy and its contour dynamics; zero-crossing rate; spectral
+centroid, rolloff and flatness; and the descriptors affect work actually uses —
+F0 mean and *spread*, energy mean and spread, voiced ratio, jitter, and a
+speaking-rate proxy. Every number in the block below is generated from
+`voice-affect.json` by `experiments/render_readme.py`.
+
+**It is not** an emotion recogniser, and nothing in it is trained on anything.
+Three claims that would be easy to make from the table below, and are all false:
+
+* *"The descriptors identify emotion in speech."* They identify which of four
+  **synthetic** conditions generated a signal — and the conditions were built to
+  differ along exactly the axes the descriptors measure, with the labels coming
+  from the generator rather than from a listener. No human voice was involved at
+  any point, and there is no labelled affect corpus in this repository to
+  validate against.
+* *"The embedding carries affect."* `VoiceEncoder` is a fixed random projection
+  with no bias and no nonlinearity — a test asserts that it is exactly the
+  matrix product it documents — so it cannot represent anything the feature
+  vector does not already contain. It is a shape adapter for the SSM, not a
+  model, and it is deliberately incapable of adding information.
+* *"Jitter and speaking rate are measured the way a phonetics tool measures
+  them."* Jitter here is a frame-level successive-F0 difference restricted to
+  adjacent voiced frames, not the cycle-to-cycle perturbation a Praat-style
+  analysis reports, and it is bounded below by the frame hop. The rate proxy
+  counts voiced *segments*; it approximates syllable rate only when the
+  segmentation is right, and it cannot see unvoiced consonants at all. Both are
+  documented as proxies in the module, and both are used as proxies here.
+
+<!-- VOICE:BEGIN -->
+**Synthetic utterances** — 64 utterances (16 per condition, 2.0 s each) at 16,000 Hz, seed 0. leave-one-out nearest centroid, z-scored per fold over 15 descriptors.
+
+| condition | F0 target (Hz) | F0 mean (Hz) | F0 std (Hz) | energy std | energy std (voiced) | voiced runs/s | jitter (Hz) |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| neutral | 150 | 151.7 | 1.68 | 0.1347 | 0.0138 | 2.02 | 0.307 |
+| aroused | 225 | 225.3 | 21.38 | 0.1571 | 0.1151 | 5.05 | 4.476 |
+| subdued | 110 | 111.5 | 0.91 | 0.1371 | 0.0094 | 1.01 | 0.299 |
+| unsteady | 255 | 250.7 | 35.51 | 0.1305 | 0.0468 | 3.54 | 5.655 |
+
+**Separability in descriptor space** — leave-one-out nearest centroid, chance 0.250
+
+Accuracy **0.969** over 64 utterances (+13.3σ against chance). The closest pair of condition centroids is 1.50 apart against a mean within-condition spread of 1.09 — a ratio of **1.4x**.
+
+| true \ predicted | neutral | aroused | subdued | unsteady |
+|---|---:|---:|---:|---:|
+| neutral | 14 | 0 | 0 | 2 |
+| aroused | 0 | 16 | 0 | 0 |
+| subdued | 0 | 0 | 16 | 0 |
+| unsteady | 0 | 0 | 0 | 16 |
+
+Each descriptor on its own, same classifier:
+
+| descriptor alone | accuracy |
+|---|---:|
+| `energy_flux_mean` | 1.000 |
+| `speaking_rate` | 1.000 |
+| `f0_mean` | 0.984 |
+| `f0_range` | 0.969 |
+| `zcr_mean` | 0.969 |
+| `f0_std` | 0.953 |
+| `energy_std_voiced` | 0.953 |
+| `voiced_ratio` | 0.906 |
+| `flatness_mean` | 0.906 |
+| `centroid_mean` | 0.859 |
+| `jitter_relative` | 0.844 |
+| `jitter` | 0.719 |
+| `energy_std` | 0.625 |
+| `energy_mean` | 0.406 |
+| `energy_mean_voiced` | 0.391 |
+
+| control | measured | what it rules out |
+|---|---|---|
+| labels shuffled, 200 rounds | mean 0.261, 95th pct 0.359, max 0.422 | that the accuracy is the classifier's rather than the descriptors' (chance 0.250) |
+| two conditions, identical parameters | 0.562 (+0.7σ) | that anything other than the generator's parameters separates the conditions (chance 0.500) |
+| white noise through the voiced decision | voiced ratio max 0.000, largest autocorrelation peak 0.140 | a voiced/unvoiced decision that always says yes (threshold 0.45) |
+| F0 recovery against the generator | mean 1.07%, worst 1.67% | descriptors that do not track what the synthesiser was asked for |
+| encoder separates two utterances | 0.1058 max difference | a degenerate all-zero projection |
+| bridge output | `(1, 198, 32)` | a front end that never reaches the model's `(B, L, D)` layout |
+<!-- VOICE:END -->
+
+### What the numbers say, including the unflattering parts
+
+* **The four conditions are separable, and not cleanly.** Leave-one-out nearest
+  centroid gets most of the 64 utterances right against a chance of 0.250, but
+  the closest pair of condition centroids is only about **1.4×** the mean
+  within-condition spread apart, and the confusion is real: two of the sixteen
+  "neutral" utterances sit closer to the "unsteady" centroid than to their own.
+  An accuracy read without the margin would overstate how far apart these are.
+* **The axis the design varied is not always the axis the obvious descriptor
+  carries.** `energy_std` — the frame-RMS spread over *all* frames — recovers
+  the condition 0.625 of the time on its own, because it mostly measures where
+  the pauses are rather than how loud the speech is. Restricting the same
+  statistic to voiced frames lifts that to 0.953. Both are reported; the second
+  exists because the first was measured and found wanting.
+* **The label-shuffle control is what makes the accuracy mean anything.** The
+  same classifier on permuted labels averages 0.261 against a chance of 0.250,
+  and the pair of conditions generated from *identical* parameters is classified
+  at 0.562 — about +0.7σ, which is noise, and is the right answer for two groups
+  that differ in nothing but the random stream.
+* **The F0 estimator is checked against the generator, not assumed.** Mean
+  absolute error against the synthesised pitch is about 1%, worst case under 2%
+  at these frequencies. At 70 Hz, where a 25 ms window holds fewer than two
+  periods, the same estimator reads 3.2% high and calls 40% of frames unvoiced —
+  which is why the tests assert a 2% tolerance over 100–380 Hz rather than over
+  the whole advertised 60–400 Hz range.
+
+None of this is a result about emotion. It is a result about whether a front end
+measures the four prosodic axes it claims to, on signals where those axes are
+known because they were set by hand.
+
 ## Limitations, stated rather than discovered later
 
 * **This is not a language model.** The task is synthetic, the vocabulary is 33

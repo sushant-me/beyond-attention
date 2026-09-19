@@ -15,6 +15,13 @@ whole reproduction procedure.
 
 Each section is rendered from its own file, and a missing file is reported as a
 missing file rather than rendered as an empty table.
+
+`--voice` renders the voice/affect section from `voice-affect.json` into its own
+`VOICE:BEGIN`/`VOICE:END` block, so it can be regenerated without touching the
+results block.
+
+    python experiments/voice_affect.py --out voice-affect.json
+    python experiments/render_readme.py --voice voice-affect.json --readme README.md
 """
 
 from __future__ import annotations
@@ -26,6 +33,8 @@ import sys
 
 BEGIN = "<!-- RESULTS:BEGIN -->"
 END = "<!-- RESULTS:END -->"
+VOICE_BEGIN = "<!-- VOICE:BEGIN -->"
+VOICE_END = "<!-- VOICE:END -->"
 
 
 def _load(path: str | None, label: str) -> dict | None:
@@ -211,43 +220,181 @@ def render(mqar: dict, scaling: list[dict], control: dict | None,
     return "\n".join(parts)
 
 
+def voice_section(payload: dict) -> str:
+    """The prosody/affect section, rendered from `voice-affect.json`.
+
+    Two things this renderer is careful about, because the section is about
+    measurement discipline and would be self-refuting otherwise:
+
+    * every row comes from the JSON, including the parameters the synthesiser
+      was given, so a reader can see what was manipulated rather than take the
+      condition names' word for it;
+    * the controls are rendered *next to* the accuracy rather than in a
+      footnote, because "0.969 against chance 0.250" and "two identical
+      conditions score 0.562" are the same claim read two ways.
+    """
+    config = payload.get("config", {})
+    conditions = payload.get("conditions", {})
+    sep = payload.get("separability", {})
+    controls = payload.get("controls", {})
+    single = payload.get("single_descriptor", {})
+    classes = sep.get("classes") or list(conditions)
+
+    features = config.get("cluster_features") or []
+    lines = [
+        f"**Synthetic utterances** — {sep['n_utterances']} utterances "
+        f"({config.get('utterances_per_condition')} per condition, "
+        f"{config.get('duration_s')} s each) at "
+        f"{config.get('sample_rate'):,} Hz, seed {config.get('seed')}. "
+        f"{config.get('classifier')} over {len(features)} descriptors.",
+        "",
+        "| condition | F0 target (Hz) | F0 mean (Hz) | F0 std (Hz) | "
+        "energy std | energy std (voiced) | voiced runs/s | jitter (Hz) |",
+        "|---|---:|---:|---:|---:|---:|---:|---:|",
+    ]
+    for name in classes:
+        entry = conditions[name]
+        d = entry["descriptors"]
+        lines.append(
+            f"| {name} | {entry['parameters']['f0_base']:.0f} | "
+            f"{d['f0_mean']:.1f} | {d['f0_std']:.2f} | {d['energy_std']:.4f} | "
+            f"{d['energy_std_voiced']:.4f} | {d['speaking_rate']:.2f} | "
+            f"{d['jitter']:.3f} |"
+        )
+
+    lines += [
+        "",
+        f"**Separability in descriptor space** — leave-one-out nearest centroid, "
+        f"chance {sep['chance']:.3f}",
+        "",
+        f"Accuracy **{sep['accuracy']:.3f}** over {sep['n_utterances']} "
+        f"utterances ({sep['z_vs_chance']:+.1f}σ against chance). The closest "
+        f"pair of condition centroids is {sep['closest_centroids']:.2f} apart "
+        f"against a mean within-condition spread of {sep['within_spread']:.2f} "
+        f"— a ratio of **{sep['ratio']:.1f}x**.",
+        "",
+        "| true \\ predicted | " + " | ".join(classes) + " |",
+        "|---|" + "---:|" * len(classes),
+    ]
+    for name, row in zip(classes, sep["confusion"]):
+        lines.append(f"| {name} | " + " | ".join(str(v) for v in row) + " |")
+
+    lines += [
+        "",
+        "Each descriptor on its own, same classifier:",
+        "",
+        "| descriptor alone | accuracy |",
+        "|---|---:|",
+    ]
+    for name, row in sorted(single.items(), key=lambda kv: -kv[1]["accuracy"]):
+        lines.append(f"| `{name}` | {row['accuracy']:.3f} |")
+
+    shuffle = controls["label_shuffle"]
+    twin = controls["identical_parameters"]
+    noise = controls["white_noise_voicing"]
+    recovery = controls["f0_recovery"]
+    lines += [
+        "",
+        "| control | measured | what it rules out |",
+        "|---|---|---|",
+        f"| labels shuffled, {int(shuffle['rounds'])} rounds | mean "
+        f"{shuffle['mean']:.3f}, 95th pct {shuffle['p95']:.3f}, max "
+        f"{shuffle['max']:.3f} | that the accuracy is the classifier's rather "
+        f"than the descriptors' (chance {sep['chance']:.3f}) |",
+        f"| two conditions, identical parameters | {twin['accuracy']:.3f} "
+        f"({twin['z_vs_chance']:+.1f}σ) | that anything other than the "
+        f"generator's parameters separates the conditions (chance "
+        f"{twin['chance']:.3f}) |",
+        f"| white noise through the voiced decision | voiced ratio max "
+        f"{noise['voiced_ratio_max']:.3f}, largest autocorrelation peak "
+        f"{noise['max_confidence']:.3f} | a voiced/unvoiced decision that "
+        f"always says yes (threshold {noise['threshold']}) |",
+        f"| F0 recovery against the generator | mean "
+        f"{recovery['mean_abs_error_pct']:.2f}%, worst "
+        f"{recovery['worst_abs_error_pct']:.2f}% | descriptors that do not "
+        f"track what the synthesiser was asked for |",
+        f"| encoder separates two utterances | "
+        f"{controls['encoder_separates_two_utterances']:.4f} max difference | a "
+        f"degenerate all-zero projection |",
+        f"| bridge output | `{tuple(config.get('bridge_output_shape') or [])}` "
+        f"| a front end that never reaches the model's `(B, L, D)` layout |",
+    ]
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--mqar", required=True)
+    parser.add_argument("--mqar")
     parser.add_argument("--scaling", action="append", default=[],
                         help="repeatable: one table per baseline")
     parser.add_argument("--control")
     parser.add_argument("--scan-inner")
+    parser.add_argument("--voice",
+                        help="voice-affect.json, which renders the voice block")
     parser.add_argument("--readme", default="README.md")
     args = parser.parse_args()
 
-    mqar = _load(args.mqar, "the main sweep")
-    if mqar is None:
-        return 1
-    scaling = [p for p in (_load(path, "a scaling run") for path in args.scaling) if p]
-    control = _load(args.control, "the control run")
-    scan_inner = _load(args.scan_inner, "the inner-scan comparison")
+    if not (args.mqar or args.voice):
+        parser.error("give --mqar (to render the results block), --voice "
+                     "(to render the voice block), or both")
 
     readme = pathlib.Path(args.readme)
     text = readme.read_text()
-    if BEGIN not in text or END not in text:
-        print(f"{args.readme} has no {BEGIN} / {END} block", file=sys.stderr)
-        return 1
-    head, rest = text.split(BEGIN, 1)
-    _, tail = rest.split(END, 1)
+    status = 0
 
-    rendered = render(mqar, scaling, control, scan_inner)
-    # Refuse to publish a table that lost its content: a broken renderer produces
-    # an empty block, and a reader cannot tell an empty result from a bug.
-    for marker in ("| pairs in context |", "| sequence length |"):
-        if marker not in rendered:
-            print(f"refusing to write: {marker!r} missing from the render",
+    if args.mqar:
+        mqar = _load(args.mqar, "the main sweep")
+        if mqar is None:
+            return 1
+        scaling = [p for p in (_load(path, "a scaling run")
+                               for path in args.scaling) if p]
+        control = _load(args.control, "the control run")
+        scan_inner = _load(args.scan_inner, "the inner-scan comparison")
+
+        if BEGIN not in text or END not in text:
+            print(f"{args.readme} has no {BEGIN} / {END} block", file=sys.stderr)
+            return 1
+        head, rest = text.split(BEGIN, 1)
+        _, tail = rest.split(END, 1)
+
+        rendered = render(mqar, scaling, control, scan_inner)
+        # Refuse to publish a table that lost its content: a broken renderer
+        # produces an empty block, and a reader cannot tell an empty result from
+        # a bug.
+        for marker in ("| pairs in context |", "| sequence length |"):
+            if marker not in rendered:
+                print(f"refusing to write: {marker!r} missing from the render",
+                      file=sys.stderr)
+                return 1
+
+        text = f"{head}{BEGIN}\n{rendered}\n{END}{tail}"
+        print(f"wrote {args.readme} results block "
+              f"({len(rendered.splitlines())} lines)")
+
+    if args.voice:
+        voice = _load(args.voice, "the voice/affect run")
+        if voice is None:
+            return 1
+        if VOICE_BEGIN not in text or VOICE_END not in text:
+            print(f"{args.readme} has no {VOICE_BEGIN} / {VOICE_END} block",
                   file=sys.stderr)
             return 1
+        head, rest = text.split(VOICE_BEGIN, 1)
+        _, tail = rest.split(VOICE_END, 1)
 
-    readme.write_text(f"{head}{BEGIN}\n{rendered}\n{END}{tail}")
-    print(f"wrote {args.readme} ({len(rendered.splitlines())} lines)")
-    return 0
+        rendered = voice_section(voice)
+        for marker in ("| condition |", "| control |"):
+            if marker not in rendered:
+                print(f"refusing to write: {marker!r} missing from the voice "
+                      f"render", file=sys.stderr)
+                return 1
+
+        text = f"{head}{VOICE_BEGIN}\n{rendered}\n{VOICE_END}{tail}"
+        print(f"wrote {args.readme} voice block "
+              f"({len(rendered.splitlines())} lines)")
+
+    readme.write_text(text)
+    return status
 
 
 if __name__ == "__main__":
