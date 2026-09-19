@@ -73,6 +73,8 @@ BLOCKS = (
      lambda: render_readme.agent_section(_json("agent-loop.json"))),
     ("memory", render_readme.MEMORY_BEGIN, render_readme.MEMORY_END,
      lambda: render_readme.memory_section(_json("long-memory.json"))),
+    ("emotion", render_readme.EMOTION_BEGIN, render_readme.EMOTION_END,
+     lambda: render_readme.emotion_section(_json("emotion-classifier.json"))),
 )
 
 

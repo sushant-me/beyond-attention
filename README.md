@@ -364,7 +364,7 @@ when only a label had changed.
 uv venv && uv pip install --index-url https://download.pytorch.org/whl/cpu torch
 uv pip install -e . pytest
 
-python -m pytest tests/ -q                     # 181 correctness tests
+python -m pytest tests/ -q                     # the correctness suite
 
 python experiments/run.py --pairs 2 4 8 16 --steps 3000 --seeds 0 \
     --out results.json                         # main sweep    (~30 min, CPU)
@@ -1507,6 +1507,12 @@ The store is a data structure and the family is synthetic. Specifically:
   inside a generated region now fails a test instead of surviving until the next
   run deletes it. Everything outside those regions — the interpretation, the
   limitations, the corrections — is still written by hand, and is meant to be.
+* **The suite's size is not stated in this README, because it is the one number
+  here that no file generates.** The reproduction block above used to read "181
+  correctness tests" and kept reading it while the suite grew past it — a stale
+  number in a document whose whole argument is that its numbers come from files.
+  The count is whatever `pytest tests/ -q` prints and CI runs it on every push,
+  so the number that cannot go stale is the one on the CI run.
 * **The agent loop is a closed grammar, not a language interface.** Its "task
   text" is a fixed instruction grammar delivered as structured events, and the
   controller is written against that grammar. There is no tokenizer and no
