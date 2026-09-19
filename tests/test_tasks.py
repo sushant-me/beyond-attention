@@ -15,11 +15,18 @@ import torch
 
 from beyond_attention.model import LanguageModel
 from beyond_attention.tasks import (
+    REG_ANS_ONE,
+    REG_ANS_ZERO,
+    REG_QUERY,
+    REG_TOGGLE,
+    REGISTER_VOCAB,
     SEPARATOR,
     mqar_batch,
+    register_batch,
+    register_chance,
     vocabulary_size,
 )
-from beyond_attention.train import evaluate_mqar, train
+from beyond_attention.train import evaluate, evaluate_mqar, train
 
 N_KEYS = 32
 VOCAB = vocabulary_size(N_KEYS)
@@ -111,3 +118,70 @@ def test_attention_model_can_also_be_evaluated_beyond_its_training_length() -> N
     train(model, "attention", n_pairs=8, steps=4, batch_size=4, seed=0,
           n_keys=N_KEYS)
     assert 0.0 <= evaluate_mqar(model, 32, batch_size=32, n_keys=N_KEYS) <= 1.0
+
+
+# ------------------------------------------------------- state tracking ------
+
+def test_register_shapes_and_query_slots() -> None:
+    batch = register_batch(4, 32, n_queries=3, generator=_gen())
+    assert batch.tokens.shape == (4, 32)
+    assert batch.targets.shape == (4, 3)
+    assert batch.query_positions.shape == (4, 3)
+    rows = torch.arange(4).unsqueeze(1)
+    assert (batch.tokens[rows, batch.query_positions] == REG_QUERY).all()
+
+
+def test_register_targets_encode_the_parity() -> None:
+    """Re-derive the answer from the token stream, independently of the task."""
+    batch = register_batch(6, 40, n_queries=4, generator=_gen(3))
+    for row in range(6):
+        parity = 0
+        for t in range(40):
+            token = int(batch.tokens[row, t])
+            if token == REG_TOGGLE:
+                parity ^= 1
+            elif token == REG_QUERY:
+                for q in range(4):
+                    if int(batch.query_positions[row, q]) == t:
+                        expected = REG_ANS_ONE if parity else REG_ANS_ZERO
+                        assert int(batch.targets[row, q]) == expected
+
+
+def test_register_query_positions_are_distinct_and_not_first() -> None:
+    batch = register_batch(8, 24, n_queries=5, generator=_gen(1))
+    for row in batch.query_positions:
+        positions = row.tolist()
+        assert len(set(positions)) == 5
+        # Position 0 would have no preceding context.
+        assert min(positions) >= 1
+        assert max(positions) <= 23
+
+
+def test_register_only_emits_answer_tokens_as_targets() -> None:
+    batch = register_batch(4, 32, n_queries=2, generator=_gen(2))
+    assert set(batch.targets.flatten().tolist()) <= {REG_ANS_ZERO, REG_ANS_ONE}
+
+
+def test_register_rejects_impossible_requests() -> None:
+    with pytest.raises(ValueError, match="length must be >= 2"):
+        register_batch(1, 1, 1, _gen())
+    with pytest.raises(ValueError, match="n_queries cannot exceed length - 1"):
+        register_batch(1, 8, 8, _gen())
+
+
+def test_register_chance_is_one_half_not_one_over_vocab() -> None:
+    """Only two tokens are ever correct, and the vocabulary is larger."""
+    assert register_chance() == 0.5
+    assert 1.0 / REGISTER_VOCAB < register_chance()
+
+
+def test_a_second_task_trains_through_the_same_loop() -> None:
+    """The sampler parameter is what keeps one training path, not two."""
+    model = LanguageModel(REGISTER_VOCAB, 32, 2, "ssm",
+                          d_state=8, expand=2, conv_kernel=4)
+    sample = lambda bs, gen, dev: register_batch(bs, 16, 2, gen, dev)
+    result = train(model, "ssm", n_pairs=1, steps=4, batch_size=4, seed=0,
+                   sample_batch=sample)
+    assert result.parameters > 0
+    assert 0.0 <= result.train_accuracy <= 1.0
+    assert 0.0 <= evaluate(model, sample, batch_size=32, seed=0) <= 1.0

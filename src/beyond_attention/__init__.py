@@ -23,7 +23,14 @@ from .ssm import (
     selective_scan_chunked,
     selective_scan_reference,
 )
-from .tasks import Batch, accuracy, mqar_batch, vocabulary_for
+from .tasks import (
+    Batch,
+    accuracy,
+    mqar_batch,
+    register_batch,
+    register_chance,
+    vocabulary_for,
+)
 from .train import Result, train
 
 __version__ = "0.1.0"
@@ -35,7 +42,8 @@ __all__ = [
     "selective_scan_reference",
     "BlockState", "StreamState", "init_stream", "stream_step", "stream_sequence",
     "kv_cache_bytes", "ssm_state_bytes",
-    "Batch", "accuracy", "mqar_batch", "vocabulary_for",
+    "Batch", "accuracy", "mqar_batch", "register_batch",
+    "register_chance", "vocabulary_for",
     "Result", "train",
     "__version__",
 ]

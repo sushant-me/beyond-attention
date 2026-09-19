@@ -143,3 +143,101 @@ def loss_and_accuracy(model, batch: Batch) -> tuple[Tensor, float]:
         picked.reshape(-1, picked.shape[-1]), batch.targets.reshape(-1)
     )
     return loss, accuracy(logits, batch)
+
+
+# ------------------------------------------------------- state tracking ------
+#
+# MQAR and the register task are deliberately opposite tests of the same thing.
+# MQAR asks the model to hold *every* pair it has seen, so the memory it needs
+# grows with the sequence: a fixed-size recurrent state is a handicap there, and
+# that handicap is the finding the main sweep reports. This task asks the model
+# to hold **one bit**, no matter how long the sequence is. Nothing about the
+# answer depends on the history except a single parity, so a fixed state is
+# sufficient by construction -- and an attention model still has to pool over
+# the whole prefix to compute it.
+#
+# Running the two together is the point: one shows where constant state costs
+# you, the other shows where it does not.
+
+REG_NOOP = 0      # leaves the register alone
+REG_TOGGLE = 1    # flips the register
+REG_QUERY = 2     # the model must emit the register's current value here
+REG_ANS_ZERO = 3  # emitted at a query when the register is 0
+REG_ANS_ONE = 4   # emitted at a query when the register is 1
+REGISTER_VOCAB = 5
+
+
+def register_batch(
+    batch_size: int,
+    length: int,
+    n_queries: int = 1,
+    generator: torch.Generator | None = None,
+    device: torch.device | str = "cpu",
+) -> Batch:
+    """Sample one batch of register-tracking sequences.
+
+    Each position is a no-op or a toggle with equal probability, except for
+    ``n_queries`` positions per row which are replaced by a query. At a query the
+    model must emit the parity of the toggles seen up to and including that
+    position -- equivalently, the value of a single bit that every toggle flips
+    and no no-op changes.
+
+    The register starts at 0, and queries are placed at distinct positions drawn
+    uniformly from 1..length-1, so a query always has at least one preceding
+    token and there is no positional shortcut to the answer.
+    """
+    if length < 2:
+        raise ValueError("length must be >= 2")
+    if n_queries < 1:
+        raise ValueError("n_queries must be >= 1")
+    if n_queries > length - 1:
+        # Positions are distinct and drawn from 1..length-1.
+        raise ValueError("n_queries cannot exceed length - 1")
+
+    toggles = torch.rand(batch_size, length, generator=generator, device=device)
+    tokens = torch.where(
+        toggles < 0.5,
+        torch.full((batch_size, length), REG_TOGGLE, dtype=torch.long,
+                   device=device),
+        torch.full((batch_size, length), REG_NOOP, dtype=torch.long,
+                   device=device),
+    )
+
+    # Distinct query positions per row, in 1..length-1, then sorted so the
+    # targets read left to right.
+    order = torch.argsort(
+        torch.rand(batch_size, length - 1, generator=generator, device=device),
+        dim=1,
+    )[:, :n_queries] + 1
+    positions, _ = order.sort(dim=1)
+
+    rows = torch.arange(batch_size, device=device).unsqueeze(1)
+    tokens[rows, positions] = REG_QUERY
+
+    # Parity of the toggles in tokens[0..t]. A query is not a toggle, so reading
+    # this at a query position gives the value the model must emit.
+    parity = (tokens == REG_TOGGLE).cumsum(dim=1).remainder(2)
+    targets = torch.where(
+        parity[rows, positions] == 1,
+        torch.full((batch_size, n_queries), REG_ANS_ONE, dtype=torch.long,
+                   device=device),
+        torch.full((batch_size, n_queries), REG_ANS_ZERO, dtype=torch.long,
+                   device=device),
+    )
+    return Batch(tokens=tokens, targets=targets, query_positions=positions)
+
+
+def register_chance() -> float:
+    """The bar to beat, *conditional on the model emitting an answer token*.
+
+    Only two tokens are ever correct at a query position, so once a model has
+    learned to answer at all it is choosing between two, and 1/2 is what it has
+    to beat. Reporting 1/vocab would understate that.
+
+    It is not a floor, and accuracy can legitimately fall below it: scoring is an
+    argmax over the whole vocabulary, so a model that has not yet learned to emit
+    an answer token at a query position scores near zero rather than near a half.
+    A below-0.5 result means "has not learned the response format yet", not
+    "worse than guessing", and the two are worth keeping apart.
+    """
+    return 0.5

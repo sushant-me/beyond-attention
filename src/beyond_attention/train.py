@@ -56,6 +56,7 @@ def train(
     log_every: int = 0,
     progress=None,
     n_keys: int | None = None,
+    sample_batch=None,
 ) -> Result:
     """Train one model on MQAR and measure it on the same task at several sizes.
 
@@ -65,6 +66,10 @@ def train(
     `n_keys` fixes the key space (and so the vocabulary) for both training and
     evaluation. Leave it None unless you intend to evaluate at a length the
     model did not train at; see `mqar_batch` for why that case needs it.
+
+    `sample_batch` replaces the MQAR generator with any `(batch_size, generator,
+    device) -> Batch` sampler, which is how a second task reuses this loop and
+    its hyperparameters instead of growing a parallel training path.
     """
     set_seed(seed)
     model.to(device)
@@ -76,13 +81,12 @@ def train(
         optimiser, max_lr=lr, total_steps=steps, pct_start=0.1
     )
     generator = torch.Generator(device=device).manual_seed(seed + 1)
+    sample = sample_batch or mqar_sampler(n_pairs, n_train_queries, n_keys)
 
     history: list[tuple[int, float, float]] = []
     final_loss = float("nan")
     for step in range(steps):
-        batch = mqar_batch(
-            batch_size, n_pairs, n_train_queries, generator, device, n_keys
-        )
+        batch = sample(batch_size, generator, device)
         loss, acc = loss_and_accuracy(model, batch)
         optimiser.zero_grad(set_to_none=True)
         loss.backward()
@@ -95,8 +99,8 @@ def train(
             if progress is not None:
                 progress(step, final_loss, acc)
 
-    train_accuracy = _evaluate(
-        model, n_pairs, n_train_queries, eval_batch_size, generator, device, n_keys
+    train_accuracy = _evaluate_sample(
+        model, sample, eval_batch_size, generator, device
     )
     test_accuracy = (
         max(
@@ -118,6 +122,34 @@ def train(
         steps=steps,
         history=history,
     )
+
+
+def mqar_sampler(n_pairs: int, n_queries: int = 1, n_keys: int | None = None):
+    """A `Batch` sampler for MQAR at one sequence length.
+
+    `train` and `evaluate` take a sampler rather than a task, so a second task
+    goes through the same optimiser, schedule and evaluation loop as the first.
+    Two architectures trained by two different code paths would make any
+    difference between them a fact about the code paths.
+    """
+    def sample(batch_size: int, generator: torch.Generator, device: str):
+        return mqar_batch(
+            batch_size, n_pairs, n_queries, generator, device, n_keys
+        )
+    return sample
+
+
+@torch.no_grad()
+def evaluate(
+    model: nn.Module,
+    sample,
+    batch_size: int = 256,
+    seed: int = 0,
+    device: str = "cpu",
+) -> float:
+    """Exact-match accuracy of a trained model under a given sampler."""
+    generator = torch.Generator(device=device).manual_seed(seed + 1)
+    return _evaluate_sample(model, sample, batch_size, generator, device)
 
 
 @torch.no_grad()
@@ -143,6 +175,27 @@ def evaluate_mqar(
 
 
 @torch.no_grad()
+def _evaluate_sample(
+    model: nn.Module,
+    sample,
+    batch_size: int,
+    generator: torch.Generator,
+    device: str,
+) -> float:
+    """Exact-match accuracy on freshly sampled batches, for any task."""
+    from .tasks import accuracy
+
+    model.eval()
+    batches = max(1, 2048 // batch_size)
+    total = 0.0
+    for _ in range(batches):
+        batch = sample(batch_size, generator, device)
+        total += accuracy(model(batch.tokens), batch)
+    model.train()
+    return total / batches
+
+
+@torch.no_grad()
 def _evaluate(
     model: nn.Module,
     n_pairs: int,
@@ -152,19 +205,11 @@ def _evaluate(
     device: str,
     n_keys: int | None = None,
 ) -> float:
-    """Exact-match accuracy on freshly sampled batches of the given size."""
-    from .tasks import accuracy
-
-    model.eval()
-    batches = max(1, 2048 // batch_size)
-    total = 0.0
-    for _ in range(batches):
-        batch = mqar_batch(
-            batch_size, n_pairs, n_queries, generator, device, n_keys
-        )
-        total += accuracy(model(batch.tokens), batch)
-    model.train()
-    return total / batches
+    """Exact-match accuracy on freshly sampled MQAR batches of the given size."""
+    return _evaluate_sample(
+        model, mqar_sampler(n_pairs, n_queries, n_keys), batch_size, generator,
+        device,
+    )
 
 
 def _count(model: nn.Module) -> int:
