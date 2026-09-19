@@ -768,6 +768,52 @@ def test_the_recall_reads_the_slot_its_key_addresses() -> None:
     assert slot_value(empty, 1) == 0
 
 
+def test_the_selective_solve_rate_fails_a_broken_gate(monkeypatch) -> None:
+    """The check the other checks rest on: break the gate, lose the family.
+
+    A solve rate of 1.000 is worth nothing if it survives a memory that
+    addresses nothing, so two specific faults are injected into ``embed`` and
+    the family is required to stop being solved. The first removes the
+    addressing -- every keyed event lands in slot 0, which is exactly what the
+    one-slot state does -- and the second removes retention altogether. Both are
+    faults a test that only counted solves would never see.
+    """
+    import beyond_attention.agent as agent
+
+    tasks = selective_suite(10, seed=0)
+    assert all(run_agent(t, budget=6).solved for t in tasks)
+
+    original = agent.embed
+
+    def slot_zero(event, state_width=0, fixed_gate=False):
+        x, delta = original(event, state_width, fixed_gate)
+        if event.kind == "instruction" and event.instruction.op == OP_PUT:
+            address = event.instruction.args[0] % state_width
+            if address:
+                x[R_SLOT_BASE] = x[R_SLOT_BASE + address]
+                delta[R_SLOT_BASE] = DELTA_WRITE
+                x[R_SLOT_BASE + address] = 0.0
+                delta[R_SLOT_BASE + address] = 0.0
+        return x, delta
+
+    def no_retention(event, state_width=0, fixed_gate=False):
+        x, delta = original(event, state_width, fixed_gate)
+        if event.kind == "instruction" and event.instruction.op == OP_PUT:
+            delta[R_SLOT_BASE:] = 0.0
+        return x, delta
+
+    try:
+        for mutation in (slot_zero, no_retention):
+            monkeypatch.setattr(agent, "embed", mutation)
+            solved = sum(run_agent(t, budget=6).solved for t in tasks)
+            assert solved < len(tasks), mutation.__name__
+            monkeypatch.setattr(agent, "embed", original)
+    finally:
+        monkeypatch.setattr(agent, "embed", original)
+
+    assert all(run_agent(t, budget=6).solved for t in tasks)
+
+
 # --------------------------------------------------------------------------
 # The controls, which are the point
 # --------------------------------------------------------------------------

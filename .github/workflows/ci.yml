@@ -90,13 +90,15 @@ jobs:
                 f"white-noise voiced ratio {noise:.3f}")
           PY
 
-      - name: The agent loop carries state, and forgetting collapses it
+      - name: The agent loop carries state, and the gate is what the state is for
         # The no-memory contrast is asserted here rather than only in the tests
         # because it is the number the agent block's honesty rests on: without
         # it, "the state carries the result" is a claim with no measurement
-        # behind it. The scalar-carry control is asserted too, because it is the
-        # one that says the recurrence is *not* what makes the loop work --
-        # publishing that row and not guarding it would be the easy half.
+        # behind it. So is the scalar carry, in both of its directions: it still
+        # reproduces the agent row for row on the five arithmetic families, and
+        # it *fails* on the selective family -- where a fixed-decay state of the
+        # same width fails with it. Publishing the row and not guarding it would
+        # be the easy half, and guarding only one direction would be the other.
         run: |
           python experiments/agent_loop.py --tasks-per-family 10 \
             --random-rounds 5 --out /tmp/agent-loop.json
@@ -107,19 +109,69 @@ jobs:
           import json, pathlib
           data = json.loads(pathlib.Path("/tmp/agent-loop.json").read_text())
           solve, controls = data["solve_rate"], data["controls"]
-          carry = [f for f in data["config"]["families"] if f != "literal"]
-          for family in carry:
+          families = data["config"]["families"]
+          width = data["config"]["selective"]["state_width"]
+
+          # Every multi-step family is solved with the state and collapses
+          # without it; the one-step family survives the wipe, which is what
+          # says the control is not simply broken.
+          for family in families:
+              if family == "literal":
+                  continue
               key = f"{family}@6"
               assert solve[key]["rate"] == 1.0, (family, solve[key])
               assert controls["no_memory"][key]["rate"] == 0.0, \
                   (family, controls["no_memory"][key])
           assert solve["literal@1"]["rate"] == 1.0
           assert controls["no_memory"]["literal@1"]["rate"] == 1.0
+
+          # The scalar carry still ties the agent where one register is enough.
           for key, cell in solve.items():
+              if key.startswith("selective"):
+                  continue
               assert controls["scalar_carry"][key]["rate"] == cell["rate"], key
+
+          # And fails where it is not, on exactly the tasks we predicted.
+          scalar = controls["scalar_carry"]["selective@6"]
+          assert 0.0 < scalar["rate"] < 1.0, scalar
+          correspondence = controls["scalar_selective"]
+          assert correspondence["correspondence_holds"], correspondence
+          assert correspondence["solved"] == correspondence["queried_the_last_store"]
+          assert correspondence["exact_matches"] == correspondence["tasks"]
+
+          # A state of the same width with a constant gate fails with it: the
+          # gating, not the width, is what the family measures.
+          assert controls["fixed_decay"]["selective@6"]["rate"] < 1.0
+          assert controls["fixed_equals_scalar_at_zero_distractors"]
+
+          # Width is the capacity: one slot is the scalar, and enough slots for
+          # the key space solve the family.
+          widths = controls["state_width"]
+          assert widths["0"]["agent"]["rate"] == 0.0, widths["0"]
+          for slots, row in widths.items():
+              if int(slots) == 0:
+                  continue
+              assert row["agent"]["rate"] >= row["scalar"]["rate"] or \
+                  int(slots) < width, row
+          for slots in (str(width), "8"):
+              assert widths[slots]["agent"]["rate"] == 1.0, widths[slots]
+              assert widths[slots]["fixed"]["rate"] < 1.0, widths[slots]
+          assert widths["1"]["agent"]["rate"] == widths["1"]["scalar"]["rate"]
+
+          # More distractors do not touch the gated state and do bury the
+          # constant gate.
+          rates = controls["distractor_rate"]
+          assert all(row["agent"]["rate"] == 1.0 for row in rates.values()), rates
+          assert all(row["none"]["rate"] == 0.0 for row in rates.values()), rates
+          loudest = max(rates.values(), key=lambda row: row["distractors"])
+          assert loudest["fixed"]["rate"] < loudest["agent"]["rate"]
+
           rendered = pathlib.Path("/tmp/README.agent.md").read_text()
-          for marker in ("| task family |", "| condition |", "| A |"):
+          for marker in ("| task family |", "| condition |", "| A |",
+                         "| memory slots |", "| distractor share |"):
               assert marker in rendered, f"agent render lost {marker!r}"
-          print("agent loop ok: carry families 1.000 with the state and 0.000 "
-                "without it; scalar carry identical")
+          print("agent loop ok: state 1.000 and no-memory 0.000 on every "
+                f"carry family; scalar ties the arithmetic families and scores "
+                f"{scalar['rate']:.3f} on selective; fixed decay "
+                f"{controls['fixed_decay']['selective@6']['rate']:.3f}")
           PY
