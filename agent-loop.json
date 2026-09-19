@@ -1,0 +1,754 @@
+{
+  "config": {
+    "tasks_per_family": 50,
+    "seed": 0,
+    "budgets": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6
+    ],
+    "families": [
+      "literal",
+      "one_op",
+      "two_op",
+      "branch",
+      "lookup"
+    ],
+    "step_counts": {
+      "literal": 1,
+      "one_op": 2,
+      "two_op": 3,
+      "branch": 4,
+      "lookup": 5
+    },
+    "tools": [
+      "add",
+      "mul",
+      "sub",
+      "lookup",
+      "finish"
+    ],
+    "registers": [
+      "carry",
+      "observations",
+      "op",
+      "arg",
+      "arg2",
+      "miss",
+      "kind",
+      "instructions"
+    ],
+    "random_rounds": 25,
+    "random_arg_span": 100,
+    "suite_size": 250
+  },
+  "solve_rate": {
+    "literal@1": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "literal@2": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "literal@3": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "literal@4": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "literal@5": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "literal@6": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "one_op@1": {
+      "solved": 0,
+      "total": 50,
+      "rate": 0.0
+    },
+    "one_op@2": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "one_op@3": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "one_op@4": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "one_op@5": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "one_op@6": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "two_op@1": {
+      "solved": 0,
+      "total": 50,
+      "rate": 0.0
+    },
+    "two_op@2": {
+      "solved": 0,
+      "total": 50,
+      "rate": 0.0
+    },
+    "two_op@3": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "two_op@4": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "two_op@5": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "two_op@6": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "branch@1": {
+      "solved": 0,
+      "total": 50,
+      "rate": 0.0
+    },
+    "branch@2": {
+      "solved": 0,
+      "total": 50,
+      "rate": 0.0
+    },
+    "branch@3": {
+      "solved": 0,
+      "total": 50,
+      "rate": 0.0
+    },
+    "branch@4": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "branch@5": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "branch@6": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "lookup@1": {
+      "solved": 0,
+      "total": 50,
+      "rate": 0.0
+    },
+    "lookup@2": {
+      "solved": 0,
+      "total": 50,
+      "rate": 0.0
+    },
+    "lookup@3": {
+      "solved": 0,
+      "total": 50,
+      "rate": 0.0
+    },
+    "lookup@4": {
+      "solved": 0,
+      "total": 50,
+      "rate": 0.0
+    },
+    "lookup@5": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    },
+    "lookup@6": {
+      "solved": 50,
+      "total": 50,
+      "rate": 1.0
+    }
+  },
+  "controls": {
+    "no_memory": {
+      "literal@1": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "literal@2": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "literal@3": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "literal@4": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "literal@5": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "literal@6": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "one_op@1": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "one_op@2": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "one_op@3": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "one_op@4": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "one_op@5": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "one_op@6": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "two_op@1": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "two_op@2": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "two_op@3": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "two_op@4": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "two_op@5": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "two_op@6": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "branch@1": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "branch@2": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "branch@3": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "branch@4": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "branch@5": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "branch@6": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup@1": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup@2": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup@3": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup@4": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup@5": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup@6": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      }
+    },
+    "scalar_carry": {
+      "literal@1": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "literal@2": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "literal@3": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "literal@4": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "literal@5": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "literal@6": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "one_op@1": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "one_op@2": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "one_op@3": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "one_op@4": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "one_op@5": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "one_op@6": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "two_op@1": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "two_op@2": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "two_op@3": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "two_op@4": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "two_op@5": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "two_op@6": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "branch@1": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "branch@2": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "branch@3": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "branch@4": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "branch@5": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "branch@6": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "lookup@1": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup@2": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup@3": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup@4": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup@5": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "lookup@6": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      }
+    },
+    "random_action": {
+      "literal@6": {
+        "solved": 1,
+        "total": 1250,
+        "rate": 0.0008
+      },
+      "one_op@6": {
+        "solved": 1,
+        "total": 1250,
+        "rate": 0.0008
+      },
+      "two_op@6": {
+        "solved": 5,
+        "total": 1250,
+        "rate": 0.004
+      },
+      "branch@6": {
+        "solved": 6,
+        "total": 1250,
+        "rate": 0.0048
+      },
+      "lookup@6": {
+        "solved": 7,
+        "total": 1250,
+        "rate": 0.0056
+      }
+    },
+    "one_step": {
+      "literal": {
+        "solved": 50,
+        "total": 50,
+        "rate": 1.0
+      },
+      "one_op": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "two_op": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "branch": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "lookup": {
+        "solved": 0,
+        "total": 50,
+        "rate": 0.0
+      },
+      "all": {
+        "solved": 50,
+        "total": 250,
+        "rate": 0.2
+      }
+    },
+    "write_exactness": {
+      "-50": {
+        "multiplier": 1.9287498479639178e-22,
+        "residual_after_overwrite": 1.735874863167526e-21,
+        "sign_test_holds": false
+      },
+      "-400": {
+        "multiplier": 1.9151695967140057e-174,
+        "residual_after_overwrite": 1.723652637042605e-173,
+        "sign_test_holds": false
+      },
+      "-745": {
+        "multiplier": 5e-324,
+        "residual_after_overwrite": 4.4e-323,
+        "sign_test_holds": false
+      },
+      "-800": {
+        "multiplier": 0.0,
+        "residual_after_overwrite": 0.0,
+        "sign_test_holds": true
+      }
+    }
+  },
+  "example_trace": {
+    "task_id": "example",
+    "text": "add 3, then add 4, then multiply the result by 5, then report the key whose value equals the result, then report the result",
+    "plan": [
+      {
+        "op": "ADD",
+        "args": [
+          3
+        ]
+      },
+      {
+        "op": "ADD",
+        "args": [
+          4
+        ]
+      },
+      {
+        "op": "MUL",
+        "args": [
+          5
+        ]
+      },
+      {
+        "op": "KEY",
+        "args": []
+      },
+      {
+        "op": "RET",
+        "args": []
+      }
+    ],
+    "table": [
+      [
+        2,
+        11
+      ],
+      [
+        3,
+        42
+      ],
+      [
+        5,
+        99
+      ],
+      [
+        7,
+        35
+      ]
+    ],
+    "answer": 7,
+    "budget": 6,
+    "stop_reason": "finish",
+    "solved": true,
+    "steps": [
+      {
+        "index": 0,
+        "instruction": "ADD 3",
+        "reads": {
+          "op_code": 3,
+          "arg": 3,
+          "carry": 0.0,
+          "observations": 0,
+          "instructions": 1
+        },
+        "action": "add",
+        "args": {
+          "a": 0,
+          "b": 3
+        },
+        "result": 3,
+        "error": null
+      },
+      {
+        "index": 1,
+        "instruction": "ADD 4",
+        "reads": {
+          "op_code": 3,
+          "arg": 4,
+          "carry": 3.0,
+          "observations": 1,
+          "instructions": 2
+        },
+        "action": "add",
+        "args": {
+          "a": 3,
+          "b": 4
+        },
+        "result": 7,
+        "error": null
+      },
+      {
+        "index": 2,
+        "instruction": "MUL 5",
+        "reads": {
+          "op_code": 4,
+          "arg": 5,
+          "carry": 7.0,
+          "observations": 2,
+          "instructions": 3
+        },
+        "action": "mul",
+        "args": {
+          "a": 7,
+          "b": 5
+        },
+        "result": 35,
+        "error": null
+      },
+      {
+        "index": 3,
+        "instruction": "KEY",
+        "reads": {
+          "op_code": 6,
+          "arg": 0,
+          "carry": 35.0,
+          "observations": 3,
+          "instructions": 4
+        },
+        "action": "lookup",
+        "args": {
+          "value": 35
+        },
+        "result": 7,
+        "error": null
+      },
+      {
+        "index": 4,
+        "instruction": "RET",
+        "reads": {
+          "op_code": 1,
+          "arg": 0,
+          "carry": 7.0,
+          "observations": 4,
+          "instructions": 5
+        },
+        "action": "finish",
+        "args": {
+          "answer": 7
+        },
+        "result": 7,
+        "error": null
+      }
+    ],
+    "replayed": [
+      {
+        "value": 3,
+        "error": null
+      },
+      {
+        "value": 7,
+        "error": null
+      },
+      {
+        "value": 35,
+        "error": null
+      },
+      {
+        "value": 7,
+        "error": null
+      },
+      {
+        "value": 7,
+        "error": null
+      }
+    ]
+  },
+  "wall_seconds": 1.01
+}

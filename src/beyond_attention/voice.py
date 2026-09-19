@@ -158,9 +158,12 @@ def autocorrelation_f0(
       the *long-lag* peaks of a noise frame (where few samples overlap and an
       unbiased estimator has its largest variance) from being read as pitch.
     * **The first strong peak, not the global maximum.** Autocorrelation peaks
-      at every multiple of the period, so a global-max search can report a
-      harmonic as the pitch. The first local maximum reaching
-      ``F0_FIRST_PEAK_FRACTION`` of the global maximum is taken instead.
+      at every multiple of the period, and the biased taper above already makes
+      the fundamental the largest of them, so on a clean signal the two rules
+      agree. The first-strong-peak rule is a guard for frames where noise makes
+      a later peak marginally larger; it is not what makes the tones in the
+      tests come out right, and no test in this repository distinguishes it from
+      a plain ``argmax``.
     * **A parabolic refinement** of the peak lag, because the lag grid is
       quantised to samples: at 16 kHz a 150 Hz tone has a period of 106.7
       samples, and reporting 107 is a 0.3% (5 cent) error before refinement.

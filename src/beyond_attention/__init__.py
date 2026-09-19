@@ -1,5 +1,36 @@
 """A selective state-space model, implemented from scratch and measured honestly."""
 
+from .agent import (
+    AGENT_DIM,
+    FAMILIES,
+    REGISTER_NAMES,
+    STEP_COUNTS,
+    TOOL_NAMES,
+    TOOL_SCHEMAS,
+    AgentRun,
+    Event,
+    Instruction,
+    Registers,
+    Step,
+    Task,
+    ToolCall,
+    ToolResult,
+    ToolSchema,
+    bridge_to_selective_scan,
+    carried_value,
+    choose_action,
+    evaluate_plan,
+    example_task,
+    execute,
+    instruction,
+    new_state,
+    read_registers,
+    replay,
+    run_agent,
+    scan_states,
+    task_suite,
+    validate_call,
+)
 from .model import (
     AttentionBlock,
     LanguageModel,
@@ -32,10 +63,38 @@ from .tasks import (
     vocabulary_for,
 )
 from .train import Result, train
+from .voice import (
+    FEATURE_NAMES,
+    F0_MAX_HZ,
+    F0_MIN_HZ,
+    VoiceEncoder,
+    VoiceFeatures,
+    affect_descriptors,
+    autocorrelation_f0,
+    feature_matrix,
+    frame_count,
+    frame_features,
+    frame_signal,
+    hann_window,
+    waveform_to_model_input,
+)
 
 __version__ = "0.1.0"
 
 __all__ = [
+    # The agent loop. `stream_step` is deliberately not re-exported: the
+    # streaming block above already owns that name for the model's own step,
+    # and two functions with one name in one namespace is how a caller ends up
+    # driving the wrong recurrence. `scan_states` is the sequence-level entry
+    # point here, and `bridge_to_selective_scan` is the way from the agent's
+    # memory into the model's scan.
+    "run_agent", "replay", "AgentRun", "Step", "Task", "task_suite",
+    "example_task", "evaluate_plan",
+    "Instruction", "instruction", "ToolCall", "ToolResult", "ToolSchema",
+    "validate_call", "execute", "TOOL_SCHEMAS", "TOOL_NAMES",
+    "new_state", "scan_states", "read_registers", "Registers", "Event",
+    "choose_action", "carried_value", "bridge_to_selective_scan",
+    "AGENT_DIM", "REGISTER_NAMES", "FAMILIES", "STEP_COUNTS",
     "AttentionBlock", "LanguageModel", "RMSNorm", "SelectiveSSMBlock",
     "build_pair", "count_parameters",
     "selective_scan", "selective_scan_associative", "selective_scan_chunked",
@@ -45,5 +104,10 @@ __all__ = [
     "Batch", "accuracy", "mqar_batch", "register_batch",
     "register_chance", "vocabulary_for",
     "Result", "train",
+    "VoiceEncoder", "VoiceFeatures", "affect_descriptors",
+    "autocorrelation_f0", "feature_matrix",
+    "frame_count", "frame_features", "frame_signal", "hann_window",
+    "waveform_to_model_input",
+    "FEATURE_NAMES", "F0_MAX_HZ", "F0_MIN_HZ",
     "__version__",
 ]

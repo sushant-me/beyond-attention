@@ -179,6 +179,26 @@ def test_silence_yields_zero_energy_and_no_voiced_frames() -> None:
     assert np.isnan(f0)
 
 
+def test_the_energy_floor_is_what_it_says() -> None:
+    """A frame below the floor is unvoiced even when its autocorrelation is clean.
+
+    This is the one place the energy gate and the autocorrelation decision can
+    disagree: a very quiet but perfectly periodic frame has a normalised peak
+    near 0.9 and would be called voiced on that evidence alone. Measured: a
+    150 Hz tone at 1e-6 amplitude has RMS 7.1e-7, under the 1e-6 floor (unvoiced
+    ratio 0.000), and the same tone at 1e-5 has RMS 7.1e-6 and is voiced for
+    100% of frames. Both halves are asserted because a gate that rejected
+    everything would pass the first one.
+    """
+    quiet = descriptors(tone(150.0, 0.5, amplitude=1e-6))
+    loud = descriptors(tone(150.0, 0.5, amplitude=1e-5))
+
+    assert quiet["voiced_ratio"] == 0.0
+    assert quiet["f0_mean"] == 0.0
+    assert loud["voiced_ratio"] > 0.95
+    assert loud["f0_mean"] == pytest.approx(150.0, rel=F0_TOLERANCE)
+
+
 # --------------------------------------------------------------------------
 # Energy, and the contour dynamics
 # --------------------------------------------------------------------------
@@ -315,6 +335,49 @@ def test_spectral_features_order_a_tone_below_noise() -> None:
     assert noisy["flatness_mean"] > 0.3
     assert tonal["flatness_mean"] < 0.01
     assert noisy["zcr_mean"] > 5.0 * tonal["zcr_mean"]
+
+
+def test_centroid_weights_by_amplitude_not_by_power() -> None:
+    """Two tones with known amplitudes pin down *which* weighting is used.
+
+    A 500 Hz tone at amplitude 0.5 and a 2000 Hz tone at 0.25. The
+    magnitude-weighted mean frequency is 1000 Hz and the power-weighted one is
+    800 Hz, so the two implementations of "spectral centroid" differ by 20%
+    here. The module documents magnitude weighting and the measured value is
+    981 Hz: 1.9% from the analytic 1000 and 23% from the alternative, which is
+    what makes this a test rather than an acceptance of either.
+    """
+    t = np.arange(SAMPLE_RATE) / SAMPLE_RATE
+    x = 0.5 * np.sin(2 * np.pi * 500.0 * t) + 0.25 * np.sin(2 * np.pi * 2000.0 * t)
+    centroid = descriptors(x)["centroid_mean"]
+
+    assert abs(centroid - 1000.0) < 0.05 * 1000.0
+    assert abs(centroid - 800.0) > 0.10 * 800.0
+
+
+@pytest.mark.parametrize("freq_hz", [150.0, 200.0, 300.0, 1000.0])
+def test_centroid_and_rolloff_sit_at_the_one_frequency_present(
+    freq_hz: float,
+) -> None:
+    """Spectral features against analytic ground truth, not just an ordering.
+
+    With a single tone in the frame the magnitude-weighted mean frequency *is*
+    that frequency, so the centroid is checkable to within a couple of percent
+    (measured +1.1% at 150 Hz, +0.05% at 200 Hz). The rolloff is the 85% power
+    point: a Hann window puts about half the power in the peak bin and the rest
+    in its two neighbours, so the cumulative power passes 85% at the peak bin or
+    the one above it. Measured 160, 240, 320 and 1040 Hz for tones at 150, 200,
+    300 and 1000 Hz — the nearest bin at or above the tone, plus at most one
+    more. The tolerance is therefore two bins (80 Hz), which is loose enough to
+    be robust and tight enough that a rolloff reported from the wrong end of the
+    spectrum fails.
+    """
+    features = frame_features(tone(freq_hz, 0.5), SAMPLE_RATE)
+    bin_hz = SAMPLE_RATE / FRAME_LENGTH
+
+    assert features.centroid_hz.mean() == pytest.approx(freq_hz, rel=0.02)
+    assert 0.0 <= features.rolloff_hz.mean() - freq_hz <= 2.0 * bin_hz + 1.0
+    assert features.rolloff_hz.mean() >= features.centroid_hz.mean()
 
 
 # --------------------------------------------------------------------------
@@ -517,20 +580,43 @@ def test_bridge_output_is_consumable_by_the_selective_scan() -> None:
 def test_jitter_ignores_the_gap_between_voiced_runs() -> None:
     """Jitter must not count a voicing boundary as a pitch jump.
 
-    Two steady tone bursts at the same pitch, separated by silence, have no
-    jitter: every pair of *adjacent* voiced frames has the same F0. A naive
-    successive-difference over all voiced frames would see the burst-to-burst
-    step and report a large one, so this test fails if the adjacency rule is
-    dropped.
+    Six tone bursts alternating between 150 and 300 Hz, separated by silence.
+    Within each burst the pitch is steady, so the adjacent-frame jitter is
+    essentially zero (measured 0.099 Hz); the only large pitch steps are the
+    five across the pauses, and those are voicing boundaries rather than
+    jitter. A naive successive difference over all voiced frames reports
+    12.309 Hz here — a factor of 124 — so this test fails loudly if the
+    adjacency rule is dropped, and its margin is that ratio rather than a
+    tolerance.
     """
-    gated = descriptors(bursts(200.0, 1.0, n_bursts=4))
+    def alternate(freqs: list[float], duty: float = 0.6) -> np.ndarray:
+        signal = np.zeros(SAMPLE_RATE)
+        span = SAMPLE_RATE // len(freqs)
+        for i, freq in enumerate(freqs):
+            start = i * span
+            stop = start + int(span * duty)
+            t = np.arange(stop - start) / SAMPLE_RATE
+            signal[start:stop] = 0.5 * np.sin(2 * np.pi * freq * t)
+        return signal
+
+    gated = descriptors(alternate([150.0, 300.0] * 3))
+    steady_bursts = descriptors(alternate([200.0] * 4))
+
     assert gated["jitter"] < 1.0
     assert gated["jitter_relative"] < 0.01
+    # The signal really does contain 150 Hz steps, so this is not a case of
+    # measuring something with nothing in it.
+    assert gated["f0_range"] > 140.0
+    # Same pitch in every burst: no jitter and no spread at all.
+    assert steady_bursts["jitter"] == 0.0
+    assert steady_bursts["f0_range"] == 0.0
 
-    # And the descriptor is not constant-zero: a real pitch jump does show up.
-    half_a = tone(180.0, 0.5)
-    half_b = tone(240.0, 0.5)
-    stepped = descriptors(np.concatenate([half_a, half_b]))
+    # And the descriptor is not constant-zero: a real pitch step shows up.
+    half = np.arange(SAMPLE_RATE) / SAMPLE_RATE
+    stepped = descriptors(np.concatenate([
+        0.5 * np.sin(2 * np.pi * 180.0 * half),
+        0.5 * np.sin(2 * np.pi * 240.0 * half),
+    ]))
     assert stepped["jitter"] > 1.0
     assert stepped["jitter_relative"] > gated["jitter_relative"]
 

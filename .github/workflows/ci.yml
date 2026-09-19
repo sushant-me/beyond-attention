@@ -63,3 +63,29 @@ jobs:
           assert data["scaling"], "the scaling run produced no rows"
           print("harness wrote both sections: ok")
           PY
+
+      - name: The voice front end, its control, and its renderer run end to end
+        # The voicing control is asserted here rather than only in the tests
+        # because it is the one number that would make every pitch figure in the
+        # README meaningless if it broke: a detector that calls everything
+        # voiced still passes every tone assertion. Rendering into a copy of the
+        # README checks the renderer too, without writing to the checkout.
+        run: |
+          python experiments/voice_affect.py --out /tmp/voice-affect.json
+          cp README.md /tmp/README.copy.md
+          python experiments/render_readme.py --voice /tmp/voice-affect.json \
+            --readme /tmp/README.copy.md
+          python - <<'PY'
+          import json, pathlib
+          data = json.loads(pathlib.Path("/tmp/voice-affect.json").read_text())
+          accuracy = data["separability"]["accuracy"]
+          chance = data["separability"]["chance"]
+          assert accuracy > chance, f"descriptors carry no condition information: {accuracy} vs {chance}"
+          noise = data["controls"]["white_noise_voicing"]["voiced_ratio_max"]
+          assert noise < 0.05, f"white noise was reported as voiced: {noise}"
+          rendered = pathlib.Path("/tmp/README.copy.md").read_text()
+          for marker in ("| condition |", "| control |"):
+              assert marker in rendered, f"voice render lost {marker!r}"
+          print(f"voice front end ok: accuracy {accuracy:.3f} vs chance {chance:.3f}, "
+                f"white-noise voiced ratio {noise:.3f}")
+          PY
