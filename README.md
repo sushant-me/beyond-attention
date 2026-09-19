@@ -422,7 +422,7 @@ python experiments/render_readme.py --mqar results.json \
 python experiments/voice_affect.py --out voice-affect.json
 python experiments/render_readme.py --voice voice-affect.json --readme README.md
 
-# the agent loop: 250 seeded tasks, six budgets, four controls (~1 s)
+# the agent loop: 300 seeded tasks, six budgets, the controls and two sweeps (~2 s)
 python experiments/agent_loop.py --out agent-loop.json
 python experiments/render_readme.py --agent agent-loop.json --readme README.md
 ```
@@ -710,7 +710,10 @@ instructions and each observation — are embedded into the `(x, delta)` pair
 this repository implements. The resulting state *is* the agent's working memory:
 an eight-wide register file whose dimensions are named (`carry`, `observations`,
 `op`, `arg`, `arg2`, `miss`, `kind`, `instructions`) and which the policy decodes
-into an opcode, an operand and the carried value. `A` is chosen by hand so that a
+into an opcode, an operand and the carried value. The `selective` family appends
+key-addressed memory slots to those eight registers — `state_width` of them — so
+the same recurrence is a register file whose width the task sets, and the
+experiment sweeps that width rather than asserting it. `A` is chosen by hand so that a
 write (`delta = 1`) replaces a register exactly and a hold (`delta = 0`) leaves it
 bit-for-bit alone. A test runs the repository's own `selective_scan` on the same
 input and requires it to reproduce this state exactly, so "the memory is the SSM's
@@ -730,28 +733,34 @@ that would be easy to make from the table below, and are all false:
 
 * *"This is an agent that generalises."* It runs one fixed, hand-written
   controller over a closed tool set — `add`, `mul`, `sub`, `lookup`, `finish`,
-  five functions fixed at import time — and a closed task family: five plan shapes
+  five functions fixed at import time — and a closed task family: six plan shapes
   over bounded integers, emitted by a seeded generator. The "task text" is that
   instruction grammar delivered as structured events; there is no tokenizer, no
   parsing and no language understanding anywhere in the path. The loop cannot be
   asked for a task the generator does not generate, a tool the registry does not
   hold, or an instruction the grammar does not define, and 1.000 says only that
-  the controller matches the five shapes it was written against.
+  the controller matches the six shapes it was written against.
 * *"The loop learns."* Nothing is trained. There is no gradient, no optimiser and
   no loss in this path: the recurrence's `A`, its read/write gate and the policy's
   branches are constants chosen by hand. A seed decides which tasks are generated
   and how the random control draws, and nothing else. The five tools are pure
   functions of their arguments — no clock, no filesystem, no network — and a test
   reads the module's imports to keep it that way.
-* *"The SSM is what makes it work."* The controls say the opposite, and they are
-  in the table rather than in a footnote. The no-memory control — the state wiped
-  before every decision, with only the current instruction re-streamed — keeps
-  every task whose answer is written in the task text and loses every task whose
-  answer is an intermediate result. That is evidence that *carrying the value* is
-  necessary. It is not evidence that the recurrence is: the same controller with
-  the carried value in one Python `int` solves exactly the same tasks, in the same
-  number of steps, calling the same tools in the same order. The state carries the
-  value; a variable would too.
+* *"The SSM is what makes it work."* On the five arithmetic families it is not.
+  The no-memory control — the state wiped before every decision, with only the
+  current instruction re-streamed — keeps every task whose answer is written in
+  the task text and loses every task whose answer is an intermediate result, so
+  *carrying the value* is necessary. It is not evidence that the recurrence is:
+  the same controller with the carried value in one Python `int` solves exactly
+  the same tasks, in the same number of steps, calling the same tools in the same
+  order, and a variable would carry the value as well as the state does. The
+  `selective` family is the one place that changes, and the change is narrow: one
+  register cannot hold two keys at once, so the scalar scores 0.320 against the
+  gated state's 1.000, and a state of the *same width* with a constant gate
+  scores 0.200. That is a real difference, and what it supports is bounded below
+  the table: the gate is hand-set in `embed`, the controller is hand-written, a
+  Python dict in `evaluate_plan` computes the same answers with no model at all,
+  and nothing anywhere in the path is trained.
 
 <!-- AGENT:BEGIN -->
 **Seeded task suite** — 300 tasks (50 per family), seed 0. Each task is a plan over bounded integers plus a bounded key/value table, and its answer is computed in Python integers by `evaluate_plan`, so correctness is a property of the task. Tools: `add`, `mul`, `sub`, `lookup`, `finish`.
@@ -862,7 +871,7 @@ Three claims this table makes easy, and that are false:
 ### What the numbers say, including the unflattering parts
 
 * **Carry-over is necessary, and that is the one thing these controls
-  establish.** Wiping the state before each decision takes the four carry
+  establish.** Wiping the state before each decision takes the five carry
   families from 1.000 to **0.000** at every budget, while the `literal` family —
   whose answer is written in the task text — stays at 1.000. The contrast is the
   measurement: a control that failed everything would only show the loop was
@@ -879,10 +888,11 @@ Three claims this table makes easy, and that are false:
   wide enough. Both halves are published as rows, since a control that flatters
   the increment and one that falsifies it are the same kind of evidence.
 * **The budget curve is a ceiling, and mostly arithmetic.** Each family needs a
-  known number of decisions (`literal` 1 through `lookup` 5), so the staircase is
+  known number of decisions (`literal` 1 through `lookup` 5, and `selective` 6 —
+  it cannot answer before the whole event stream has arrived), so the staircase is
   what the step counts predict rather than a discovery. It is still worth
   publishing, because it shows the budget is enforced rather than nominal and
-  says plainly that a family needing five decisions is unsolvable in four.
+  says plainly that a family needing six decisions is unsolvable in five.
 * **The first version of the memory had a bug the experiment caught, not the
   tests.** With `A = -50` a register write left 1.7e-21 of the previous value
   behind. That is not a rounding detail: `IFPOS` branches on the *sign* of the
@@ -979,8 +989,8 @@ the action so that this is checkable rather than asserted.
   `length-extrapolation.json` is the fix, and until then that command should not
   be trusted to reproduce the README.
 * **The agent loop is a closed grammar, not a language interface.** Its "task
-  text" is five instruction shapes delivered as structured events, and the
-  controller is written against those five shapes. There is no tokenizer and no
+  text" is a fixed instruction grammar delivered as structured events, and the
+  controller is written against that grammar. There is no tokenizer and no
   natural-language input anywhere in the path, so no test in this repository
   could detect a failure to understand a sentence — nothing accepts one.
 * **The tools are five pure functions that cannot touch anything.** No network,
@@ -988,12 +998,22 @@ the action so that this is checkable rather than asserted.
   or discover tools. "Open-ended tool use" is not a claim this harness can
   support, and the interesting failure modes of real tool use — irreversible
   actions, partial failure, retries — are absent rather than handled.
-* **The suite is five generated plan shapes over bounded integers.** Every task
+* **The suite is six generated plan shapes over bounded integers.** Every task
   comes from `task_suite`, whose own constraints (no answer is 0, table values
   are unique, operands are 2-9) are what make the controls interpretable. Nothing
   here speaks to a task outside that family; the 1.000 solve rate is a statement
   about a controller matching the shapes it was written for, and the README says
   so above the table as well as here.
+* **The selective result is a hand-set gate on a closed, four-key family.**
+  Which slot an event is written to is computed in `embed` from the event's own
+  key; nothing learns it, and there is no comparison against a model that learned
+  a gate. The key space is four, the query key is drawn uniformly from the stored
+  keys — which is what makes one register insufficient — and a Python dict in
+  `evaluate_plan` computes every answer without the memory at all. What the width
+  and distractor sweeps establish is that *this* gate, once the state is wide
+  enough, retains what a scalar and a constant decay cannot; they do not
+  establish that a state-space model is what makes the loop work, and the five
+  arithmetic families still show a scalar tying it exactly.
 
 ## References
 
