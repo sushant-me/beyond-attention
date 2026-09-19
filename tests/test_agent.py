@@ -20,6 +20,15 @@ tool tests feed malformed calls and the module test reads the source's imports.
 Where a claim is checkable against something outside this module -- that the
 memory is the repository's own recurrence -- it is checked against that thing
 rather than against a restatement of it.
+
+The selective family gets the same treatment plus one more requirement: its
+controls are asserted to **fail**. The scalar-carry control solves a selective
+task exactly when the queried key is the last one stored and never otherwise --
+asserted task by task rather than as a rate, because a rate below 1.0 could mean
+a hard task instead of a missing register. The fixed-decay control, a state of
+the same width with a constant gate, is asserted to tie the scalar when nothing
+is distracting and to be broken by a distractor when something is, which is what
+says the *gating* rather than the width is doing the work.
 """
 
 from __future__ import annotations
@@ -37,17 +46,26 @@ from beyond_attention.agent import (
     DELTA_WRITE,
     FAMILIES,
     OP_ADD,
+    OP_CODES,
     OP_IFPOS,
     OP_KEY,
     OP_MUL,
+    OP_NOISE,
+    OP_PUT,
+    OP_RECALL,
     OP_RET,
     OP_RETLIT,
     OP_SUB,
+    R_ARG,
     R_CARRY,
     R_COUNT,
     R_INDEX,
     R_MISS,
     R_OP,
+    R_SLOT_BASE,
+    SELECTIVE_DISTRACTORS,
+    SELECTIVE_KEYS,
+    SELECTIVE_STORES,
     STEP_COUNTS,
     TOOL_NAMES,
     ToolCall,
@@ -55,17 +73,23 @@ from beyond_attention.agent import (
     bridge_to_selective_scan,
     carried_value,
     choose_action,
+    decay_vector,
     embed,
     embed_all,
     evaluate_plan,
     example_task,
     execute,
     instruction,
+    new_state,
     observation_event,
     read_registers,
     replay,
+    required_state_width,
     run_agent,
     scan_states,
+    selective_example_task,
+    selective_suite,
+    slot_value,
     stream_step,
     task_suite,
     validate_call,
@@ -472,6 +496,279 @@ def test_bad_configuration_is_rejected() -> None:
 
 
 # --------------------------------------------------------------------------
+# The selective family: retention that depends on the input
+# --------------------------------------------------------------------------
+
+def test_the_selective_example_has_the_hand_computed_answer() -> None:
+    """Key 1 holds 40, key 3 holds 60, key 2 holds 90, and 70 was a distractor."""
+    task = selective_example_task()
+
+    assert [i.op for i in task.plan] == [
+        OP_PUT, OP_NOISE, OP_PUT, OP_PUT, OP_RECALL
+    ]
+    assert task.answer == 60
+    assert evaluate_plan(
+        (instruction(OP_PUT, 1, 40),
+         instruction(OP_NOISE, 70),
+         instruction(OP_PUT, 3, 60),
+         instruction(OP_PUT, 2, 90),
+         instruction(OP_RECALL, 3)), ()) == 60
+    # A later PUT does not overwrite an earlier key, and the distractor is
+    # stored nowhere at all.
+    assert evaluate_plan(
+        (instruction(OP_PUT, 1, 40),
+         instruction(OP_PUT, 3, 60),
+         instruction(OP_NOISE, 40),
+         instruction(OP_RECALL, 1)), ()) == 40
+    with pytest.raises(ValueError):
+        evaluate_plan((instruction(OP_PUT, 1, 40),
+                       instruction(OP_RECALL, 2)), ())
+
+
+def test_a_stored_value_lives_only_in_its_memory_slot() -> None:
+    """The value is not also parked in a named register for the policy to read.
+
+    If it were, the policy could answer the query without the memory, and the
+    family would stop testing anything.
+    """
+    x, delta = embed(instruction_event_of(OP_PUT, 3, 77), state_width=4)
+
+    assert x[R_SLOT_BASE + 3] == 77.0
+    assert delta[R_SLOT_BASE + 3] == DELTA_WRITE
+    assert 77.0 not in x[:R_SLOT_BASE]
+    # The key *is* in an instruction register: the key is the input, not memory.
+    assert x[R_ARG] == 3.0
+
+
+def test_a_put_writes_its_own_slot_and_leaves_the_others_alone() -> None:
+    state = new_state(4)
+    state = stream_step(state, *embed(instruction_event_of(OP_PUT, 1, 40),
+                                      state_width=4))
+    state = stream_step(state, *embed(instruction_event_of(OP_PUT, 3, 60),
+                                      state_width=4))
+
+    assert tuple(state[R_SLOT_BASE:]) == (0.0, 40.0, 0.0, 60.0)
+
+
+def test_a_distractor_writes_no_slot_and_is_nowhere_in_the_state() -> None:
+    """A NOISE event is seen -- its opcode moves -- and remembered nowhere."""
+    state = new_state(4)
+    state = stream_step(state, *embed(instruction_event_of(OP_PUT, 2, 55),
+                                      state_width=4))
+    before = state.copy()
+
+    state = stream_step(state, *embed(instruction_event_of(OP_NOISE, 99),
+                                      state_width=4))
+
+    np.testing.assert_array_equal(state[R_SLOT_BASE:], before[R_SLOT_BASE:])
+    assert 99.0 not in state[R_SLOT_BASE:]
+    assert read_registers(state).op_code == OP_CODES[OP_NOISE]
+    # The distractor's value *is* in the instruction register, because the event
+    # was read; it is in no memory slot, which is the distinction the family is
+    # built on.
+    assert state[R_ARG] == 99.0
+
+
+def test_the_state_holds_every_keyed_value_at_once() -> None:
+    """The memory at the moment of the query, read out slot by slot.
+
+    This is the mechanism the family exists to test: 40, 60 and 90 are all in
+    the state when the query for key 3 is answered, and the distractor 70 is in
+    none of them.
+    """
+    run = run_agent(selective_example_task(), budget=6)
+
+    assert run.solved
+    assert run.answer == 60
+    assert run.steps[-1].registers.slots == (0.0, 40.0, 90.0, 60.0)
+    assert all(step.action.tool == "add" for step in run.steps[:-1])
+    assert run.steps[-1].action == ToolCall("finish", {"answer": 60})
+
+
+def test_the_selective_family_needs_its_whole_stream_before_the_question() -> None:
+    task = selective_suite(1, seed=0)[0]
+
+    assert STEP_COUNTS["selective"] == len(task.plan)
+    assert len(task.plan) == SELECTIVE_STORES + SELECTIVE_DISTRACTORS + 1
+    for budget in range(1, len(task.plan)):
+        run = run_agent(task, budget=budget)
+        assert run.stop_reason == "budget"
+        assert run.solved is False and run.answer is None
+    run = run_agent(task, budget=len(task.plan))
+    assert run.stop_reason == "finish" and run.solved
+    assert len(run_agent(task, budget=50).steps) == len(task.plan)
+
+
+def test_the_selective_trace_replays_and_the_run_is_deterministic() -> None:
+    task = selective_suite(10, seed=3)[4]
+
+    first = run_agent(task, budget=8)
+    again = run_agent(task, budget=8)
+
+    assert first.actions == again.actions
+    assert [s.result for s in first.steps] == [s.result for s in again.steps]
+    assert replay(first, task.table) == tuple(s.result for s in first.steps)
+    assert all(validate_call(step.action) is None for step in first.steps)
+    assert first.answer == task.answer
+
+
+def test_a_malformed_call_cannot_end_the_selective_loop() -> None:
+    calls = [ToolCall("add", {"a": 1}),           # missing b
+             ToolCall("explode", {}),             # unknown tool
+             ToolCall("finish", {"answer": 60})]  # the real answer, at last
+
+    def policy(registers: Registers) -> ToolCall:
+        del registers
+        return calls.pop(0)
+
+    run = run_agent(selective_example_task(), budget=8, policy=policy)
+
+    assert run.solved
+    assert [step.result.error for step in run.steps[:2]] == \
+        ["bad_params", "unknown_tool"]
+
+
+def test_the_scalar_carry_control_fails_the_selective_family() -> None:
+    """A single register cannot hold two keys, asserted task by task.
+
+    The correspondence is exact and it is the whole argument: the charitable
+    scalar answers with the last *keyed* value it saw, so it is right exactly
+    when the queried key is the one the last PUT named. A rate below 1.0 alone
+    would be consistent with a merely harder task, which is why the per-task
+    equality is what this test asserts. That it stays below 1.0 over fifty tasks
+    is then a consequence rather than the evidence.
+    """
+    suite = task_suite(20, seed=2)
+    for task in suite:
+        with_state = run_agent(task, budget=8)
+        with_scalar = run_agent(task, budget=8, memory="scalar")
+        if task.family == "selective":
+            last_stored = [i.args[0] for i in task.plan if i.op == OP_PUT][-1]
+            queried = [i.args[0] for i in task.plan if i.op == OP_RECALL][0]
+            assert with_state.solved, task.task_id
+            assert with_scalar.solved == (queried == last_stored), task.task_id
+        else:
+            assert with_state.solved, task.task_id
+            assert with_scalar.solved == with_state.solved, task.task_id
+            assert with_scalar.actions == with_state.actions, task.task_id
+
+    tasks = selective_suite(50, seed=0)
+    solved = sum(run_agent(t, budget=6, memory="scalar").solved for t in tasks)
+    assert 0 < solved < len(tasks), solved
+    assert all(run_agent(t, budget=6).solved for t in tasks)
+
+
+def test_the_fixed_decay_control_ties_the_scalar_and_stores_distractors() -> None:
+    """A wide state with a constant gate is not a memory, measured both ways.
+
+    With no distractor every slot ends up holding the last value written, which
+    is exactly what one scalar holds -- so the width buys nothing. With a
+    distractor after the last store it holds the distractor's value, which the
+    charitable scalar does not even look at.
+    """
+    task = selective_example_task()
+    fixed = run_agent(task, budget=6, memory="fixed", state_width=4)
+
+    assert run_agent(task, budget=6).answer == 60
+    assert run_agent(task, budget=6, memory="scalar").answer == 90
+    assert fixed.answer == 90
+    assert fixed.solved is False
+    assert fixed.steps[-1].registers.slots == (90.0, 90.0, 90.0, 90.0)
+
+    # A trailing distractor: the scalar still holds the last store, and the
+    # constant gate replaces it with the noise.
+    from beyond_attention.agent import Task
+
+    plan = (instruction(OP_PUT, 1, 11),
+            instruction(OP_PUT, 3, 22),
+            instruction(OP_NOISE, 77),
+            instruction(OP_RECALL, 1))
+    trailing = Task("trailing", "selective", plan, (), 11, "by hand")
+    assert run_agent(trailing, budget=4).answer == 11
+    assert run_agent(trailing, budget=4, memory="scalar").answer == 22
+    assert run_agent(trailing, budget=4, memory="fixed",
+                     state_width=4).answer == 77
+
+
+def test_the_fixed_decay_state_is_the_scalar_when_nothing_distracts() -> None:
+    """The two controls coincide exactly where the gate has nothing to do."""
+    tasks = selective_suite(20, seed=7, n_store=3, n_distractors=0, n_keys=4)
+    for task in tasks:
+        with_fixed = run_agent(task, budget=4, memory="fixed", state_width=4)
+        with_scalar = run_agent(task, budget=4, memory="scalar")
+        assert with_fixed.solved == with_scalar.solved, task.task_id
+
+
+def test_a_distractor_breaks_the_fixed_decay_state_and_not_the_gated_one() -> None:
+    """The gate, not the width: the same state width, one constant gate."""
+    tasks = selective_suite(20, seed=7, n_store=3, n_distractors=4, n_keys=4)
+    gated = sum(run_agent(t, budget=8).solved for t in tasks)
+    fixed = sum(run_agent(t, budget=8, memory="fixed", state_width=4).solved
+                for t in tasks)
+
+    assert gated == len(tasks)
+    assert fixed < gated
+
+
+def test_the_no_memory_control_collapses_the_selective_family() -> None:
+    for task in selective_suite(20, seed=1):
+        wiped = run_agent(task, budget=6, memory="none")
+        assert wiped.solved is False, task.task_id
+        assert wiped.stop_reason == "finish"
+        assert wiped.answer == 0 and wiped.answer != task.answer
+        assert all(step.registers.observations == 0 for step in wiped.steps)
+        assert run_agent(task, budget=6).solved, task.task_id
+
+
+def test_the_state_width_is_the_capacity_that_matters() -> None:
+    """Where the family starts to solve: at least as many slots as keys.
+
+    Two anchors, both analytic. A one-slot state aliases every key onto slot 0,
+    so it *is* the scalar -- the same solve set task by task, not merely a
+    similar rate. A state as wide as the key space aliases nothing and solves
+    every task. Everything between is the experiment's curve.
+    """
+    tasks = selective_suite(20, seed=0)
+    for task in tasks:
+        width = required_state_width(task)
+        assert width == 1 + max(i.args[0] for i in task.plan
+                                if i.op in (OP_PUT, OP_RECALL))
+        assert run_agent(task, budget=6, state_width=width).solved, task.task_id
+        assert run_agent(task, budget=6, state_width=1).solved == \
+            run_agent(task, budget=6, memory="scalar").solved, task.task_id
+
+    assert run_agent(tasks[0], budget=6, state_width=0).solved is False
+    narrow = sum(run_agent(t, budget=6, state_width=1).solved for t in tasks)
+    wide = sum(run_agent(t, budget=6).solved for t in tasks)
+    assert wide == len(tasks)
+    assert narrow < wide
+
+
+def test_the_recall_reads_the_slot_its_key_addresses() -> None:
+    """The accessor the policy uses, directly, including the aliasing rule."""
+    slots = (0.0, 11.0, 22.0, 33.0)
+    registers = Registers(carry=0.0, observations=0,
+                          op_code=OP_CODES[OP_RECALL], arg=2, arg2=0,
+                          miss=False, kind=0, instructions=1, slots=slots)
+
+    assert slot_value(registers, 2) == 22
+    assert slot_value(registers, 3) == 33
+    assert choose_action(registers) == ToolCall("finish", {"answer": 22})
+
+    # Aliasing is the documented behaviour of a narrow state, not an error: the
+    # address is the key modulo the width.
+    narrow = Registers(carry=0.0, observations=0,
+                       op_code=OP_CODES[OP_RECALL], arg=3, arg2=0,
+                       miss=False, kind=0, instructions=1, slots=(11.0, 22.0))
+    assert slot_value(narrow, 3) == 22
+    # A state with no memory slots holds no keyed value, and says so with 0.
+    empty = Registers(carry=0.0, observations=0,
+                      op_code=OP_CODES[OP_RECALL], arg=1, arg2=0,
+                      miss=False, kind=0, instructions=1)
+    assert slot_value(empty, 1) == 0
+
+
+# --------------------------------------------------------------------------
 # The controls, which are the point
 # --------------------------------------------------------------------------
 
@@ -508,17 +805,21 @@ def test_the_no_memory_control_fails_carry_over_and_passes_the_literal_task() ->
             assert run_agent(task, budget=6, memory="ssm").solved, task.task_id
 
 
-def test_the_scalar_carry_control_matches_the_state_space_agent() -> None:
-    """If a Python int solves every task, the recurrence is not what does.
+def test_the_scalar_carry_control_ties_the_arithmetic_families() -> None:
+    """Where one register is enough, the recurrence earns nothing measurable.
 
-    This is the control behind the README's third false claim. It is reported
-    whether it passes or fails; a difference here would be the evidence that the
-    state does something the carry does not.
+    This is the control behind the README's third false claim, and it is scoped
+    to the five arithmetic families on purpose. On the `selective` family the
+    same control fails, which is the test above and the reason that family
+    exists. Publishing only the half that flatters the architecture would be the
+    easy version; publishing only the half that flatters the control would be
+    the other one.
     """
     suite = task_suite(20, seed=2)
-    assert suite
-    for task in suite:
-        with_state = run_agent(task, budget=8, memory="ssm")
+    arithmetic = [t for t in suite if t.family != "selective"]
+    assert arithmetic
+    for task in arithmetic:
+        with_state = run_agent(task, budget=8)
         with_scalar = run_agent(task, budget=8, memory="scalar")
         assert with_state.solved, task.task_id
         assert with_scalar.solved == with_state.solved, task.task_id
@@ -554,7 +855,9 @@ def test_the_random_action_control_is_near_the_floor() -> None:
             trials += 1
             solved += int(run.solved)
 
-    assert trials == 1000
+    # Counted per draw rather than per task, and the suite grew when the
+    # selective family was added, so the total is derived rather than typed.
+    assert trials == len(suite) * 10
     assert solved / trials < 0.05, f"random action solved {solved}/{trials}"
 
 
@@ -611,10 +914,19 @@ def test_suite_tables_have_exactly_one_key_per_value() -> None:
 
 
 def test_the_state_width_and_the_decay_are_the_documented_ones() -> None:
-    """The register file is exactly the eight named registers, nothing spare."""
+    """The register file is exactly the eight named registers, plus any slots."""
     assert A_DIAG.shape == (AGENT_DIM,)
     assert A_DIAG[R_CARRY] == A_HOLD
     assert A_DIAG[R_COUNT] == 0.0
     assert A_DIAG[R_INDEX] == 0.0
     assert A_DIAG[R_OP] == A_HOLD
     assert A_DIAG[R_MISS] == A_HOLD
+
+    # A memory slot holds what it is written until it is written again, so its
+    # decay is the same exact-write constant the carry register uses.
+    wide = decay_vector(AGENT_DIM + 3)
+    assert wide.shape == (AGENT_DIM + 3,)
+    np.testing.assert_array_equal(wide[:AGENT_DIM], A_DIAG)
+    np.testing.assert_array_equal(wide[AGENT_DIM:], np.full(3, A_HOLD))
+    with pytest.raises(ValueError):
+        decay_vector(AGENT_DIM - 1)

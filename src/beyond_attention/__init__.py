@@ -4,6 +4,10 @@ from .agent import (
     AGENT_DIM,
     FAMILIES,
     REGISTER_NAMES,
+    SELECTIVE_DISTRACTORS,
+    SELECTIVE_KEYS,
+    SELECTIVE_STORES,
+    SELECTIVE_WIDTH,
     STEP_COUNTS,
     TOOL_NAMES,
     TOOL_SCHEMAS,
@@ -26,8 +30,12 @@ from .agent import (
     new_state,
     read_registers,
     replay,
+    required_state_width,
     run_agent,
     scan_states,
+    selective_example_task,
+    selective_suite,
+    slot_value,
     task_suite,
     validate_call,
 )
@@ -90,6 +98,13 @@ __all__ = [
     # memory into the model's scan.
     "run_agent", "replay", "AgentRun", "Step", "Task", "task_suite",
     "example_task", "evaluate_plan",
+    # The selective family: a stream of keyed events and distractors, and a
+    # query that only a memory wide enough to hold several keys can answer.
+    # ``selective_suite`` exposes the task shape so the width and distractor
+    # sweeps measure the same tasks the main table does.
+    "selective_suite", "selective_example_task", "required_state_width",
+    "slot_value", "SELECTIVE_STORES", "SELECTIVE_DISTRACTORS", "SELECTIVE_KEYS",
+    "SELECTIVE_WIDTH",
     "Instruction", "instruction", "ToolCall", "ToolResult", "ToolSchema",
     "validate_call", "execute", "TOOL_SCHEMAS", "TOOL_NAMES",
     "new_state", "scan_states", "read_registers", "Registers", "Event",

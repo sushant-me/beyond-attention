@@ -13,6 +13,13 @@ state, and ``RET`` -- plus a bounded key/value table. The answer is computed by
 ``evaluate_plan`` in Python integers, so it is analytic: correctness is a
 property of the task, not of a model.
 
+The ``selective`` family is a different question. A stream of keyed events and
+distractors arrives, then a query asks for the value of one key, and which
+events are retained -- and where they land -- is decided by each event's own
+content. Retention there has to depend on the input, which is what the
+architecture's gate exists to do, and the controls below are what decide whether
+the gate or merely the width is doing the work.
+
 Controls, each of which can fail:
 
 * **no memory** -- the state is wiped before every decision and only the current
@@ -21,9 +28,23 @@ Controls, each of which can fail:
   must collapse on every family whose answer is an intermediate result, and must
   **not** collapse on the family whose answer is written in the task text. That
   contrast is the measurement.
-* **scalar carry** -- the same controller with the carried value held in one
-  Python int instead of the state-space state. If this matches the full agent,
-  the recurrence is not what makes the loop work, and the README says so.
+* **scalar carry** -- the same controller with the values held in one Python int
+  instead of the state-space state. On the five arithmetic families it matches
+  the full agent row for row, which is the honest statement that the recurrence
+  earns nothing there. On ``selective`` it **fails**, and the failure is exact:
+  it is right precisely when the queried key is the last one stored, because one
+  register cannot hold two keys.
+* **fixed decay** -- a memory of the *same width* as the gated one with a
+  constant, input-independent write gate: every value-carrying event is written
+  into every slot. This separates "the architecture" from "a sufficiently wide
+  memory". If it tied the gated state, the gating would not be what does the
+  work.
+* **state width** -- the same selective tasks read by a state of 0, 1, 2, 3, 4
+  and 8 memory slots. A one-slot state aliases every key onto one slot and *is*
+  the scalar; the curve is where the family starts to solve.
+* **distractor rate** -- the same family with 0, 1, 2, 4, 6 and 8 distractors in
+  the stream. A memory claim that dies at the first distractor is not a memory
+  claim.
 * **random action** -- tools and arguments chosen uniformly. The floor.
 * **budget ceiling** -- the same suite at budgets 1..6. Each family needs a known
   number of loop steps, so this is the ceiling the budget imposes, and the
@@ -43,11 +64,18 @@ from pathlib import Path
 import numpy as np
 
 from beyond_attention.agent import (
+    AGENT_DIM,
     A_HOLD,
     DELTA_WRITE,
     FAMILIES,
+    OP_PUT,
+    OP_RECALL,
     RANDOM_ARG_SPAN,
     REGISTER_NAMES,
+    SELECTIVE_DISTRACTORS,
+    SELECTIVE_KEYS,
+    SELECTIVE_STORES,
+    SELECTIVE_WIDTH,
     STEP_COUNTS,
     TOOL_NAMES,
     AgentRun,
@@ -55,8 +83,16 @@ from beyond_attention.agent import (
     example_task,
     replay,
     run_agent,
+    selective_example_task,
+    selective_suite,
     task_suite,
 )
+
+# The two sweeps. Widths are memory slots, not the whole state: the eight named
+# registers are always there, and ``total_width`` in the payload records the sum
+# so the two are not confused.
+WIDTHS = (0, 1, 2, 3, 4, 8)
+NOISE_COUNTS = (0, 1, 2, 4, 6, 8)
 
 
 def solve_rate(runs: list[tuple[Task, AgentRun]]) -> dict:
@@ -76,19 +112,123 @@ def grid(
     memory: str = "ssm",
     policy: str = "plan",
     seed: int = 0,
+    state_width: int | None = None,
 ) -> dict[str, dict]:
-    """Solve rate for every (family, budget) cell, keyed ``family@budget``."""
+    """Solve rate for every (family, budget) cell, keyed ``family@budget``.
+
+    ``state_width`` is passed through to the loop; ``None`` lets the loop size
+    the memory to each task's own key space, which is what the main table wants.
+    The width sweep passes an explicit value instead.
+    """
     cells: dict[str, dict] = {}
     for family in FAMILIES:
         family_tasks = [t for t in tasks if t.family == family]
         for budget in budgets:
             runs = [
                 (task, run_agent(task, budget=budget, memory=memory,
-                                 policy=policy, seed=seed + index))
+                                 policy=policy, seed=seed + index,
+                                 state_width=state_width))
                 for index, task in enumerate(family_tasks)
             ]
             cells[f"{family}@{budget}"] = solve_rate(runs)
     return cells
+
+
+def condition_rate(tasks: tuple[Task, ...], **kwargs) -> dict:
+    """Solve rate for one condition over one family."""
+    return solve_rate([(task, run_agent(task, **kwargs)) for task in tasks])
+
+
+def selective_shape(tasks_per_family: int, seed: int, n_store: int,
+                    n_distractors: int, n_keys: int) -> tuple[Task, ...]:
+    return selective_suite(tasks_per_family, seed, n_store=n_store,
+                           n_distractors=n_distractors, n_keys=n_keys)
+
+
+def width_sweep(tasks_per_family: int, seed: int, n_keys: int,
+                n_store: int, n_distractors: int) -> dict[str, dict]:
+    """The selective family read by states of increasing memory width.
+
+    The same fifty tasks at every width, so the curve is about the state and
+    nothing else. The scalar column is constant by construction -- it replaces
+    the memory, so the width cannot reach it -- and it is repeated in every row
+    rather than stated once, because a constant next to a rising curve is the
+    comparison the table exists to make.
+    """
+    budget = n_store + n_distractors + 1
+    tasks = selective_shape(tasks_per_family, seed, n_store, n_distractors,
+                            n_keys)
+    rows: dict[str, dict] = {}
+    for width in WIDTHS:
+        rows[str(width)] = {
+            "slots": width,
+            "total_width": AGENT_DIM + width,
+            "agent": condition_rate(tasks, budget=budget, state_width=width),
+            "scalar": condition_rate(tasks, budget=budget, memory="scalar"),
+            "fixed": condition_rate(tasks, budget=budget, memory="fixed",
+                                    state_width=width),
+            "none": condition_rate(tasks, budget=budget, memory="none",
+                                   state_width=width),
+        }
+    return rows
+
+
+def distractor_sweep(tasks_per_family: int, seed: int, n_keys: int,
+                     n_store: int) -> dict[str, dict]:
+    """The selective family with more and more of the stream discarded.
+
+    Every point is a different task set, because the number of distractors is
+    part of the shape -- so the four conditions are run on the same tasks as
+    each other at each point, and the budget grows with the stream.
+    """
+    rows: dict[str, dict] = {}
+    for n_distractors in NOISE_COUNTS:
+        budget = n_store + n_distractors + 1
+        tasks = selective_shape(tasks_per_family, seed, n_store, n_distractors,
+                                n_keys)
+        rows[str(n_distractors)] = {
+            "distractors": n_distractors,
+            "events": n_store + n_distractors,
+            "rate": n_distractors / (n_store + n_distractors),
+            "budget": budget,
+            "agent": condition_rate(tasks, budget=budget, state_width=n_keys),
+            "scalar": condition_rate(tasks, budget=budget, memory="scalar"),
+            "fixed": condition_rate(tasks, budget=budget, memory="fixed",
+                                    state_width=n_keys),
+            "none": condition_rate(tasks, budget=budget, memory="none",
+                                   state_width=n_keys),
+        }
+    return rows
+
+
+def scalar_selective_correspondence(tasks: tuple[Task, ...],
+                                    budget: int) -> dict:
+    """Per-task: is the scalar right exactly when the query names the last store?
+
+    A rate below 1.0 would be consistent with a merely harder task. The
+    correspondence is the argument -- one register, so it is right precisely
+    when the key it is asked about is the key it holds last -- and it is
+    recorded per task rather than summarised so that a single mismatch is
+    visible.
+    """
+    solved = 0
+    queried_the_last_store = 0
+    exact = 0
+    for task in tasks:
+        stored = [i.args[0] for i in task.plan if i.op == OP_PUT]
+        queried = [i.args[0] for i in task.plan if i.op == OP_RECALL][0]
+        holds_the_answer = queried == stored[-1]
+        run = run_agent(task, budget=budget, memory="scalar")
+        solved += int(run.solved)
+        queried_the_last_store += int(holds_the_answer)
+        exact += int(bool(run.solved) == holds_the_answer)
+    return {
+        "tasks": len(tasks),
+        "solved": solved,
+        "queried_the_last_store": queried_the_last_store,
+        "exact_matches": exact,
+        "correspondence_holds": exact == len(tasks),
+    }
 
 
 def random_grid(
@@ -161,6 +301,9 @@ def trace_payload(run: AgentRun, task: Task) -> dict:
                     "carry": round(step.registers.carry, 6),
                     "observations": step.registers.observations,
                     "instructions": step.registers.instructions,
+                    # Empty for the arithmetic families, which have no memory
+                    # slots; the selective trace is read out of this field.
+                    "slots": [round(v, 6) for v in step.registers.slots],
                 },
                 "action": step.action.tool,
                 "args": dict(sorted(step.action.args.items())),
@@ -195,7 +338,40 @@ def main() -> int:
     # --- controls ---------------------------------------------------------
     no_memory = grid(tasks, args.budgets, memory="none")
     scalar_carry = grid(tasks, args.budgets, memory="scalar")
+    fixed_decay = grid(tasks, args.budgets, memory="fixed")
     random_action = random_grid(tasks, max_budget, args.random_rounds, args.seed)
+
+    # --- the selective family's own sweeps --------------------------------
+    widths = width_sweep(args.tasks_per_family, args.seed, SELECTIVE_KEYS,
+                         SELECTIVE_STORES, SELECTIVE_DISTRACTORS)
+    distractors = distractor_sweep(args.tasks_per_family, args.seed,
+                                   SELECTIVE_KEYS, SELECTIVE_STORES)
+
+    selective_tasks = selective_suite(args.tasks_per_family, args.seed)
+    selective_budget = STEP_COUNTS["selective"]
+    correspondence = scalar_selective_correspondence(selective_tasks,
+                                                     selective_budget)
+
+    # The fixed-decay state is a constant gate, so with nothing to discard it
+    # collapses onto the scalar exactly. Asserted here rather than described,
+    # because it is the statement that separates the two controls.
+    calm = selective_suite(args.tasks_per_family, args.seed,
+                           n_distractors=0)
+    fixed_equals_scalar = all(
+        run_agent(t, budget=SELECTIVE_STORES + 1, memory="fixed",
+                  state_width=SELECTIVE_KEYS).solved
+        == run_agent(t, budget=SELECTIVE_STORES + 1, memory="scalar").solved
+        for t in calm
+    )
+
+    # The scalar control is right exactly when the query names the last store,
+    # so it cannot be right on every selective task -- and it is wrong on the
+    # published example for the same reason.
+    if correspondence["solved"] == correspondence["tasks"]:
+        raise AssertionError("the scalar solved the selective family: the family "
+                             "does not require a second register")
+    if not correspondence["correspondence_holds"]:
+        raise AssertionError("the scalar control is not the predicted register")
 
     # The one-step agent is the budget-1 column of the main grid, pulled out
     # rather than re-run so the two cannot drift apart.
@@ -243,10 +419,22 @@ def main() -> int:
         "zero_carry_branch": zero_carry_branch,
         "no_memory": no_memory,
         "scalar_carry": scalar_carry,
+        "fixed_decay": fixed_decay,
         "random_action": random_action,
         "one_step": one_step,
         "write_exactness": write_exactness,
+        "state_width": widths,
+        "distractor_rate": distractors,
+        "scalar_selective": correspondence,
+        "fixed_equals_scalar_at_zero_distractors": bool(fixed_equals_scalar),
     }
+
+    selective_example = selective_example_task()
+    selective_run = run_agent(selective_example, budget=len(selective_example.plan))
+    selective_replayed = replay(selective_run, selective_example.table)
+    for step, again in zip(selective_run.steps, selective_replayed):
+        assert (step.result.value, step.result.error) == (again.value, again.error), \
+            "the selective example trace does not replay"
 
     payload = {
         "config": {
@@ -260,10 +448,20 @@ def main() -> int:
             "random_rounds": args.random_rounds,
             "random_arg_span": RANDOM_ARG_SPAN,
             "suite_size": len(tasks),
+            "selective": {
+                "stores": SELECTIVE_STORES,
+                "distractors": SELECTIVE_DISTRACTORS,
+                "keys": SELECTIVE_KEYS,
+                "state_width": SELECTIVE_WIDTH,
+                "step_count": STEP_COUNTS["selective"],
+                "widths": list(WIDTHS),
+                "noise_counts": list(NOISE_COUNTS),
+            },
         },
         "solve_rate": solve,
         "controls": controls,
         "example_trace": trace_payload(example_run, example),
+        "selective_example_trace": trace_payload(selective_run, selective_example),
         "wall_seconds": round(time.perf_counter() - started, 2),
     }
     Path(args.out).write_text(json.dumps(payload, indent=2))
@@ -288,6 +486,7 @@ def main() -> int:
     for name, cells in (
         ("no memory", no_memory),
         ("scalar carry", scalar_carry),
+        ("fixed decay", fixed_decay),
         ("random action", random_action),
         ("agent", solve),
     ):
@@ -297,6 +496,25 @@ def main() -> int:
         row = f"  {name:<14}{solved / total:>6.3f}   "
         row += " ".join(f"{c['rate']:.3f}" for c in at_max)
         print(row)
+    print()
+    print("selective: scalar carry is right exactly when the query names the "
+          "last store")
+    print(f"  solved {correspondence['solved']}/{correspondence['tasks']}, "
+          f"queried the last store {correspondence['queried_the_last_store']}, "
+          f"correspondence holds={correspondence['correspondence_holds']}")
+    print(f"  fixed decay == scalar with no distractors: {fixed_equals_scalar}")
+    print()
+    print(f"{'slots':>6}{'total':>7}{'agent':>8}{'scalar':>8}{'fixed':>8}{'none':>8}")
+    for row in widths.values():
+        print(f"{row['slots']:>6}{row['total_width']:>7}"
+              f"{row['agent']['rate']:>8.3f}{row['scalar']['rate']:>8.3f}"
+              f"{row['fixed']['rate']:>8.3f}{row['none']['rate']:>8.3f}")
+    print()
+    print(f"{'noise':>6}{'rate':>7}{'agent':>8}{'scalar':>8}{'fixed':>8}{'none':>8}")
+    for row in distractors.values():
+        print(f"{row['distractors']:>6}{row['rate']:>7.3f}"
+              f"{row['agent']['rate']:>8.3f}{row['scalar']['rate']:>8.3f}"
+              f"{row['fixed']['rate']:>8.3f}{row['none']['rate']:>8.3f}")
     print()
     print(f"one-step agent (budget 1), all families: "
           f"{one_step['all']['rate']:.3f}")

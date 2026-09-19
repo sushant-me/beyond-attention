@@ -39,6 +39,16 @@ control falsified:
 * **F0 recovery against the generator's own target** -- the descriptor is
   checked against the number the synthesiser was asked for.
 
+The file also carries the **frame-level tracks** the dashboard draws: the mean F0
+and RMS contour of each condition across its sixteen utterances, the per-frame
+share of utterances judged voiced, and one white-noise block next to one pure
+tone with the voiced/unvoiced confidence curve the decision was made on. Those
+are per-frame arrays rather than summary numbers because a summary cannot be
+looked at: "voiced ratio 0.000 for noise" is an assertion, while the confidence
+curve next to the 0.45 threshold is the thing the assertion is about. They are
+written here rather than recomputed by the renderer so that the page and the
+tables above it are the same measurement.
+
     python -u experiments/voice_affect.py --out voice-affect.json
 """
 
@@ -53,7 +63,9 @@ from pathlib import Path
 import numpy as np
 
 from beyond_attention.voice import (
+    HOP_MS,
     VOICED_PEAK_THRESHOLD,
+    WINDOW_MS,
     VoiceEncoder,
     affect_descriptors,
     frame_features,
@@ -238,6 +250,113 @@ def separation(
 
 
 # --------------------------------------------------------------------------
+# Frame-level tracks, which is what the dashboard draws
+# --------------------------------------------------------------------------
+
+# The probe tone. 220 Hz is inside the band the tests assert a 2% tolerance in,
+# so the drawn tone is a signal the estimator is known to handle rather than one
+# picked to flatter it.
+PROBE_TONE_HZ = 220.0
+PROBE_NOISE_AMPLITUDE = 0.3
+
+TRACK_ROUNDING = ("f0_hz to 0.01 Hz, rms to 1e-4, voiced_share to 0.01, "
+                  "confidence to 1e-4, times_s to 1e-3 s")
+
+
+def _round(values, digits: int) -> list[float | None]:
+    """Round an array to a list, mapping non-finite entries to ``None``.
+
+    ``None`` rather than 0.0 for an unvoiced frame: F0 is ``nan`` exactly where
+    the frame has no pitch, and a chart that read 0.0 Hz there would draw a
+    plunge to a pitch that was never measured.
+    """
+    out: list[float | None] = []
+    for value in np.asarray(values, dtype=np.float64):
+        value = float(value)
+        out.append(round(value, digits) if np.isfinite(value) else None)
+    return out
+
+
+def mean_frame_tracks(
+    feature_sets: list, labels: np.ndarray, condition_names: list[str],
+) -> dict[str, dict]:
+    """Mean per-frame F0 / RMS / voiced share for each condition.
+
+    The average is over the condition's utterances frame by frame, which is the
+    same population the descriptor means above summarise: every utterance in a
+    condition has the same burst layout, so the frames line up and averaging
+    keeps the burst structure instead of smoothing it away. F0 is averaged only
+    over the utterances that were voiced in that frame, so an unvoiced frame
+    cannot pull the line towards zero -- it is ``None`` there and the chart
+    breaks the line.
+    """
+    n_frames = feature_sets[0].n_frames
+    for features in feature_sets:
+        if features.n_frames != n_frames:
+            raise ValueError("every utterance in a run must frame to one length")
+
+    tracks: dict[str, dict] = {}
+    for name in condition_names:
+        members = [f for f, label in zip(feature_sets, labels) if label == name]
+        voiced = np.array([f.voiced for f in members])
+        f0 = np.array([f.f0_hz for f in members])
+        rms = np.array([f.rms for f in members])
+        counts = voiced.sum(axis=0)
+        totals = np.nansum(np.where(voiced, f0, np.nan), axis=0)
+        mean_f0 = np.where(counts > 0, totals / np.maximum(counts, 1), np.nan)
+        tracks[name] = {
+            "n_frames": n_frames,
+            "n_utterances": len(members),
+            "f0_hz": _round(mean_f0, 2),
+            "rms": _round(rms.mean(axis=0), 4),
+            "voiced_share": _round(voiced.mean(axis=0), 2),
+        }
+    return tracks
+
+
+def voicing_probe(sample_rate: int, duration_s: float, seed: int) -> dict:
+    """One white-noise block and one tone, with the decision that separates them.
+
+    ``confidence`` is the estimator's own normalised autocorrelation peak -- the
+    number ``voiced`` was compared against the threshold on -- so the curve a
+    reader sees is the decision variable rather than a stand-in for it. The noise
+    draws from its own seed stream, so adding this probe does not shift the eight
+    draws the summary control above reports.
+    """
+    n_samples = int(round(duration_s * sample_rate))
+    rng = np.random.default_rng(seed)
+    noise = PROBE_NOISE_AMPLITUDE * rng.standard_normal(n_samples)
+    tone = 0.5 * np.sin(
+        2 * np.pi * PROBE_TONE_HZ * np.arange(n_samples) / sample_rate
+    )
+
+    series: dict[str, dict] = {}
+    for key, label, signal in (("white_noise", "white noise", noise),
+                               ("tone", f"{PROBE_TONE_HZ:.0f} Hz tone", tone)):
+        features = frame_features(signal, sample_rate)
+        voiced = features.voiced
+        series[key] = {
+            "label": label,
+            "n_frames": features.n_frames,
+            "rms": _round(features.rms, 4),
+            "confidence": _round(features.voiced_confidence, 4),
+            "voiced": [int(v) for v in voiced],
+            "f0_hz": _round(features.f0_hz, 2),
+            "voiced_ratio": float(np.count_nonzero(voiced) / features.n_frames),
+            "max_confidence": float(features.voiced_confidence.max()),
+            "mean_f0_hz": (float(np.mean(features.f0_hz[voiced]))
+                           if np.any(voiced) else None),
+        }
+    return {
+        "threshold": VOICED_PEAK_THRESHOLD,
+        "tone_hz": PROBE_TONE_HZ,
+        "noise_amplitude": PROBE_NOISE_AMPLITUDE,
+        "seed": seed,
+        "series": series,
+    }
+
+
+# --------------------------------------------------------------------------
 
 def main() -> int:
     parser = argparse.ArgumentParser()
@@ -265,9 +384,11 @@ def main() -> int:
             names.append(condition.name)
 
     # --- measure ----------------------------------------------------------
-    summaries = [
-        affect_descriptors(frame_features(x, args.sample_rate)) for x in raw
-    ]
+    # The per-frame features are kept, not discarded: the descriptors and the
+    # frame tracks the dashboard draws must be the same measurement, and
+    # recomputing them would be a second place for the two to disagree.
+    feature_sets = [frame_features(x, args.sample_rate) for x in raw]
+    summaries = [affect_descriptors(features) for features in feature_sets]
     descriptor_names = list(summaries[0])
     features = np.array(
         [[summary[name] for name in descriptor_names] for summary in summaries]
@@ -347,6 +468,11 @@ def main() -> int:
         for name in classes
     ]
 
+    # --- the frame tracks the dashboard draws -----------------------------
+    tracks = mean_frame_tracks(feature_sets, labels, classes)
+    n_frames = feature_sets[0].n_frames
+    probe = voicing_probe(args.sample_rate, args.duration, args.seed + 20_000)
+
     # --- the bridge is exercised, not just imported -----------------------
     bridge = waveform_to_model_input(raw[0], args.sample_rate, d_model=32)
     encoder = VoiceEncoder(32, seed=args.seed)
@@ -407,6 +533,17 @@ def main() -> int:
             },
             "encoder_separates_two_utterances": encode_delta,
         },
+        # The frame-level record the dashboard draws its charts from. Written
+        # here so the page has no second source of truth: the charts and the
+        # descriptor table beside them come out of one run of this file.
+        "frame_tracks": {
+            "window_ms": WINDOW_MS,
+            "hop_ms": HOP_MS,
+            "rounding": TRACK_ROUNDING,
+            "times_s": [round(i * HOP_MS / 1000.0, 3) for i in range(n_frames)],
+            "conditions": tracks,
+        },
+        "voicing_probe": probe,
         "wall_seconds": round(time.perf_counter() - started, 2),
     }
 
@@ -455,6 +592,18 @@ def main() -> int:
           f"worst {np.max(errors):.2f}%")
     print(f"  bridge output {tuple(bridge.shape)}, "
           f"encoder differs by {encode_delta:.4f} between utterances")
+    print()
+    print(f"frame tracks: {n_frames} frames, "
+          f"{HOP_MS:.0f} ms hop, classes {classes}")
+    for name in classes:
+        track = tracks[name]
+        pitched = sum(1 for v in track["f0_hz"] if v is not None)
+        print(f"  {name:<10}{track['n_utterances']:>3} utterances, "
+              f"{pitched:>3}/{track['n_frames']} frames with a mean F0")
+    for key, row in probe["series"].items():
+        print(f"  probe {row['label']:<14} voiced {row['voiced_ratio']:.3f}, "
+              f"max confidence {row['max_confidence']:.3f} "
+              f"(threshold {probe['threshold']})")
     print(f"\nwrote {args.out} in {payload['wall_seconds']}s")
     return 0
 

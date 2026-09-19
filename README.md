@@ -754,7 +754,7 @@ that would be easy to make from the table below, and are all false:
   value; a variable would too.
 
 <!-- AGENT:BEGIN -->
-**Seeded task suite** — 250 tasks (50 per family), seed 0. Each task is a plan over bounded integers plus a bounded key/value table, and its answer is computed in Python integers by `evaluate_plan`, so correctness is a property of the task. Tools: `add`, `mul`, `sub`, `lookup`, `finish`.
+**Seeded task suite** — 300 tasks (50 per family), seed 0. Each task is a plan over bounded integers plus a bounded key/value table, and its answer is computed in Python integers by `evaluate_plan`, so correctness is a property of the task. Tools: `add`, `mul`, `sub`, `lookup`, `finish`.
 
 The memory is a selective-scan state 8 registers wide, one named register per dimension: `carry`, `observations`, `op`, `arg`, `arg2`, `miss`, `kind`, `instructions`.
 
@@ -765,17 +765,19 @@ The memory is a selective-scan state 8 registers wide, one named register per di
 | two_op | 3 | 0.000 | 0.000 | 1.000 | 1.000 | 1.000 | 1.000 |
 | branch | 4 | 0.000 | 0.000 | 0.000 | 1.000 | 1.000 | 1.000 |
 | lookup | 5 | 0.000 | 0.000 | 0.000 | 0.000 | 1.000 | 1.000 |
+| selective | 6 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | 1.000 |
 
-**Controls at budget 6** — per-family solve rate, with the agent's own row for comparison. "Overall" averages the 5 families.
+**Controls at budget 6** — per-family solve rate, with the agent's own row for comparison. "Overall" averages the 6 families.
 
-| condition | literal | one_op | two_op | branch | lookup | overall |
-|---|---:|---:|---:|---:|---:|---:|
-| the agent, memory = the SSM state | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
-| no memory: the state is wiped before each decision | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 | **0.200** |
-| scalar carry: the same controller, one Python int | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
-| random action: tools and arguments uniform | 0.001 | 0.001 | 0.004 | 0.005 | 0.006 | **0.003** |
+| condition | literal | one_op | two_op | branch | lookup | selective | overall |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| the agent, memory = the SSM state | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
+| no memory: the state is wiped before each decision | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 | 0.000 | **0.167** |
+| scalar carry: the same controller, one Python int | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 0.320 | **0.887** |
+| fixed decay: the same width, a constant gate | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 0.200 | **0.867** |
+| random action: tools and arguments uniform | 0.001 | 0.001 | 0.004 | 0.005 | 0.006 | 0.005 | **0.003** |
 
-The budget-1 slice of the agent is the one-step control: **0.200** solved over all 250 tasks. Only the `literal` family, whose answer is written in the task text, is reachable in a single decision — so the suite is not one call deep.
+The budget-1 slice of the agent is the one-step control: **0.167** solved over all 300 tasks. Only the `literal` family, whose answer is written in the task text, is reachable in a single decision — so the suite is not one call deep.
 
 **Where the first version's residual bit.** Of the 50 `branch` tasks, 8 arrive at the `IFPOS` decision (step 2) carrying exactly 0 — the value a write residual turns positive. Those are exactly the tasks the `A = -50` register got wrong, and the last column below is the fix.
 
@@ -797,6 +799,64 @@ The budget-1 slice of the agent is the one-step control: **0.200** solved over a
 | 2 | MUL 5 | 4 / 5 / 7 / 2 | `mul(a=7, b=5)` | 35 |
 | 3 | KEY | 6 / 0 / 35 / 3 | `lookup(value=35)` | 7 |
 | 4 | RET | 1 / 0 / 7 / 4 | `finish(answer=7)` | 7 |
+
+### Selective memory: retention that depends on the input
+
+**What this family asks.** 3 events carry a value tagged with a key, 2 carry a value tagged with nothing, and the events arrive in a shuffled order; then a query asks for the value of one of the keys, drawn uniformly. The answer is a dict lookup inside `evaluate_plan`, computed in Python integers — the target never consults the memory, which is what makes it ground truth rather than a restatement. What makes the family *selective* rather than merely multi-step is that retention depends on the event: a keyed event is written to the slot its key addresses and a distractor is written nowhere, so which events survive, and where they land, is a property of the input and not of the position. The memory is 4 slots addressed by `key % width`, appended to the same eight named registers the arithmetic families use and run through the same recurrence, so the state is 12 registers wide.
+
+**Controls on the selective family, at budget 6** — the same controller with a different memory, on the same 50 tasks. The `fixed decay` and `scalar carry` rows are what decide what the architecture is worth.
+
+| condition | selective | what the memory is |
+|---|---:|---|
+| the agent, memory = the gated SSM state | **1.000** | 4 slots, written by the key of the event |
+| fixed decay: the same width, a constant gate | 0.200 | the same slots, every value-carrying event written to every one |
+| scalar carry: one Python int | 0.320 | the last keyed value seen; distractors do not move it |
+| no memory: the state is wiped before each decision | 0.000 | nothing survives a step |
+| random action: tools and arguments uniform | 0.005 | the floor |
+
+The scalar's failure is exact rather than statistical. It holds the last keyed value it saw, so it must be right precisely when the queried key is the one the last `PUT` named, and wrong otherwise: **16 of 50** tasks solved against **16** tasks whose query named the last store, with the predicted set matching the solved set on **50 of 50** tasks. A rate below 1.000 on its own would be consistent with a merely harder task; the correspondence is what says a second register is what was missing.
+
+**State width** — the same tasks read by a memory of 0, 1, 2, 3, 4, 8 slots. The eight named registers are always present, so the state is that much wider again; "slots" is the column that matters. A one-slot state aliases every key onto slot 0, which is why its column is the scalar's.
+
+| memory slots | total state width | agent | scalar | fixed decay | no memory |
+|---:|---:|---:|---:|---:|---:|
+| 0 | 8 | 0.000 | 0.320 | 0.000 | 0.000 |
+| 1 | 9 | 0.320 | 0.320 | 0.200 | 0.000 |
+| 2 | 10 | 0.700 | 0.320 | 0.200 | 0.000 |
+| 3 | 11 | 0.800 | 0.320 | 0.200 | 0.000 |
+| 4 | 12 | 1.000 | 0.320 | 0.200 | 0.000 |
+| 8 | 16 | 1.000 | 0.320 | 0.200 | 0.000 |
+
+The family starts to solve at **4 memory slots** on this key space of 4 keys, and the curve between zero and there is the honest capacity statement rather than a cliff: a narrow state does not fail, it aliases, and it is right exactly when no two keys in the stream collide.
+
+**Distractor rate** — the same shape with more of the stream discarded, every point its own task set and its own budget. At zero distractors the fixed-decay state *is* the scalar (0.340 against 0.340, and the experiment asserts the per-task agreement). The distractors are what the gate is for.
+
+| distractor share | agent | scalar | fixed decay | no memory |
+|---:|---:|---:|---:|---:|
+| 0.000 | 1.000 | 0.340 | 0.340 | 0.000 |
+| 0.250 | 1.000 | 0.320 | 0.280 | 0.000 |
+| 0.400 | 1.000 | 0.320 | 0.200 | 0.000 |
+| 0.571 | 1.000 | 0.360 | 0.140 | 0.000 |
+| 0.667 | 1.000 | 0.440 | 0.120 | 0.000 |
+| 0.727 | 1.000 | 0.320 | 0.100 | 0.000 |
+
+**The published selective trace** — `note that key 1 holds 40, then ignore 70, then note that key 3 holds 60, then note that key 2 holds 90, then report the value of key 3`, answer `60`, 5 steps, stop reason `finish`, solved `True`. The `slots` column is the whole memory at that step: three keyed values held at once, and the distractor in no slot.
+
+| step | instruction | reads: op / arg / slots | action | result |
+|---:|---|---|---|---:|
+| 0 | PUT 1 | 8 / 1 / [0, 40, 0, 0] | `add(a=0, b=0)` | 0 |
+| 1 | NOISE 70 | 9 / 70 / [0, 40, 0, 0] | `add(a=0, b=0)` | 0 |
+| 2 | PUT 3 | 8 / 3 / [0, 40, 0, 60] | `add(a=0, b=0)` | 0 |
+| 3 | PUT 2 | 8 / 2 / [0, 40, 90, 60] | `add(a=0, b=0)` | 0 |
+| 4 | RECALL 3 | 10 / 3 / [0, 40, 90, 60] | `finish(answer=60)` | 60 |
+
+Three claims this table makes easy, and that are false:
+
+* *"The architecture is what makes the agent work."* On the 5 arithmetic families the scalar carry still reproduces the agent row for row, and the recurrence earns nothing there. On `selective` the gated state reaches **1.000** where the scalar reaches **0.320** and a fixed-decay state of the *same width* reaches **0.200** — so what is doing the work is the input-dependent gate, and the width alone is not enough. That gate is **hand-set**, in `embed`: it is not learned, it is not produced by a projection, and a Python dict in `evaluate_plan` computes the same answers with no model at all. What is established is narrower than the claim: *this* hand-designed gate, at *this* width, on *this* family, does something a scalar and a constant gate do not.
+
+* *"The state is doing something a scalar cannot."* True on this family, and it rests on one design decision: the query key is drawn uniformly from the stored keys, so one register is insufficient on most tasks. It is not a general statement about state-space models — a scalar with a Python dict beside it would tie the agent exactly, and no task here requires more than the four slots the family declares.
+
+* *"This generalises."* It does not. The family is closed and synthetic: a fixed grammar, a shuffled event stream, a bounded key space, and an answer computed by a dict. Nothing is trained — no gradient anywhere in this path — the controller is hand-written branching, and the gate is set by hand. The clearest evidence that the *selectivity* rather than the capacity is what this family measures is the fixed-decay row of the width table: it scores 0.200 at 1 slot and 0.200 at 8 slots, so widening it changes nothing, while the gated state at the same 8 slots reaches 1.000. The part of the model this repository has never learned is the part that decides what to write.
 <!-- AGENT:END -->
 
 ### What the numbers say, including the unflattering parts
@@ -807,12 +867,17 @@ The budget-1 slice of the agent is the one-step control: **0.200** solved over a
   whose answer is written in the task text — stays at 1.000. The contrast is the
   measurement: a control that failed everything would only show the loop was
   broken, and one that passed everything would be evidence for nothing.
-* **The state-space state is not what earns it.** `scalar carry` reproduces the
-  agent's row exactly: 1.000 in every family, the same calls in the same order.
-  The recurrent state is a faithful and tested way to hold the carried value, and
-  it is not the source of the capability. This is the one place in the repository
-  where the control falsifies the increment's own most flattering reading, so it
-  is published as a row rather than as a caveat.
+* **Where the state-space state earns it, and where it does not.** On the five
+  arithmetic families `scalar carry` reproduces the agent's row exactly — 1.000,
+  the same calls in the same order — so there the recurrent state is a faithful
+  and tested way to hold the carried value and is *not* the source of the
+  capability. On the `selective` family, where what must be retained depends on
+  the input rather than on position, that changes: the gated state reaches
+  **1.000** while a scalar carry manages **0.320** and a fixed, input-independent
+  decay reaches **0.200**. The fixed-decay control is what makes that readable,
+  because it rules out the boring explanation that the state merely has to be
+  wide enough. Both halves are published as rows, since a control that flatters
+  the increment and one that falsifies it are the same kind of evidence.
 * **The budget curve is a ceiling, and mostly arithmetic.** Each family needs a
   known number of decisions (`literal` 1 through `lookup` 5), so the staircase is
   what the step counts predict rather than a discovery. It is still worth

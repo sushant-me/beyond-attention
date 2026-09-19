@@ -32,21 +32,41 @@ and there is no gradient anywhere in this path. ``tests/test_agent.py`` checks t
 recurrence against the repository's own ``selective_scan`` on the same inputs, so
 "this is the SSM's recurrence" is a check rather than a claim.
 
+The register file is not only a carry. ``selective`` is a second kind of task
+family: a stream of events, some of them a value tagged with a key and some of
+them distractors, followed by a query for the value of one key. A tagged event
+is written to the memory slot its key addresses and a distractor is written
+nowhere, so **whether an event is retained, and where it lands, is decided by
+the event's own content** rather than by its position -- which is what the
+model's learned gate exists to do, and here is set by hand. The memory is
+``state_width`` slots appended to the same eight registers, and a slot is
+addressed by ``key % state_width``, so the family has a capacity that can be
+swept rather than asserted.
+
 What it is **not**, stated here rather than left to be discovered:
 
 * **It is not a general agent.** The task text is a closed instruction grammar
-  (``ADD``/``MUL``/``SUB``/``KEY``/``IFPOS``/``RET``) delivered as structured
-  events, not natural language. There is no tokenizer, no language
-  understanding, and no open-ended tool use: the tool set is five functions
-  fixed at import time.
+  (``ADD``/``MUL``/``SUB``/``KEY``/``IFPOS``/``RET``, plus ``PUT``/``NOISE``/
+  ``RECALL`` for the selective family) delivered as structured events, not
+  natural language. There is no tokenizer, no language understanding, and no
+  open-ended tool use: the tool set is five functions fixed at import time.
 * **It does not learn.** The policy is hand-written branching, the SSM
   parameters are constants, and a seed only decides which tasks get generated.
-* **The SSM is not what makes it work.** ``experiments/agent_loop.py`` runs the
-  same controller with the carried value held in one Python int and solves the
-  same tasks, and it runs a no-memory control that collapses on every task whose
-  answer is an intermediate result while still solving the ones whose answer is
-  written in the task text. The recurrence carries the value; it is not the
-  source of the capability, and both controls are published rather than one.
+* **The SSM is not what makes the arithmetic families work.**
+  ``experiments/agent_loop.py`` runs the same controller with the carried value
+  held in one Python int and solves the same tasks, and it runs a no-memory
+  control that collapses on every task whose answer is an intermediate result
+  while still solving the ones whose answer is written in the task text. The
+  recurrence carries the value; it is not the source of the capability.
+* **The selective family is where the state earns something measurable, and
+  that is a narrow statement.** One scalar register cannot hold two keyed values
+  at once, so the scalar-carry control solves the selective family only on the
+  tasks whose queried key happens to be the last one stored, and nothing else. A
+  *wide but non-selective* state -- constant decay, every event written to every
+  slot -- fails with it. Both rows are published, because the second is what
+  says the gating (rather than the width) is doing the work. Neither says the
+  architecture is what makes the loop work: the gate is hand-set, the controller
+  is hand-written, and the family is closed and synthetic.
 * **The tools cannot touch anything.** No network, no filesystem, no clock. A
   test parses this module's imports and asserts that ``numpy`` is the only one.
 
@@ -81,6 +101,14 @@ REGISTER_NAMES = (
     "carry", "observations", "op", "arg", "arg2", "miss", "kind", "instructions",
 )
 
+# The selective family's memory starts here: ``state_width`` value slots are
+# appended after the eight named registers, so a state's width is
+# ``AGENT_DIM + state_width`` and ``state_width = 0`` is exactly the register
+# file the arithmetic families use. A slot is addressed by
+# ``key % state_width``, which is why a narrower state degrades smoothly into
+# aliasing rather than failing outright.
+R_SLOT_BASE = AGENT_DIM
+
 # `A` is stored negated, as the rest of the repository stores it, so that
 # `a_t = exp(delta_t * A)`. Two values are used:
 #
@@ -104,6 +132,20 @@ A_DIAG = np.array(
     dtype=np.float64,
 )
 
+# The decay vector for a state of a given total width. Every memory slot uses
+# A_HOLD, so a slot is written exactly or not at all. Built rather than cached
+# because these states are a few dozen floats wide and a cache is a second place
+# for the layout to be wrong.
+def decay_vector(width: int) -> np.ndarray:
+    """The ``A`` diagonal for a state ``width`` registers wide."""
+    if width < AGENT_DIM:
+        raise ValueError(f"a state is at least {AGENT_DIM} registers wide, not {width}")
+    if width == AGENT_DIM:
+        return A_DIAG
+    return np.concatenate(
+        [A_DIAG, np.full(width - AGENT_DIM, A_HOLD, dtype=np.float64)]
+    )
+
 DELTA_HOLD = 0.0
 DELTA_WRITE = 1.0
 
@@ -125,6 +167,9 @@ OP_KEY = "KEY"        # acc = the key whose value equals acc
 OP_IFPOS = "IFPOS"    # acc = acc * arg if acc > 0 else acc + arg
 OP_RET = "RET"        # finish with the carried value
 OP_RETLIT = "RETLIT"  # finish with the literal operand (the one-step family)
+OP_PUT = "PUT"        # write arg2 into the memory slot addressed by arg
+OP_NOISE = "NOISE"    # a distractor: carries a value and is written nowhere
+OP_RECALL = "RECALL"  # finish with the value the slot addressed by arg holds
 
 OP_CODES = {
     OP_RET: 1,
@@ -134,9 +179,17 @@ OP_CODES = {
     OP_SUB: 5,
     OP_KEY: 6,
     OP_IFPOS: 7,
+    OP_PUT: 8,
+    OP_NOISE: 9,
+    OP_RECALL: 10,
 }
 CODE_OPS = {code: op for op, code in OP_CODES.items()}
 NONE_CODE = 0  # nothing has been streamed into R_OP yet
+
+# Instructions that carry a value into the memory. The fixed-decay control is
+# exactly the statement that this distinction is *not* available to it: see
+# ``embed``.
+VALUE_INSTRUCTIONS = (OP_PUT, OP_NOISE)
 
 
 @dataclass(frozen=True)
@@ -157,7 +210,8 @@ def instruction(op: str, *args: int) -> Instruction:
     if op not in OP_CODES:
         raise ValueError(f"unknown instruction {op!r}")
     arity = {OP_ADD: 1, OP_MUL: 1, OP_SUB: 1, OP_KEY: 0, OP_IFPOS: 1,
-             OP_RET: 0, OP_RETLIT: 1}[op]
+             OP_RET: 0, OP_RETLIT: 1,
+             OP_PUT: 2, OP_NOISE: 1, OP_RECALL: 1}[op]
     if len(args) != arity:
         raise ValueError(f"{op} takes {arity} operand(s), got {len(args)}")
     return Instruction(op=op, args=tuple(int(a) for a in args))
@@ -294,21 +348,28 @@ def execute(call: ToolCall, table: ToolTable = ()) -> ToolResult:
 # The recurrence. This is the memory.
 # --------------------------------------------------------------------------
 
-def new_state() -> np.ndarray:
-    """A zeroed state. The only allocation; streaming reuses the array shape."""
-    return np.zeros(AGENT_DIM, dtype=np.float64)
+def new_state(state_width: int = 0) -> np.ndarray:
+    """A zeroed state: ``AGENT_DIM`` registers plus ``state_width`` memory slots.
+
+    ``state_width = 0`` is the register file the arithmetic families use, and is
+    what every caller got before the selective family existed.
+    """
+    if state_width < 0:
+        raise ValueError("state_width must be >= 0")
+    return np.zeros(AGENT_DIM + state_width, dtype=np.float64)
 
 
 def stream_step(state: np.ndarray, x: np.ndarray, delta: np.ndarray) -> np.ndarray:
     """One timestep: ``h = exp(delta * A) * h + delta * x``.
 
-    ``x`` and ``delta`` are both AGENT_DIM wide, because the gate is per
+    ``x`` and ``delta`` are as wide as ``state``, because the gate is per
     register: an observation writes the carry without disturbing the
-    instruction, and an instruction writes the instruction without disturbing
-    the carry. That is the selective part, and here it is hand-set rather than
-    produced by a projection.
+    instruction, an instruction writes the instruction without disturbing the
+    carry, and a selective event writes the one memory slot its key addresses
+    without disturbing any other. That is the selective part, and here it is
+    hand-set rather than produced by a projection.
     """
-    a = np.exp(delta * A_DIAG)
+    a = np.exp(delta * decay_vector(state.shape[0]))
     return a * state + delta * x
 
 
@@ -316,11 +377,11 @@ def scan_states(x: np.ndarray, delta: np.ndarray,
                 state: np.ndarray | None = None) -> np.ndarray:
     """The recurrence over a whole sequence, returning the state at each step.
 
-    ``x`` and ``delta`` are ``(L, AGENT_DIM)``. The returned array is
-    ``(L, AGENT_DIM)``: row ``t`` is the state *after* consuming token ``t``,
-    which is what a decision at that point observes.
+    ``x`` and ``delta`` are ``(L, width)``. The returned array is
+    ``(L, width)``: row ``t`` is the state *after* consuming token ``t``, which
+    is what a decision at that point observes.
     """
-    h = new_state() if state is None else state
+    h = np.zeros(x.shape[1], dtype=np.float64) if state is None else state
     out = np.empty_like(x)
     for t in range(x.shape[0]):
         h = stream_step(h, x[t], delta[t])
@@ -337,13 +398,14 @@ def bridge_to_selective_scan(
     so the readout ``y_t = sum_n C_t[n] h_t[d, n]`` is exactly ``h_t[d, 0]``.
     ``tests/test_agent.py`` runs the repository's ``selective_scan`` on this
     dict and asserts it reproduces ``scan_states`` above -- which is what makes
-    "the memory is the SSM's recurrence" a measurement.
+    "the memory is the SSM's recurrence" a measurement, for a state of any
+    width.
     """
-    length = x.shape[0]
+    length, width = x.shape
     return {
-        "x": x.reshape(1, length, AGENT_DIM),
-        "delta": delta.reshape(1, length, AGENT_DIM),
-        "A": A_DIAG.reshape(AGENT_DIM, 1),
+        "x": x.reshape(1, length, width),
+        "delta": delta.reshape(1, length, width),
+        "A": decay_vector(width).reshape(width, 1),
         "B": np.ones((1, length, 1)),
         "C": np.ones((1, length, 1)),
     }
@@ -381,15 +443,42 @@ def observation_event(result: ToolResult) -> Event:
     return Event(kind="observation", result=result)
 
 
-def embed(event: Event) -> tuple[np.ndarray, np.ndarray]:
+def embed(event: Event, state_width: int = 0,
+          fixed_gate: bool = False) -> tuple[np.ndarray, np.ndarray]:
     """Map an event to the ``(x, delta)`` pair the recurrence consumes.
 
     An action embeds to ``(zeros, zeros)``: it is in the transcript and in no
     register. An instruction writes only the instruction registers, an
     observation only the memory registers.
+
+    ``state_width`` appends that many value slots to the state, and the three
+    selective instructions use them:
+
+    * ``PUT`` writes its value into the slot its key addresses and leaves every
+      other slot holding -- the gate is computed from the event's content, so
+      *which* slot is written is a property of the input;
+    * ``NOISE`` carries a value and writes no slot at all, so a distractor is
+      discarded rather than stored;
+    * ``RECALL`` writes nothing; it is a question, not an event.
+
+    The value is deliberately *not* also written to a named register: the only
+    place it exists after a ``PUT`` is the slot, which is what makes the memory
+    load-bearing rather than decorative.
+
+    ``fixed_gate`` is the control. It replaces that gate with a constant: **every
+    event that carries a value writes that value into every slot**, with the same
+    write, so which event arrived and which key it named cannot matter. That is
+    what "a state with a constant, input-independent decay" means here, and it
+    is the control that separates the architecture from a merely wide memory.
+    The instruction registers are not memory -- they are the current input, and a
+    constant gate there would stop the loop from knowing what it was asked to do
+    -- so they are left alone.
     """
-    x = np.zeros(AGENT_DIM, dtype=np.float64)
-    delta = np.zeros(AGENT_DIM, dtype=np.float64)
+    if state_width < 0:
+        raise ValueError("state_width must be >= 0")
+    width = AGENT_DIM + state_width
+    x = np.zeros(width, dtype=np.float64)
+    delta = np.zeros(width, dtype=np.float64)
 
     if event.kind == "instruction":
         assert event.instruction is not None
@@ -408,6 +497,22 @@ def embed(event: Event) -> tuple[np.ndarray, np.ndarray]:
         delta[R_ARG2] = DELTA_WRITE
         x[R_INDEX] = 1.0
         delta[R_INDEX] = DELTA_WRITE
+
+        if state_width > 0 and instr.op in VALUE_INSTRUCTIONS:
+            value = float(instr.args[1] if instr.op == OP_PUT else instr.args[0])
+            if fixed_gate:
+                # Constant gate: no addressing, no retain/discard decision.
+                x[R_SLOT_BASE:] = value
+                delta[R_SLOT_BASE:] = DELTA_WRITE
+            elif instr.op == OP_PUT:
+                address = instr.args[0] % state_width
+                x[R_SLOT_BASE + address] = value
+                delta[R_SLOT_BASE + address] = DELTA_WRITE
+            # OP_NOISE under the selective gate: no slot is written, so the
+            # default delta of zero leaves every slot bit-for-bit unchanged.
+            if instr.op == OP_PUT:
+                # The value lives in the memory, not in a named register.
+                x[R_ARG2] = 0.0
     elif event.kind == "observation":
         assert event.result is not None
         result = event.result
@@ -427,10 +532,12 @@ def embed(event: Event) -> tuple[np.ndarray, np.ndarray]:
     return x, delta
 
 
-def embed_all(events: Sequence[Event]) -> tuple[np.ndarray, np.ndarray]:
+def embed_all(events: Sequence[Event], state_width: int = 0,
+              fixed_gate: bool = False) -> tuple[np.ndarray, np.ndarray]:
     if not events:
-        return np.zeros((0, AGENT_DIM)), np.zeros((0, AGENT_DIM))
-    pairs = [embed(e) for e in events]
+        return (np.zeros((0, AGENT_DIM + state_width)),
+                np.zeros((0, AGENT_DIM + state_width)))
+    pairs = [embed(e, state_width, fixed_gate) for e in events]
     return (
         np.stack([p[0] for p in pairs]),
         np.stack([p[1] for p in pairs]),
@@ -443,7 +550,12 @@ def embed_all(events: Sequence[Event]) -> tuple[np.ndarray, np.ndarray]:
 
 @dataclass(frozen=True)
 class Registers:
-    """The state, decoded. Every field is a register the recurrence wrote."""
+    """The state, decoded. Every field is a register the recurrence wrote.
+
+    ``slots`` holds the selective family's memory, in slot order, and is empty
+    for a state with no memory slots. It is a tuple rather than an array so that
+    a decoded readout is hashable and cannot be mutated underneath a decision.
+    """
 
     carry: float
     observations: int
@@ -453,6 +565,7 @@ class Registers:
     miss: bool
     kind: int
     instructions: int
+    slots: tuple[float, ...] = ()
 
 
 def read_registers(state: np.ndarray) -> Registers:
@@ -474,7 +587,21 @@ def read_registers(state: np.ndarray) -> Registers:
         miss=bool(round(state[R_MISS])),
         kind=int(round(state[R_KIND])),
         instructions=int(round(state[R_INDEX])),
+        slots=tuple(float(v) for v in state[R_SLOT_BASE:]),
     )
+
+
+def slot_value(registers: Registers, key: int) -> int:
+    """The value the memory holds under ``key``, or 0 if there is no memory.
+
+    A state with no slots cannot hold a keyed value, and reporting 0 is the
+    honest reading of that -- the same choice ``carried_value`` makes for a
+    state that has seen no result. No task's answer is 0, so this default cannot
+    accidentally be right.
+    """
+    if not registers.slots:
+        return 0
+    return int(round(registers.slots[key % len(registers.slots)]))
 
 
 def carried_value(registers: Registers) -> int:
@@ -490,6 +617,13 @@ def carried_value(registers: Registers) -> int:
     return int(round(registers.carry))
 
 
+# The action at an event step. A ``PUT`` and a ``NOISE`` are already in the
+# state by the time the policy is asked, so there is nothing to call; this is a
+# well-formed, pure, harmless call rather than a new tool, which keeps the tool
+# registry at the five functions the rest of the repository documents.
+NOOP_CALL = ToolCall("add", {"a": 0, "b": 0})
+
+
 def choose_action(registers: Registers) -> ToolCall:
     """The hand-designed controller. A pure function of the decoded state.
 
@@ -497,6 +631,15 @@ def choose_action(registers: Registers) -> ToolCall:
     the action is determined. ``tests/test_agent.py`` asserts that, and asserts
     that the branch instruction really does depend on the state by flipping the
     sign of the carry and requiring the tool to change.
+
+    Two instructions read the *memory* rather than the task text. ``RECALL``
+    finishes with the value the slot addressed by its key holds -- the key comes
+    from the instruction, the value only from the state, which is what makes the
+    selective family a memory test. ``PUT`` and ``NOISE`` have nothing to do:
+    the event has already been streamed into the state, so the agent
+    acknowledges with an arithmetic no-op. The value is never in the task text
+    read by the policy, and it is not in a named register either -- see
+    ``embed``.
     """
     op = CODE_OPS.get(registers.op_code)
     if op is None:
@@ -524,6 +667,10 @@ def choose_action(registers: Registers) -> ToolCall:
         if registers.carry > 0:
             return ToolCall("mul", {"a": carry, "b": arg})
         return ToolCall("add", {"a": carry, "b": arg})
+    if op == OP_RECALL:
+        return ToolCall("finish", {"answer": slot_value(registers, arg)})
+    if op in VALUE_INSTRUCTIONS:
+        return NOOP_CALL
     raise AssertionError(f"unhandled op {op!r}")  # pragma: no cover
 
 
@@ -580,8 +727,14 @@ def evaluate_plan(plan: Sequence[Instruction],
     a separate, slower piece of code from the loop: ``run_agent`` decides when to
     stop and what to call, and this decides what the answer is. They share the
     instruction *names* and nothing else.
+
+    For the selective family the memory here is a Python dict, so the answer is
+    what a correct reader of the event stream would report regardless of how the
+    event stream is implemented -- the state-space memory is not consulted, and
+    a bug in it cannot move the target.
     """
     acc = 0
+    memory: dict[int, int] = {}
     for instr in plan:
         if instr.op == OP_ADD:
             acc = acc + instr.args[0]
@@ -596,6 +749,16 @@ def evaluate_plan(plan: Sequence[Instruction],
             if len(found) != 1:
                 raise ValueError(f"table has {len(found)} keys with value {acc}")
             acc = found[0]
+        elif instr.op == OP_PUT:
+            key, value = instr.args
+            memory[key] = value
+        elif instr.op == OP_NOISE:
+            pass  # a distractor changes nothing, by definition
+        elif instr.op == OP_RECALL:
+            key = instr.args[0]
+            if key not in memory:
+                raise ValueError(f"nothing was stored under key {key}")
+            return memory[key]
         elif instr.op == OP_RETLIT:
             return instr.args[0]
         elif instr.op == OP_RET:
@@ -627,6 +790,12 @@ def task_text(plan: Sequence[Instruction]) -> str:
             )
         elif instr.op == OP_KEY:
             parts.append("report the key whose value equals the result")
+        elif instr.op == OP_PUT:
+            parts.append(f"note that key {instr.args[0]} holds {instr.args[1]}")
+        elif instr.op == OP_NOISE:
+            parts.append(f"ignore {instr.args[0]}")
+        elif instr.op == OP_RECALL:
+            parts.append(f"report the value of key {instr.args[0]}")
         elif instr.op == OP_RETLIT:
             parts.append(f"report {instr.args[0]}")
         elif instr.op == OP_RET:
@@ -637,15 +806,96 @@ def task_text(plan: Sequence[Instruction]) -> str:
 # The families, and how many loop steps each one needs. A task is solved within
 # a budget exactly when its family's step count fits inside it, which is what
 # makes the budget curve a ceiling rather than a mystery.
+#
+# The selective family's shape is fixed here -- three keyed events, two
+# distractors, then the query -- because the budget table needs one step count
+# per family. The experiment sweeps the shape separately, through
+# ``selective_suite``, and that sweep is where the distractor and state-width
+# questions are answered.
+SELECTIVE_STORES = 3
+SELECTIVE_DISTRACTORS = 2
+SELECTIVE_KEYS = 4
+SELECTIVE_WIDTH = 4
+
 STEP_COUNTS = {
     "literal": 1,   # RETLIT v          -- the answer is written in the task
     "one_op": 2,    # ADD a, RET
     "two_op": 3,    # MUL a, SUB b, RET
     "branch": 4,    # ADD a, SUB c, IFPOS b, RET
     "lookup": 5,    # ADD a, MUL b, SUB c, KEY, RET
+    # PUT/NOISE events (in a shuffled order), then RECALL. Every event is a loop
+    # step, so the budget has to cover the whole stream before the question.
+    "selective": SELECTIVE_STORES + SELECTIVE_DISTRACTORS + 1,
 }
 FAMILIES = tuple(STEP_COUNTS)
 CARRY_FAMILIES = tuple(f for f in FAMILIES if STEP_COUNTS[f] > 1)
+
+
+def _build_selective(rng: np.random.Generator, task_id: str, n_store: int,
+                     n_distractors: int, n_keys: int) -> Task:
+    """One selective task: keyed events, distractors, and a query for one key.
+
+    Four properties, each of which a control depends on:
+
+    * **Store keys are distinct and drawn from ``0 .. n_keys - 1``**, which is
+      the state's address space. A state at least ``n_keys`` slots wide has no
+      aliasing; a narrower one aliases, which is what makes the width sweep a
+      capacity curve rather than a cliff.
+    * **Every value in the plan is distinct and nonzero** -- stored or
+      distractor. A control that happens to hold *some* value therefore cannot
+      score by coincidence, and no answer is 0.
+    * **The queried key is one of the stored keys, drawn uniformly.** The task
+      does not prefer the last store, the way a single register would.
+    * **The events are shuffled.** Retention is a property of an event's content
+      -- is it keyed, and which key -- rather than of its position in the
+      stream, so a controller cannot do better by counting steps.
+    """
+    if not 1 <= n_store <= n_keys:
+        raise ValueError(f"need 1 <= n_store <= n_keys, got {n_store}, {n_keys}")
+    if n_distractors < 0:
+        raise ValueError("n_distractors must be >= 0")
+
+    keys = [int(k) for k in rng.permutation(n_keys)[:n_store]]
+    pool = rng.permutation(np.arange(1, 2 * (n_store + n_distractors) + 1))
+    values = [int(v) for v in pool[:n_store + n_distractors]]
+
+    events = [instruction(OP_PUT, key, value)
+              for key, value in zip(keys, values[:n_store])]
+    events += [instruction(OP_NOISE, value) for value in values[n_store:]]
+    order = [int(i) for i in rng.permutation(len(events))]
+    query = keys[int(rng.integers(n_store))]
+
+    plan = tuple(events[i] for i in order) + (instruction(OP_RECALL, query),)
+    return Task(
+        task_id=task_id,
+        family="selective",
+        plan=plan,
+        table=(),
+        answer=evaluate_plan(plan, ()),
+        text=task_text(plan),
+    )
+
+
+def selective_suite(tasks_per_family: int = 50, seed: int = 0,
+                    n_store: int = SELECTIVE_STORES,
+                    n_distractors: int = SELECTIVE_DISTRACTORS,
+                    n_keys: int = SELECTIVE_KEYS) -> tuple[Task, ...]:
+    """The selective family alone, with its shape exposed for the sweeps.
+
+    ``task_suite`` builds its ``selective`` family through this function with
+    the default shape, so the main table and the sweeps cannot drift apart. The
+    per-task seeds match ``task_suite``'s, so ``selective-7`` is the same task
+    in both.
+    """
+    if tasks_per_family < 1:
+        raise ValueError("tasks_per_family must be >= 1")
+    return tuple(
+        _build_selective(
+            np.random.default_rng((seed * 1_000_003) + index * 97),
+            f"selective-{index}", n_store, n_distractors, n_keys,
+        )
+        for index in range(tasks_per_family)
+    )
 
 
 def _build_task(family: str, rng: np.random.Generator, task_id: str) -> Task:
@@ -656,6 +906,10 @@ def _build_task(family: str, rng: np.random.Generator, task_id: str) -> Task:
     state's readout is a float, and a task whose answer needed 60 bits would be
     testing the tolerance rather than the mechanism.
     """
+    if family == "selective":
+        return _build_selective(rng, task_id, SELECTIVE_STORES,
+                                SELECTIVE_DISTRACTORS, SELECTIVE_KEYS)
+
     operands = [int(v) for v in rng.integers(2, 10, size=4)]
     table: tuple[tuple[int, int], ...] = ()
 
@@ -719,6 +973,11 @@ def task_suite(tasks_per_family: int = 50, seed: int = 0) -> tuple[Task, ...]:
         raise ValueError("tasks_per_family must be >= 1")
     tasks: list[Task] = []
     for family in FAMILIES:
+        if family == "selective":
+            # Built by the same function the sweeps use, so the main table and
+            # the width/distractor sweeps are measuring the same tasks.
+            tasks.extend(selective_suite(tasks_per_family, seed))
+            continue
         made = 0
         attempt = 0
         while made < tasks_per_family:
@@ -759,6 +1018,33 @@ def example_task() -> Task:
     )
 
 
+def selective_example_task() -> Task:
+    """The selective task the README quotes, with a hand-checkable answer.
+
+    Three keyed events and one distractor arrive, then the query asks for key 3.
+    The answers are written out by hand: key 1 holds 40, key 3 holds 60, key 2
+    holds 90, and 70 was a distractor. So the answer is **60**, and both controls
+    would answer **90** -- the scalar because 90 was the last keyed value, and
+    the fixed-decay state because 90 was the last value of any kind. Four slots
+    hold all three values at once, which is the whole point of the family.
+    """
+    plan = (
+        instruction(OP_PUT, 1, 40),
+        instruction(OP_NOISE, 70),
+        instruction(OP_PUT, 3, 60),
+        instruction(OP_PUT, 2, 90),
+        instruction(OP_RECALL, 3),
+    )
+    return Task(
+        task_id="selective-example",
+        family="selective",
+        plan=plan,
+        table=(),
+        answer=evaluate_plan(plan, ()),
+        text=task_text(plan),
+    )
+
+
 # --------------------------------------------------------------------------
 # The loop.
 # --------------------------------------------------------------------------
@@ -795,38 +1081,78 @@ class AgentRun:
 Policy = Callable[[Registers], ToolCall]
 
 
+def required_state_width(task: Task) -> int:
+    """The narrowest state that can hold this task's key space without aliasing.
+
+    Every key a plan stores or asks for is an address, and a slot is
+    ``key % state_width``; a state one slot wider than the largest key aliases
+    nothing. Arithmetic plans name no keys, so this is 0 for them and the
+    register file is exactly the eight named registers. It is the default width
+    ``run_agent`` uses, so a selective task is never silently run with no memory
+    -- the width sweep passes an explicit width to override it and measure the
+    aliasing.
+    """
+    keys = [instr.args[0] for instr in task.plan
+            if instr.op in (OP_PUT, OP_RECALL)]
+    return max(keys) + 1 if keys else 0
+
+
 def run_agent(
     task: Task,
     budget: int = 6,
     memory: str = "ssm",
     policy: str | Policy = "plan",
     seed: int = 0,
+    state_width: int | None = None,
 ) -> AgentRun:
     """Run the loop until ``finish`` or the budget runs out.
 
-    ``memory`` selects what carries the last result between decisions:
+    ``memory`` selects what carries the values between decisions:
 
     * ``"ssm"`` -- the selective-scan state implemented above, which is the
       subject of the measurement;
-    * ``"scalar"`` -- one Python int, updated by the same rule. This is the
-      control for "is the recurrence doing anything the carry is not";
+    * ``"scalar"`` -- one Python int standing in for the whole value memory. For
+      the arithmetic families it holds the last observation; for the selective
+      family it holds the last keyed event's value. It is deliberately the
+      *charitable* scalar: it is allowed the retain/discard decision for free --
+      a distractor does not move it -- and fails only because one register
+      cannot hold two keys' values at once. This is the control for "is the
+      recurrence doing anything the carry is not".
+    * ``"fixed"`` -- the same width of memory as ``"ssm"`` with a constant,
+      input-independent write gate: every value-carrying event is written into
+      every slot. This is the control for "is it the gating or the width".
     * ``"none"`` -- wiped before every decision, with only the current
       instruction re-streamed. This is the control for "does carrying the value
       matter at all": the instruction registers refill from the task text, so
       the agent still knows which tool to reach for, and only the carried result
       is gone.
 
+    ``state_width`` appends that many memory slots to the state. ``None``, the
+    default, sizes the memory to the task's own key space through
+    ``required_state_width`` -- so a selective task gets a state wide enough to
+    hold its keys and an arithmetic task gets the eight named registers -- and
+    an explicit width is how the experiment measures aliasing.
+
     ``policy`` is ``"plan"``, ``"random"``, ``"never"``, or any callable taking
     the decoded state and returning a (possibly malformed) call.
     """
     if budget < 1:
         raise ValueError("budget must be >= 1")
-    if memory not in ("ssm", "scalar", "none"):
+    if memory not in ("ssm", "scalar", "none", "fixed"):
         raise ValueError(f"unknown memory {memory!r}")
+    if state_width is None:
+        state_width = required_state_width(task)
+    if state_width < 0:
+        raise ValueError("state_width must be >= 0")
+
+    # A scalar *is* the memory, so it has no slots. Every other memory keeps the
+    # state's width, because "wiped" and "a fixed gate" are claims about the
+    # state that only mean anything if the state exists.
+    width = 0 if memory == "scalar" else state_width
 
     rng = np.random.default_rng(seed)
-    state = new_state()
-    carry: int | None = None  # used by memory="scalar" only
+    state = new_state(width)
+    scalar: int | None = None  # used by memory="scalar" only
 
     def act(regs: Registers) -> ToolCall:
         if callable(policy):
@@ -846,24 +1172,30 @@ def run_agent(
                             None, False, "plan_exhausted")
 
         instr = task.plan[index]
+        keyed = instr.op in VALUE_INSTRUCTIONS
+
+        if memory == "none":
+            state = new_state(width)  # forget everything, then re-read the task
+        x, delta = embed(instruction_event(instr), state_width=width,
+                         fixed_gate=(memory == "fixed"))
+        state = stream_step(state, x, delta)
 
         if memory == "scalar":
-            # Same controller, same instruction: only the substrate for the
-            # carried value differs.
-            x, delta = embed(instruction_event(instr))
-            state = stream_step(state, x, delta)
+            # The scalar is written exactly where the state's memory would be:
+            # by a keyed event for the selective family, and by an observation
+            # for the arithmetic ones. The no-op action at an event step returns
+            # 0 and must not overwrite what the event just stored.
+            if instr.op == OP_PUT:
+                scalar = instr.args[1]
             regs = read_registers(state)
             regs = Registers(
-                carry=float(carry) if carry is not None else 0.0,
-                observations=0 if carry is None else 1,
+                carry=float(scalar) if scalar is not None else 0.0,
+                observations=0 if scalar is None else 1,
                 op_code=regs.op_code, arg=regs.arg, arg2=regs.arg2,
                 miss=regs.miss, kind=regs.kind, instructions=regs.instructions,
+                slots=() if scalar is None else (float(scalar),),
             )
         else:
-            if memory == "none":
-                state = new_state()  # forget everything, then re-read the task
-            x, delta = embed(instruction_event(instr))
-            state = stream_step(state, x, delta)
             regs = read_registers(state)
 
         call = act(regs)
@@ -875,11 +1207,12 @@ def run_agent(
             return AgentRun(task.task_id, task.family, memory, budget,
                             tuple(steps), result.value, solved, "finish")
 
-        if memory == "ssm":
-            x, delta = embed(observation_event(result))
+        if memory in ("ssm", "fixed"):
+            x, delta = embed(observation_event(result), state_width=width,
+                             fixed_gate=(memory == "fixed"))
             state = stream_step(state, x, delta)
-        elif memory == "scalar":
-            carry = result.value if result.ok else None
+        elif memory == "scalar" and not keyed and instr.op != OP_RECALL:
+            scalar = result.value if result.ok else None
         # memory == "none": the observation is recorded in the trace and never
         # streamed, which is exactly what "wiped between steps" means here.
 
