@@ -647,6 +647,52 @@ Each descriptor on its own, same classifier:
 | bridge output | `(1, 198, 32)` | a front end that never reaches the model's `(B, L, D)` layout |
 <!-- VOICE:END -->
 
+<!-- AGENT:BEGIN -->
+**Seeded task suite** — 250 tasks (50 per family), seed 0. Each task is a plan over bounded integers plus a bounded key/value table, and its answer is computed in Python integers by `evaluate_plan`, so correctness is a property of the task. Tools: `add`, `mul`, `sub`, `lookup`, `finish`.
+
+The memory is a 8-wide selective-scan state with one named register per dimension: `carry`, `observations`, `op`, `arg`, `arg2`, `miss`, `kind`, `instructions`.
+
+| task family | loop steps needed | budget 1 | budget 2 | budget 3 | budget 4 | budget 5 | budget 6 |
+|---|---:|---:|---:|---:|---:|---:|---:|
+| literal | 1 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| one_op | 2 | 0.000 | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| two_op | 3 | 0.000 | 0.000 | 1.000 | 1.000 | 1.000 | 1.000 |
+| branch | 4 | 0.000 | 0.000 | 0.000 | 1.000 | 1.000 | 1.000 |
+| lookup | 5 | 0.000 | 0.000 | 0.000 | 0.000 | 1.000 | 1.000 |
+
+**Controls at budget 6** — per-family solve rate, with the agent's own row for comparison. "Overall" averages the 5 families.
+
+| condition | literal | one_op | two_op | branch | lookup | overall |
+|---|---:|---:|---:|---:|---:|---:|
+| the agent, memory = the SSM state | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
+| no memory: the state is wiped before each decision | 1.000 | 0.000 | 0.000 | 0.000 | 0.000 | **0.200** |
+| scalar carry: the same controller, one Python int | 1.000 | 1.000 | 1.000 | 1.000 | 1.000 | **1.000** |
+| random action: tools and arguments uniform | 0.001 | 0.001 | 0.004 | 0.005 | 0.006 | **0.003** |
+
+The budget-1 slice of the agent is the one-step control: **0.200** solved over all 250 tasks. Only the `literal` family, whose answer is written in the task text, is reachable in a single decision — so the suite is not one call deep.
+
+**Where the first version's residual bit.** Of the 50 `branch` tasks, 8 arrive at the `IFPOS` decision (step 2) carrying exactly 0 — the value a write residual turns positive. Those are exactly the tasks the `A = -50` register got wrong, and the last column below is the fix.
+
+**Register write exactness** — what a register holds after being written 9 and then 0, for four choices of the decay. A residual above zero is not a rounding detail: `IFPOS` branches on the sign of this number.
+
+| A | exp(A) | residual after overwriting | sign test holds |
+|---:|---:|---:|---|
+| -50 | 1.929e-22 | 1.736e-21 | no |
+| -400 | 1.915e-174 | 1.724e-173 | no |
+| -745 | 4.941e-324 | 4.447e-323 | no |
+| -800 | 0.000e+00 | 0.000e+00 | yes |
+
+**The published trace** — `add 3, then add 4, then multiply the result by 5, then report the key whose value equals the result, then report the result`, answer `7`, 5 steps, stop reason `finish`, solved `True`. "Reads" is the state the policy acted on, before the call.
+
+| step | instruction | reads: op / arg / carry / observations | action | result |
+|---:|---|---|---|---:|
+| 0 | ADD 3 | 3 / 3 / 0 / 0 | `add(a=0, b=3)` | 3 |
+| 1 | ADD 4 | 3 / 4 / 3 / 1 | `add(a=3, b=4)` | 7 |
+| 2 | MUL 5 | 4 / 5 / 7 / 2 | `mul(a=7, b=5)` | 35 |
+| 3 | KEY | 6 / 0 / 35 / 3 | `lookup(value=35)` | 7 |
+| 4 | RET | 1 / 0 / 7 / 4 | `finish(answer=7)` | 7 |
+<!-- AGENT:END -->
+
 ### What the numbers say, including the unflattering parts
 
 * **The four conditions are separable, and not cleanly.** Leave-one-out nearest

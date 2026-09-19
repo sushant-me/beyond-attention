@@ -22,6 +22,12 @@ results block.
 
     python experiments/voice_affect.py --out voice-affect.json
     python experiments/render_readme.py --voice voice-affect.json --readme README.md
+
+`--agent` does the same for the agent loop, from `agent-loop.json` into
+`AGENT:BEGIN`/`AGENT:END`.
+
+    python experiments/agent_loop.py --out agent-loop.json
+    python experiments/render_readme.py --agent agent-loop.json --readme README.md
 """
 
 from __future__ import annotations
@@ -35,6 +41,8 @@ BEGIN = "<!-- RESULTS:BEGIN -->"
 END = "<!-- RESULTS:END -->"
 VOICE_BEGIN = "<!-- VOICE:BEGIN -->"
 VOICE_END = "<!-- VOICE:END -->"
+AGENT_BEGIN = "<!-- AGENT:BEGIN -->"
+AGENT_END = "<!-- AGENT:END -->"
 
 
 def _load(path: str | None, label: str) -> dict | None:
@@ -323,6 +331,160 @@ def voice_section(payload: dict) -> str:
     return "\n".join(lines)
 
 
+def agent_section(payload: dict) -> str:
+    """The agent-loop section, rendered from `agent-loop.json`.
+
+    Three things this renderer is careful about, because the section is about
+    measurement discipline and would be self-refuting otherwise:
+
+    * the **controls are rendered beside the solve rate**, in the same table
+      shape, because "1.000 solved" and "0.000 solved once the state is wiped"
+      are one claim read two ways, and a control in a footnote is a control
+      nobody reads;
+    * every cell comes from the JSON, including the number of loop steps each
+      family needs, so a reader can see why the budget columns have the shape
+      they do rather than take the family names' word for it;
+    * the example trace shows **what the policy read**, not only what it called,
+      because a table of actions alone is consistent with a controller that read
+      its operand out of the task text.
+    """
+    config = payload.get("config", {})
+    solve = payload.get("solve_rate", {})
+    controls = payload.get("controls", {})
+    families = config.get("families") or []
+    budgets = config.get("budgets") or []
+    step_counts = config.get("step_counts") or {}
+    max_budget = max(budgets) if budgets else 0
+
+    def rate(cells: dict, family: str, budget: int) -> str:
+        cell = cells.get(f"{family}@{budget}")
+        return "—" if cell is None else f"{cell['rate']:.3f}"
+
+    def overall(cells: dict, budget: int) -> str:
+        chosen = [cells[f"{f}@{budget}"] for f in families
+                  if f"{f}@{budget}" in cells]
+        solved = sum(c["solved"] for c in chosen)
+        total = sum(c["total"] for c in chosen)
+        return f"{solved / total:.3f}" if total else "—"
+
+    lines = [
+        f"**Seeded task suite** — {config.get('suite_size')} tasks "
+        f"({config.get('tasks_per_family')} per family), seed "
+        f"{config.get('seed')}. Each task is a plan over bounded integers plus a "
+        f"bounded key/value table, and its answer is computed in Python integers "
+        f"by `evaluate_plan`, so correctness is a property of the task. Tools: "
+        + ", ".join(f"`{t}`" for t in config.get("tools", [])) + ".",
+        "",
+        f"The memory is a {len(config.get('registers', []))}-wide "
+        f"selective-scan state with one named register per dimension: "
+        + ", ".join(f"`{r}`" for r in config.get("registers", [])) + ".",
+        "",
+        "| task family | loop steps needed | "
+        + " | ".join(f"budget {b}" for b in budgets) + " |",
+        "|---|---:|" + "---:|" * len(budgets),
+    ]
+    for family in families:
+        lines.append(
+            f"| {family} | {step_counts.get(family)} | "
+            + " | ".join(rate(solve, family, b) for b in budgets) + " |"
+        )
+
+    labels = {
+        "no_memory": "no memory: the state is wiped before each decision",
+        "scalar_carry": "scalar carry: the same controller, one Python int",
+        "random_action": "random action: tools and arguments uniform",
+    }
+    lines += [
+        "",
+        f"**Controls at budget {max_budget}** — per-family solve rate, "
+        f"with the agent's own row for comparison. \"Overall\" averages the "
+        f"{len(families)} families.",
+        "",
+        "| condition | " + " | ".join(families) + " | overall |",
+        "|---|" + "---:|" * (len(families) + 1),
+    ]
+    rows = [("the agent, memory = the SSM state", solve, overall(solve, max_budget))]
+    for key in ("no_memory", "scalar_carry", "random_action"):
+        cells = controls.get(key, {})
+        rows.append((labels[key], cells, overall(cells, max_budget)))
+    for label, cells, total in rows:
+        lines.append(
+            f"| {label} | "
+            + " | ".join(rate(cells, f, max_budget) for f in families)
+            + f" | **{total}** |"
+        )
+
+    one = controls.get("one_step", {}).get("all", {})
+    if one:
+        lines += [
+            "",
+            f"The budget-1 slice of the agent is the one-step control: "
+            f"**{one['rate']:.3f}** solved over all {one['total']} tasks. Only "
+            f"the `literal` family, whose answer is written in the task text, is "
+            f"reachable in a single decision — so the suite is not one call deep.",
+        ]
+
+    zero = controls.get("zero_carry_branch", {})
+    if zero:
+        lines += [
+            "",
+            f"**Where the first version's residual bit.** Of the "
+            f"{zero['total']} `branch` tasks, {zero['count']} arrive at the "
+            f"`IFPOS` decision (step {zero['step']}) carrying exactly 0 — the "
+            f"value a write residual turns positive. Those are exactly the tasks "
+            f"the `A = -50` register got wrong, and the last column below is the "
+            f"fix.",
+        ]
+
+    exactness = controls.get("write_exactness", {})
+    if exactness:
+        lines += [
+            "",
+            "**Register write exactness** — what a register holds after being "
+            "written 9 and then 0, for four choices of the decay. A residual "
+            "above zero is not a rounding detail: `IFPOS` branches on the sign "
+            "of this number.",
+            "",
+            "| A | exp(A) | residual after overwriting | sign test holds |",
+            "|---:|---:|---:|---|",
+        ]
+        for a, row in exactness.items():
+            lines.append(
+                f"| {a} | {row['multiplier']:.3e} | "
+                f"{row['residual_after_overwrite']:.3e} | "
+                f"{'yes' if row['sign_test_holds'] else 'no'} |"
+            )
+
+    trace = payload.get("example_trace", {})
+    if trace:
+        lines += [
+            "",
+            f"**The published trace** — `{trace.get('text')}`, answer "
+            f"`{trace.get('answer')}`, {len(trace.get('steps') or [])} steps, "
+            f"stop reason `{trace.get('stop_reason')}`, solved "
+            f"`{trace.get('solved')}`. \"Reads\" is the state the policy acted "
+            f"on, before the call.",
+            "",
+            "| step | instruction | reads: op / arg / carry / observations | "
+            "action | result |",
+            "|---:|---|---|---|---:|",
+        ]
+        for step in trace.get("steps", []):
+            reads = step["reads"]
+            action = step["action"] + "(" + ", ".join(
+                f"{k}={v}" for k, v in step["args"].items()
+            ) + ")"
+            shown = step["result"]
+            if step.get("error"):
+                shown = f"`{step['error']}`"
+            lines.append(
+                f"| {step['index']} | {step['instruction']} | "
+                f"{reads['op_code']} / {reads['arg']} / {reads['carry']:g} / "
+                f"{reads['observations']} | `{action}` | {shown} |"
+            )
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mqar")
@@ -332,12 +494,15 @@ def main() -> int:
     parser.add_argument("--scan-inner")
     parser.add_argument("--voice",
                         help="voice-affect.json, which renders the voice block")
+    parser.add_argument("--agent",
+                        help="agent-loop.json, which renders the agent block")
     parser.add_argument("--readme", default="README.md")
     args = parser.parse_args()
 
-    if not (args.mqar or args.voice):
+    if not (args.mqar or args.voice or args.agent):
         parser.error("give --mqar (to render the results block), --voice "
-                     "(to render the voice block), or both")
+                     "(to render the voice block), --agent (to render the agent "
+                     "block), or a combination")
 
     readme = pathlib.Path(args.readme)
     text = readme.read_text()
@@ -392,6 +557,28 @@ def main() -> int:
 
         text = f"{head}{VOICE_BEGIN}\n{rendered}\n{VOICE_END}{tail}"
         print(f"wrote {args.readme} voice block "
+              f"({len(rendered.splitlines())} lines)")
+
+    if args.agent:
+        agent = _load(args.agent, "the agent-loop run")
+        if agent is None:
+            return 1
+        if AGENT_BEGIN not in text or AGENT_END not in text:
+            print(f"{args.readme} has no {AGENT_BEGIN} / {AGENT_END} block",
+                  file=sys.stderr)
+            return 1
+        head, rest = text.split(AGENT_BEGIN, 1)
+        _, tail = rest.split(AGENT_END, 1)
+
+        rendered = agent_section(agent)
+        for marker in ("| task family |", "| condition |", "| A |"):
+            if marker not in rendered:
+                print(f"refusing to write: {marker!r} missing from the agent "
+                      f"render", file=sys.stderr)
+                return 1
+
+        text = f"{head}{AGENT_BEGIN}\n{rendered}\n{AGENT_END}{tail}"
+        print(f"wrote {args.readme} agent block "
               f"({len(rendered.splitlines())} lines)")
 
     readme.write_text(text)

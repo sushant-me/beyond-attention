@@ -198,6 +198,11 @@
     }
   },
   "controls": {
+    "zero_carry_branch": {
+      "count": 8,
+      "total": 50,
+      "step": 2
+    },
     "no_memory": {
       "literal@1": {
         "solved": 50,
@@ -750,5 +755,5 @@
       }
     ]
   },
-  "wall_seconds": 1.01
+  "wall_seconds": 1.14
 }

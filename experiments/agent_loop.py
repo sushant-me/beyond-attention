@@ -224,7 +224,23 @@ def main() -> int:
         for a in (-50.0, -400.0, -745.0, A_HOLD)
     }
 
+    # How many branch tasks reach the branch with a carry of exactly zero. That
+    # is the value a write residual turns positive: at A = -50 the register held
+    # 1.7e-21 instead of 0.0, `IFPOS` read it as positive, and these are exactly
+    # the tasks it got wrong. Measured rather than asserted, because "it only
+    # affected an edge case" is the kind of claim that should be countable.
+    branch_tasks = [t for t in tasks if t.family == "branch"]
+    zero_carry_branch = {
+        "count": sum(
+            1 for t in branch_tasks
+            if run_agent(t, budget=max_budget).steps[2].registers.carry == 0.0
+        ),
+        "total": len(branch_tasks),
+        "step": 2,
+    }
+
     controls = {
+        "zero_carry_branch": zero_carry_branch,
         "no_memory": no_memory,
         "scalar_carry": scalar_carry,
         "random_action": random_action,
