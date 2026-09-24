@@ -1657,7 +1657,8 @@ def learned_gate_section(payload: dict) -> str:
     keyed = sorted(sweep, key=lambda k: float(k), reverse=True)
     lines += [
         "",
-        "**The gap is hardness, not addressing.** At a raw sigmoid the trained gate "
+        "**The gap is in the values, not the addressing** — a later measurement below "
+        "corrects the reading this section first gave. At a raw sigmoid the trained gate "
         f"solves {rate('learned_gate_trained_raw')[0]:.3f} against the hand-set "
         f"gate's {rate('hand_set_gate')[0]:.3f}. It has learned *which* slot a "
         "value belongs in — its 0.5-threshold is exactly the hand-set gate on "
@@ -1722,8 +1723,22 @@ def learned_gate_section(payload: dict) -> str:
         "**Three things this does not establish.** Only the gate is trained: `A` is "
         "still `A_HOLD` and the reader is unchanged, so a Python dict in "
         "`evaluate_plan` still computes every answer and the *\"no model is needed\"* "
-        "half of the objection stands. The exact hand-set behaviour needs an "
-        "evaluation-time temperature, so the hardness is chosen rather than learned. "
+        "half of the objection stands. "
+        "**A later measurement corrects the reading above**, and the correction "
+        "matters more than the original claim: evaluated at the *same* trained "
+        "parameters, the hard gate (`w > 0.5`) produces an exactly correct state — "
+        "loss **0.00** — and its rounded gate equals the hand-set one-hot on "
+        "**every** eval event, which the committed results recorded all along as a "
+        "rounded one-hot fraction of 1.000. So the discrete decision gradient "
+        "descent learned is not approximately right, it is exactly right, and "
+        "hardening is a **no-op on the discrete answer**: a 0.5 threshold or a "
+        "temperature of 0.05 recovers 1.000 because the rounding was never in "
+        "question, not because either supplied something the gradient missed. What "
+        "is miscalibrated is the soft **values** used as write weights — a 0.9 write "
+        "is not a 1.0 write under `exp(-800·w)`. "
+        "A straight-through hard forward pass was also tried and is *worse*: 0.160 "
+        "against 0.420, converging to an all-ones gate that writes to every slot on "
+        "all five seeds. "
         "And nothing here tests other shapes, other objectives, or the model's own "
         "learned `delta`.",
         "",
