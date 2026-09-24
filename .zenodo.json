@@ -1,0 +1,36 @@
+{
+  "title": "beyond-attention: a selective state-space model (Mamba S6) implemented from scratch, measured against a parameter-matched Transformer",
+  "description": "<p>A from-scratch implementation of the selective state-space recurrence (Mamba's S6), with the arithmetic checked three independent ways and an honest parameter-matched comparison against a Transformer on multi-query associative recall.</p><p><strong>Correctness.</strong> Three implementations sharing no code — an explicit reference loop (the definition), a chunked kernel-style path, and an associative Hillis-Steele scan over the (a, b) monoid — are asserted equal to float64 tolerance on random, degenerate and adversarial inputs, at chunk sizes that do and do not divide the sequence length. Causality and long-range propagation are tested independently of numerical agreement, because agreement cannot catch them. Every test is mutation-checked: breaking the monoid, dropping the carry between chunks, reversing the chunk scan, removing the convolution's causal padding and removing the attention mask each fail a <em>different, specific</em> test.</p><p><strong>The comparison, including the unflattering parts.</strong> Both architectures get identical data, optimiser, schedule, step budget and seed, at matched parameter counts. The headline table shows the state-space model reaching 1.000 accuracy where attention reaches 0.312 — and the control falsifies that reading. With the key space held fixed so the vocabulary is identical at every length, <em>neither</em> architecture extrapolates, and attention decays more slowly than the state-space model at every step past its training length. Both the flattering table and the control that overturns it are reported, because reporting one of them would be choosing the answer.</p><p>Also included: streaming cost and real-RSS memory measurements over a million tokens, an inner-scan comparison, a voice/affect front end with a trained classifier on synthesised prosody, an agent loop with selective memory, and a generated dashboard. Every number in the README is rendered from a committed JSON results file by a script, so re-running the experiment and the renderer reproduces the tables.</p>",
+  "creators": [
+    {
+      "name": "Poudel, Sushant",
+      "affiliation": "Nepal Engineering College, Bhaktapur, Nepal"
+    }
+  ],
+  "upload_type": "software",
+  "access_right": "open",
+  "license": "MIT",
+  "version": "0.1.0",
+  "language": "eng",
+  "keywords": [
+    "state-space-model",
+    "mamba",
+    "selective-scan",
+    "sequence-models",
+    "attention",
+    "deep-learning",
+    "reproducibility"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "https://github.com/sushant-me/beyond-attention",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    },
+    {
+      "identifier": "https://arxiv.org/abs/2312.00752",
+      "relation": "references",
+      "scheme": "url"
+    }
+  ]
+}
