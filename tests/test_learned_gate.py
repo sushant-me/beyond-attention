@@ -673,3 +673,49 @@ def test_the_committed_results_file_is_the_runs_shape() -> None:
     # Training did not leave the raw gate hard: the hold weights are soft.
     assert payload["sharpness"]["temperature_1_0"]["trained"][
         "mean_weight_on_held_slots"] > 0.05
+
+
+def test_the_rounded_gate_is_exactly_the_hand_set_gate() -> None:
+    """Pin the number that decides what the 0.420 means.
+
+    This is the single most consequential figure in the published results, and it
+    was read past repeatedly while a whole write-up was built on the opposite
+    reading. At `temperature_1_0` the trained gate's **rounded** form — every
+    weight thresholded at 0.5 — equals the hand-set gate on *every* eval event.
+
+    So the 0.420 does not come from wrong addressing. The discrete decision
+    gradient descent learned is exactly right, everywhere; what is miscalibrated
+    is the soft **values** used as write weights, and under `exp(-800*w)` a 0.9
+    write corrupts a slot that should have held. Hardening is therefore a no-op on
+    the discrete answer: a 0.5 threshold or a temperature of 0.05 recovers 1.000
+    because the rounding was never in question.
+
+    If this ever stops holding, the README section "Is the gate learnable, or is
+    it still hand-set?" is wrong and its correction is too — which is why the
+    number is asserted rather than described.
+    """
+    payload = json.loads((REPO / "learned-gate.json").read_text())
+
+    rounded = payload["sharpness"]["temperature_1_0"]["trained"][
+        "rounded_one_hot_fraction"]
+    assert rounded == 1.0, (
+        f"the trained gate's 0.5-threshold matches the hand-set gate on only "
+        f"{rounded:.3f} of eval events. The README's read depends on it being "
+        "1.0: the claim that the addressing is already exactly right, and that "
+        "the 0.420 is a calibration of write magnitude rather than a failure to "
+        "learn the gate, does not survive a value below 1.0."
+    )
+
+    # And the addressing is what is right while the values are not: the gate is
+    # genuinely soft (a real deviation from 0/1) at the same time.
+    deviation = payload["sharpness"]["temperature_1_0"]["trained"]["mean_deviation"]
+    assert deviation > 0.01, (
+        "the trained gate is no longer soft, so 'the values are miscalibrated' is "
+        "no longer the right description of the gap"
+    )
+
+    # The decisive direct measurement: at the same parameters the HARD gate
+    # produces an exactly correct state. Recorded in the results as the hold
+    # multiplier of the hand-set representation being exact.
+    hand = payload["soft_gate_cost"]["hand_set"]
+    assert hand["fraction_holds_destroyed"] == 0.0
