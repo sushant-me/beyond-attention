@@ -431,6 +431,37 @@ python experiments/render_dashboard.py --voice voice-affect.json \
 `experiments/run.py --help` lists the knobs; `--steps`, `--seeds`, `--pairs`,
 `--queries` and `--blocks` are the ones that cost time.
 
+### One published row does not reproduce across Python versions
+
+Stated here rather than left for someone to discover. The learned-gate block is
+reproducible within a Python version, but **the annealed row moves across the CI
+matrix**: on 3.12 it reads 0.94 where 3.11 and 3.13 both reproduce the committed
+0.928.
+
+The cause is measured and it is not the platform. The committed `training_reports`
+give the same configuration at five seeds:
+
+| variant | final losses, seeds 0–4 | spread |
+|---|---|---|
+| raw, no annealing | 7.41931, 7.41932, 7.41931, 7.41932, 7.41933 | ~2e-5 |
+| annealed to 0.05 | 2.69626, 0.654751, 2.80023, 6.09e-17, 2.11812 | ~2.8, ten orders of magnitude |
+
+Plain training agrees to five significant figures across seeds; annealing lands
+anywhere from `6e-17` to `2.8` on seed alone. **Annealing is the only numerically
+sensitive part of the experiment**, which is why it is the only row that varies
+across platforms.
+
+It is also the row the conclusion rejects: annealing reaches 0.928 where training
+soft and thresholding reaches 1.000. So **every row the conclusion rests on
+reproduces**, and the one that does not belongs to the approach the results argue
+against. Three independent measurements — accuracy, stability across seeds, and
+stability across platforms — point the same way.
+
+`experiments/learned_gate.py --verify` re-runs the experiment and diffs every
+published number against the committed file. It is a local tool, not a CI gate:
+as an exact-match gate it fails on 3.12 for the reason above, and a tolerance
+would hide exactly the drift it exists to catch.
+
 The voice, agent, memory and learned-gate blocks render on their own (`--voice`,
 `--agent`, `--memory`, `--learned-gate`) rather than as part of the results
 command, so each can be
