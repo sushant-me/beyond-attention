@@ -417,6 +417,12 @@ python experiments/learned_gate.py --out learned-gate.json
 python experiments/render_readme.py --learned-gate learned-gate.json \
     --readme README.md
 
+# the straight-through attempt, which is the 0.160 quoted above: a hard forward
+# pass with the sigmoid gradient passed through. Prints the soft-gate control
+# first, so a reader can see the harness reproduce 0.420 / 1.000 before trusting
+# the 0.160. Not part of the suite -- it takes about two minutes.
+python experiments/learned_gate_straight_through.py
+
 # the results file is committed, so check that it still matches the code instead
 # of trusting that it does: re-runs the experiment and diffs every number. This
 # exists because the file silently went stale once — four fields were added to a
