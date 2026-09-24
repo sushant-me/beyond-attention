@@ -61,6 +61,8 @@ AGENT_BEGIN = "<!-- AGENT:BEGIN -->"
 AGENT_END = "<!-- AGENT:END -->"
 MEMORY_BEGIN = "<!-- MEMORY:BEGIN -->"
 MEMORY_END = "<!-- MEMORY:END -->"
+LEARNED_GATE_BEGIN = "<!-- LEARNED-GATE:BEGIN -->"
+LEARNED_GATE_END = "<!-- LEARNED-GATE:END -->"
 
 
 def _load(path: str | None, label: str) -> dict | None:
@@ -1591,6 +1593,148 @@ def memory_section(payload: dict) -> str:
     return "\n".join(lines)
 
 
+def learned_gate_section(payload: dict) -> str:
+    """The learnability section, rendered from `learned-gate.json`.
+
+    The question is the README's own strongest self-criticism -- that the
+    selective family's write gate is hand-set rather than produced by a
+    projection. The answer is partial and the section says so: the projection
+    learns *which* slot a value lands in, but gradient descent does not drive the
+    sigmoid to 0/1, so the hardness that makes a hold exact comes from an
+    evaluation-time temperature. Both halves are rendered, because the flattering
+    half alone would be the overclaim this repository exists to avoid.
+    """
+    conditions = payload["conditions"]
+    sharp = payload["sharpness"]["temperature_1_0"]
+    cost = payload["soft_gate_cost"]
+    held = payload["held_out_keys"]
+    reference = payload["reference_agreement"]
+
+    def rate(name: str) -> tuple[float, str]:
+        entry = conditions[name]
+        spread = entry.get("spread")
+        if spread is not None:
+            return spread["mean"], f"[{spread['min']:.3f}, {spread['max']:.3f}]"
+        return entry["rate"], "—"
+
+    rows = [
+        ("hand-set gate (`agent.py`)", "hand_set_gate"),
+        ("hand-set gate through the learned path", "hand_set_gate_learned_path"),
+        ('fixed / constant gate (`memory="fixed"`)', "fixed_constant_gate"),
+        ("learned gate, trained, **raw sigmoid**", "learned_gate_trained_raw"),
+        ("learned gate, trained, sharpened", "learned_gate_trained_sharpened"),
+        ("learned gate, temperature annealed in training",
+         "learned_gate_trained_annealed"),
+        ("learned gate, untrained (hold init)", "learned_gate_untrained_hold_raw"),
+        ("learned gate, untrained (midpoint init)",
+         "learned_gate_untrained_midpoint_raw"),
+        ("saturation weights (exactly the hand-set gate)", "saturation_weights"),
+    ]
+
+    lines = [
+        "### Is the gate learnable, or is it still hand-set?",
+        "",
+        "`experiments/learned_gate.py`, rendered from `learned-gate.json`. The gate "
+        "is a single `nn.Linear` over one-hot features — one-hot opcode "
+        "concatenated with one-hot key — followed by a sigmoid, trained by "
+        "gradient descent on the *state*. Every row runs the agent's own "
+        "`choose_action` on the decoded state, so the reader is identical "
+        "everywhere and a difference between rows is a difference in the gate.",
+        "",
+        f"Selective family, {conditions['hand_set_gate']['tasks']} eval tasks "
+        f"(seed 1), trained on {payload['config']['train_tasks']} tasks (seed 0), "
+        f"{payload['config']['steps']} steps, "
+        f"{len(payload['config']['seeds'])} seeds.",
+        "",
+        "| condition | solve rate | spread over seeds |",
+        "|---|---|---|",
+    ]
+    for label, key in rows:
+        mean, spread = rate(key)
+        lines.append(f"| {label} | {mean:.3f} | {spread} |")
+
+    sweep = payload["temperature_sweep"]
+    keyed = sorted(sweep, key=lambda k: float(k), reverse=True)
+    lines += [
+        "",
+        "**The gap is hardness, not addressing.** At a raw sigmoid the trained gate "
+        f"solves {rate('learned_gate_trained_raw')[0]:.3f} against the hand-set "
+        f"gate's {rate('hand_set_gate')[0]:.3f}. It has learned *which* slot a "
+        "value belongs in — its 0.5-threshold is exactly the hand-set gate on "
+        "every eval event (rounded one-hot fraction "
+        f"{sharp['trained']['rounded_one_hot_fraction']:.3f}) — but it is soft: "
+        f"mean deviation of the gate from 0/1 is "
+        f"{sharp['trained']['mean_deviation']:.4f} (max "
+        f"{sharp['trained']['max_deviation']:.4f}), and it puts "
+        f"{sharp['trained']['mean_weight_on_held_slots']:.4f} on slots that must "
+        "hold rather than the "
+        f"{sharp['hand_set_representation']['mean_weight_on_held_slots']:.4f} the "
+        "hand-set gate puts there. A hold multiplies the slot by `exp(-800·w)`, so "
+        f"the raw gate leaves a mean hold multiplier of "
+        f"{cost['trained_raw']['mean_hold_multiplier']:.4f} and loses more than 1% "
+        f"on {cost['trained_raw']['fraction_holds_destroyed'] * 100:.1f}% of held "
+        f"slots, against {cost['hand_set']['fraction_holds_destroyed'] * 100:.1f}% "
+        "for the hand-set gate.",
+        "",
+        "| sigmoid temperature | trained | untrained (hold init) |",
+        "|---|---|---|",
+    ]
+    for temperature in keyed:
+        entry = sweep[temperature]
+        lines.append(
+            f"| {entry['temperature']} | {entry['trained']['mean']:.3f} | "
+            f"{entry['untrained_hold']['mean']:.3f} |")
+
+    lines += [
+        "",
+        "So a temperature choice supplies the hardness gradient descent did not: "
+        "sharpened to 0.05 the learned gate reaches "
+        f"{rate('learned_gate_trained_sharpened')[0]:.3f}, equal to the hand-set "
+        "gate, while the untrained control stays at "
+        f"{rate('learned_gate_untrained_hold_raw')[0]:.3f} at every temperature. "
+        "Annealing the temperature *during* training reaches "
+        f"{rate('learned_gate_trained_annealed')[0]:.3f} — closer, and not exact.",
+        "",
+        "**The prescribed feature map does not generalise to unseen keys.** Train on "
+        f"keys {held['training_key_range'][0]}–{held['training_key_range'][1]} and "
+        f"evaluate on {held['held_out_key_range'][0]}–{held['held_out_key_range'][1]} "
+        f"of a vocabulary of {held['keys']}:",
+        "",
+        "| feature map | train keys | held-out keys |",
+        "|---|---|---|",
+    ]
+    for mode, label in (("key", "one-hot **per key** (as prescribed)"),
+                        ("address", "one-hot per slot (`key % state_width`)")):
+        entry = held["conditions"][mode]
+        lines.append(
+            f"| {label} | {entry['sharpened_train_keys']['mean']:.3f} | "
+            f"{entry['sharpened_held_out_keys']['mean']:.3f} |")
+
+    lines += [
+        "",
+        "The per-key map memorises: a held-out key's weight row is still at its "
+        "initialisation, so nothing is written and the rate is zero. Sharing weights "
+        "between keys that address the same slot generalises fully. The failure "
+        "therefore belongs to the prescribed feature map rather than to the "
+        "mechanism — but the map that works is a different map, and the hand-set "
+        "gate scores 1.000 on both.",
+        "",
+        "**Three things this does not establish.** Only the gate is trained: `A` is "
+        "still `A_HOLD` and the reader is unchanged, so a Python dict in "
+        "`evaluate_plan` still computes every answer and the *\"no model is needed\"* "
+        "half of the objection stands. The exact hand-set behaviour needs an "
+        "evaluation-time temperature, so the hardness is chosen rather than learned. "
+        "And nothing here tests other shapes, other objectives, or the model's own "
+        "learned `delta`.",
+        "",
+        f"Agreement check: `agent.py` {reference['agent_py_rate']:.3f}, this "
+        f"experiment's hand-set row {reference['experiment_hand_set_rate']:.3f}, "
+        f"the agent-loop run {reference['agent_loop_json_rate']}.",
+        "",
+    ]
+    return "\n".join(lines)
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument("--mqar")
@@ -1607,6 +1751,9 @@ def main() -> int:
                         help="agent-loop.json, which renders the agent block")
     parser.add_argument("--memory",
                         help="long-memory.json, which renders the memory block")
+    parser.add_argument("--learned-gate",
+                        help="learned-gate.json, which renders the gate-"
+                             "learnability block")
     parser.add_argument("--length-extrapolation",
                         help="length-extrapolation.json, which renders the "
                              "length-extrapolation section of the results "
@@ -1615,12 +1762,13 @@ def main() -> int:
     args = parser.parse_args()
 
     if not (args.mqar or args.voice or args.emotion or args.agent
-            or args.memory):
+            or args.memory or args.learned_gate):
         parser.error("give --mqar (to render the results block), --voice "
                      "(to render the voice block), --emotion (to render the "
                      "trained-classifier block), --agent (to render the agent "
-                     "block), --memory (to render the memory block), or a "
-                     "combination")
+                     "block), --memory (to render the memory block), "
+                     "--learned-gate (to render the gate-learnability block), "
+                     "or a combination")
 
     readme = pathlib.Path(args.readme)
     text = readme.read_text()
@@ -1764,6 +1912,29 @@ def main() -> int:
 
         text = f"{head}{MEMORY_BEGIN}\n{rendered}\n{MEMORY_END}{tail}"
         print(f"wrote {args.readme} memory block "
+              f"({len(rendered.splitlines())} lines)")
+
+    if args.learned_gate:
+        gate = _load(args.learned_gate, "the learned-gate run")
+        if gate is None:
+            return 1
+        if LEARNED_GATE_BEGIN not in text or LEARNED_GATE_END not in text:
+            print(f"{args.readme} has no {LEARNED_GATE_BEGIN} / "
+                  f"{LEARNED_GATE_END} block", file=sys.stderr)
+            return 1
+        head, rest = text.split(LEARNED_GATE_BEGIN, 1)
+        _, tail = rest.split(LEARNED_GATE_END, 1)
+
+        rendered = learned_gate_section(gate)
+        for marker in ("| condition |", "| sigmoid temperature |",
+                       "| feature map |", "### Is the gate learnable"):
+            if marker not in rendered:
+                print(f"refusing to write: {marker!r} missing from the learned-"
+                      f"gate render", file=sys.stderr)
+                return 1
+
+        text = f"{head}{LEARNED_GATE_BEGIN}\n{rendered}\n{LEARNED_GATE_END}{tail}"
+        print(f"wrote {args.readme} learned-gate block "
               f"({len(rendered.splitlines())} lines)")
 
     readme.write_text(text)

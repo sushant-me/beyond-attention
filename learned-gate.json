@@ -1,0 +1,1152 @@
+{
+  "config": {
+    "family": "selective",
+    "stores": 3,
+    "distractors": 2,
+    "keys": 4,
+    "state_width": 4,
+    "budget": 6,
+    "train_tasks": 64,
+    "train_task_seed": 0,
+    "eval_tasks": 50,
+    "eval_task_seed": 1,
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "task_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "steps": 2000,
+    "lr": 0.05,
+    "optimiser": "Adam (full batch)",
+    "loss": "mean squared error between the slot contents and the state a correct gate produces, over every value event (dense) or at the end alone",
+    "init": "hold",
+    "temperatures": [
+      1.0,
+      0.5,
+      0.2,
+      0.1,
+      0.05
+    ],
+    "sharp_temperature": 0.05,
+    "features": "one-hot opcode ++ one-hot key (NOISE gets no key dimension unless the ablation is on)",
+    "gate": "nn.Linear(features, state_width) then sigmoid, float64",
+    "held_out": {
+      "keys": 32,
+      "state_width": 16,
+      "training_tasks": 256,
+      "eval_tasks": 128,
+      "seeds": [
+        0,
+        1,
+        2,
+        3,
+        4
+      ]
+    }
+  },
+  "conditions": {
+    "hand_set_gate": {
+      "source": "run_agent(task, memory='ssm')",
+      "rate": 1.0,
+      "tasks": 50,
+      "spread": {
+        "rates": [
+          1.0
+        ],
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "stdev": 0.0,
+        "tasks": 50
+      }
+    },
+    "hand_set_gate_learned_path": {
+      "source": "run_learned(task, HandSetGate)",
+      "rate": 1.0,
+      "tasks": 50,
+      "embedding_matches_agent_embed": true
+    },
+    "fixed_constant_gate": {
+      "source": "run_agent(task, memory='fixed', state_width=width)",
+      "rate": 0.16,
+      "tasks": 50
+    },
+    "learned_gate_trained_raw": {
+      "source": "trained 2000 steps at temperature 1.0",
+      "spread": {
+        "rates": [
+          0.42,
+          0.42,
+          0.42,
+          0.42,
+          0.42
+        ],
+        "mean": 0.42,
+        "min": 0.42,
+        "max": 0.42,
+        "stdev": 0.0,
+        "tasks": 50
+      }
+    },
+    "learned_gate_trained_sharpened": {
+      "source": "trained, evaluated at temperature 0.05",
+      "spread": {
+        "rates": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "stdev": 0.0,
+        "tasks": 50
+      }
+    },
+    "learned_gate_trained_annealed": {
+      "source": "trained with the temperature annealed to 0.05, evaluated there",
+      "spread": {
+        "rates": [
+          0.88,
+          0.96,
+          0.88,
+          1.0,
+          0.92
+        ],
+        "mean": 0.928,
+        "min": 0.88,
+        "max": 1.0,
+        "stdev": 0.052154,
+        "tasks": 50
+      }
+    },
+    "learned_gate_untrained_midpoint_raw": {
+      "spread": {
+        "rates": [
+          0.08,
+          0.1,
+          0.06,
+          0.12,
+          0.12
+        ],
+        "mean": 0.096,
+        "min": 0.06,
+        "max": 0.12,
+        "stdev": 0.026077,
+        "tasks": 50
+      }
+    },
+    "learned_gate_untrained_midpoint_sharpened": {
+      "spread": {
+        "rates": [
+          0.18,
+          0.0,
+          0.06,
+          0.0,
+          0.1
+        ],
+        "mean": 0.068,
+        "min": 0.0,
+        "max": 0.18,
+        "stdev": 0.075631,
+        "tasks": 50
+      }
+    },
+    "learned_gate_untrained_hold_raw": {
+      "spread": {
+        "rates": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "stdev": 0.0,
+        "tasks": 50
+      }
+    },
+    "learned_gate_untrained_hold_sharpened": {
+      "spread": {
+        "rates": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "stdev": 0.0,
+        "tasks": 50
+      }
+    },
+    "saturation_weights": {
+      "source": "constructed weights whose sigmoid is exactly the hand-set gate",
+      "rate": 1.0,
+      "tasks": 50,
+      "every_gate_vector_equals_hand_set": true
+    }
+  },
+  "temperature_sweep": {
+    "1": {
+      "temperature": 1.0,
+      "trained": {
+        "rates": [
+          0.42,
+          0.42,
+          0.42,
+          0.42,
+          0.42
+        ],
+        "mean": 0.42,
+        "min": 0.42,
+        "max": 0.42,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "untrained_hold": {
+        "rates": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "stdev": 0.0,
+        "tasks": null
+      }
+    },
+    "0.5": {
+      "temperature": 0.5,
+      "trained": {
+        "rates": [
+          0.42,
+          0.42,
+          0.42,
+          0.42,
+          0.42
+        ],
+        "mean": 0.42,
+        "min": 0.42,
+        "max": 0.42,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "untrained_hold": {
+        "rates": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "stdev": 0.0,
+        "tasks": null
+      }
+    },
+    "0.2": {
+      "temperature": 0.2,
+      "trained": {
+        "rates": [
+          0.5,
+          0.5,
+          0.5,
+          0.5,
+          0.5
+        ],
+        "mean": 0.5,
+        "min": 0.5,
+        "max": 0.5,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "untrained_hold": {
+        "rates": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "stdev": 0.0,
+        "tasks": null
+      }
+    },
+    "0.1": {
+      "temperature": 0.1,
+      "trained": {
+        "rates": [
+          0.8,
+          0.8,
+          0.8,
+          0.8,
+          0.8
+        ],
+        "mean": 0.8,
+        "min": 0.8,
+        "max": 0.8,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "untrained_hold": {
+        "rates": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "stdev": 0.0,
+        "tasks": null
+      }
+    },
+    "0.05": {
+      "temperature": 0.05,
+      "trained": {
+        "rates": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "untrained_hold": {
+        "rates": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "stdev": 0.0,
+        "tasks": null
+      }
+    }
+  },
+  "task_seed_spread": {
+    "eval_seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "sharpened_rate": {
+      "rates": [
+        1.0,
+        1.0,
+        1.0,
+        1.0,
+        1.0
+      ],
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "stdev": 0.0,
+      "tasks": 50
+    }
+  },
+  "held_out_keys": {
+    "keys": 32,
+    "state_width": 16,
+    "training_key_range": [
+      0,
+      15
+    ],
+    "held_out_key_range": [
+      16,
+      31
+    ],
+    "training_tasks": 256,
+    "train_key_eval_tasks": 128,
+    "held_out_eval_tasks": 128,
+    "hand_set_train_keys": {
+      "rates": [
+        1.0
+      ],
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "stdev": 0.0,
+      "tasks": 128
+    },
+    "hand_set_held_out_keys": {
+      "rates": [
+        1.0
+      ],
+      "mean": 1.0,
+      "min": 1.0,
+      "max": 1.0,
+      "stdev": 0.0,
+      "tasks": 128
+    },
+    "conditions": {
+      "key": {
+        "feature_map": "one dimension per key",
+        "raw_train_keys": {
+          "rates": [
+            0.429688,
+            0.429688,
+            0.421875,
+            0.429688,
+            0.421875
+          ],
+          "mean": 0.426563,
+          "min": 0.421875,
+          "max": 0.429688,
+          "stdev": 0.004279,
+          "tasks": null
+        },
+        "sharpened_train_keys": {
+          "rates": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0,
+          "stdev": 0.0,
+          "tasks": null
+        },
+        "raw_held_out_keys": {
+          "rates": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "stdev": 0.0,
+          "tasks": null
+        },
+        "sharpened_held_out_keys": {
+          "rates": [
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0
+          ],
+          "mean": 0.0,
+          "min": 0.0,
+          "max": 0.0,
+          "stdev": 0.0,
+          "tasks": null
+        },
+        "sharpness_train_keys": {
+          "mean_deviation": 0.028377,
+          "max_deviation": 0.18416,
+          "min_deviation": 0.0,
+          "rounded_one_hot_fraction": 1.0,
+          "mean_weight_on_addressed_slots": 0.994618,
+          "mean_weight_on_held_slots": 0.029273,
+          "events": 640,
+          "weights": 10240,
+          "written_slots": 384,
+          "held_slots": 9856
+        },
+        "sharpness_held_out_keys": {
+          "mean_deviation": 0.044011,
+          "max_deviation": 0.101828,
+          "min_deviation": 1e-06,
+          "rounded_one_hot_fraction": 0.4,
+          "mean_weight_on_addressed_slots": 0.072687,
+          "mean_weight_on_held_slots": 0.042894,
+          "events": 640,
+          "weights": 10240,
+          "written_slots": 384,
+          "held_slots": 9856
+        }
+      },
+      "address": {
+        "feature_map": "one dimension per slot (key % state_width)",
+        "raw_train_keys": {
+          "rates": [
+            0.429688,
+            0.421875,
+            0.429688,
+            0.429688,
+            0.421875
+          ],
+          "mean": 0.426563,
+          "min": 0.421875,
+          "max": 0.429688,
+          "stdev": 0.004279,
+          "tasks": null
+        },
+        "sharpened_train_keys": {
+          "rates": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0,
+          "stdev": 0.0,
+          "tasks": null
+        },
+        "raw_held_out_keys": {
+          "rates": [
+            0.390625,
+            0.390625,
+            0.390625,
+            0.390625,
+            0.390625
+          ],
+          "mean": 0.390625,
+          "min": 0.390625,
+          "max": 0.390625,
+          "stdev": 0.0,
+          "tasks": null
+        },
+        "sharpened_held_out_keys": {
+          "rates": [
+            1.0,
+            1.0,
+            1.0,
+            1.0,
+            1.0
+          ],
+          "mean": 1.0,
+          "min": 1.0,
+          "max": 1.0,
+          "stdev": 0.0,
+          "tasks": null
+        },
+        "sharpness_train_keys": {
+          "mean_deviation": 0.028377,
+          "max_deviation": 0.184176,
+          "min_deviation": 0.0,
+          "rounded_one_hot_fraction": 1.0,
+          "mean_weight_on_addressed_slots": 0.994617,
+          "mean_weight_on_held_slots": 0.029273,
+          "events": 640,
+          "weights": 10240,
+          "written_slots": 384,
+          "held_slots": 9856
+        },
+        "sharpness_held_out_keys": {
+          "mean_deviation": 0.028061,
+          "max_deviation": 0.184176,
+          "min_deviation": 0.0,
+          "rounded_one_hot_fraction": 1.0,
+          "mean_weight_on_addressed_slots": 0.994625,
+          "mean_weight_on_held_slots": 0.028945,
+          "events": 640,
+          "weights": 10240,
+          "written_slots": 384,
+          "held_slots": 9856
+        }
+      }
+    }
+  },
+  "feature_ablation": {
+    "noise_only_opcode": {
+      "noise_key_feature": false,
+      "raw": {
+        "rates": [
+          0.42,
+          0.42,
+          0.42,
+          0.42,
+          0.42
+        ],
+        "mean": 0.42,
+        "min": 0.42,
+        "max": 0.42,
+        "stdev": 0.0,
+        "tasks": 50
+      },
+      "sharpened": {
+        "rates": [
+          1.0,
+          1.0,
+          1.0,
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "stdev": 0.0,
+        "tasks": 50
+      },
+      "final_losses": [
+        7.419305,
+        7.419321,
+        7.419307,
+        7.41932,
+        7.419329
+      ],
+      "noise_hard_zero_fraction": 1.0,
+      "sharpness": {
+        "mean_deviation": 0.111409,
+        "max_deviation": 0.372146,
+        "min_deviation": 2e-06,
+        "rounded_one_hot_fraction": 1.0,
+        "mean_weight_on_addressed_slots": 0.994675,
+        "mean_weight_on_held_slots": 0.130129,
+        "events": 250,
+        "weights": 1000,
+        "written_slots": 150,
+        "held_slots": 850
+      }
+    },
+    "noise_operand": {
+      "noise_key_feature": true,
+      "raw": {
+        "rates": [
+          0.42,
+          0.4,
+          0.36,
+          0.42,
+          0.42
+        ],
+        "mean": 0.404,
+        "min": 0.36,
+        "max": 0.42,
+        "stdev": 0.026077,
+        "tasks": 50
+      },
+      "sharpened": {
+        "rates": [
+          1.0,
+          0.98,
+          0.94,
+          1.0,
+          1.0
+        ],
+        "mean": 0.984,
+        "min": 0.94,
+        "max": 1.0,
+        "stdev": 0.026077,
+        "tasks": 50
+      },
+      "final_losses": [
+        7.417891,
+        7.446465,
+        7.688677,
+        7.417908,
+        7.417908
+      ],
+      "noise_hard_zero_fraction": 0.936,
+      "sharpness": {
+        "mean_deviation": 0.116314,
+        "max_deviation": 0.398244,
+        "min_deviation": 0.0,
+        "rounded_one_hot_fraction": 0.9744,
+        "mean_weight_on_addressed_slots": 0.99423,
+        "mean_weight_on_held_slots": 0.140168,
+        "events": 250,
+        "weights": 1000,
+        "written_slots": 150,
+        "held_slots": 850
+      }
+    }
+  },
+  "sharpness": {
+    "temperature_1_0": {
+      "trained": {
+        "mean_deviation": 0.111409,
+        "max_deviation": 0.372146,
+        "min_deviation": 2e-06,
+        "rounded_one_hot_fraction": 1.0,
+        "mean_weight_on_addressed_slots": 0.994675,
+        "mean_weight_on_held_slots": 0.130129,
+        "events": 250,
+        "weights": 1000,
+        "written_slots": 150,
+        "held_slots": 850
+      },
+      "untrained_hold": {
+        "mean_deviation": 6e-06,
+        "max_deviation": 8e-06,
+        "min_deviation": 4e-06,
+        "rounded_one_hot_fraction": 0.4,
+        "mean_weight_on_addressed_slots": 6e-06,
+        "mean_weight_on_held_slots": 6e-06,
+        "events": 250,
+        "weights": 1000,
+        "written_slots": 150,
+        "held_slots": 850
+      },
+      "untrained_midpoint": {
+        "mean_deviation": 0.454489,
+        "max_deviation": 0.496423,
+        "min_deviation": 0.384818,
+        "rounded_one_hot_fraction": 0.0904,
+        "mean_weight_on_addressed_slots": 0.486001,
+        "mean_weight_on_held_slots": 0.489523,
+        "events": 250,
+        "weights": 1000,
+        "written_slots": 150,
+        "held_slots": 850
+      },
+      "hand_set_representation": {
+        "mean_deviation": 0.0,
+        "max_deviation": 0.0,
+        "min_deviation": 0.0,
+        "rounded_one_hot_fraction": 1.0,
+        "mean_weight_on_addressed_slots": 1.0,
+        "mean_weight_on_held_slots": 0.0,
+        "events": 250,
+        "weights": 1000,
+        "written_slots": 150,
+        "held_slots": 850
+      }
+    },
+    "temperature_0_05": {
+      "trained": {
+        "mean_deviation": 1e-06,
+        "max_deviation": 2.9e-05,
+        "min_deviation": 0.0,
+        "rounded_one_hot_fraction": 1.0,
+        "mean_weight_on_addressed_slots": 1.0,
+        "mean_weight_on_held_slots": 1e-06,
+        "events": 250,
+        "weights": 1000,
+        "written_slots": 150,
+        "held_slots": 850
+      },
+      "untrained_hold": {
+        "mean_deviation": 0.0,
+        "max_deviation": 0.0,
+        "min_deviation": 0.0,
+        "rounded_one_hot_fraction": 0.4,
+        "mean_weight_on_addressed_slots": 0.0,
+        "mean_weight_on_held_slots": 0.0,
+        "events": 250,
+        "weights": 1000,
+        "written_slots": 150,
+        "held_slots": 850
+      },
+      "untrained_midpoint": {
+        "mean_deviation": 0.116763,
+        "max_deviation": 0.431065,
+        "min_deviation": 0.000389,
+        "rounded_one_hot_fraction": 0.0904,
+        "mean_weight_on_addressed_slots": 0.424631,
+        "mean_weight_on_held_slots": 0.410079,
+        "events": 250,
+        "weights": 1000,
+        "written_slots": 150,
+        "held_slots": 850
+      },
+      "hand_set_representation": {
+        "mean_deviation": 0.0,
+        "max_deviation": 0.0,
+        "min_deviation": 0.0,
+        "rounded_one_hot_fraction": 1.0,
+        "mean_weight_on_addressed_slots": 1.0,
+        "mean_weight_on_held_slots": 0.0,
+        "events": 250,
+        "weights": 1000,
+        "written_slots": 150,
+        "held_slots": 850
+      }
+    }
+  },
+  "soft_gate_cost": {
+    "trained_raw": {
+      "held_slots": 850,
+      "mean_hold_multiplier": 0.4676279250238047,
+      "min_hold_multiplier": 5.081609669831811e-130,
+      "fraction_holds_destroyed": 0.6470588235294118,
+      "note": "exp(A_HOLD * w) for slots the event should not write"
+    },
+    "trained_sharpened": {
+      "held_slots": 850,
+      "mean_hold_multiplier": 0.9988590025801162,
+      "min_hold_multiplier": 0.9773581505666473,
+      "fraction_holds_destroyed": 0.04588235294117647,
+      "note": "exp(A_HOLD * w) for slots the event should not write"
+    },
+    "untrained_hold_raw": {
+      "held_slots": 850,
+      "mean_hold_multiplier": 0.9950382561368629,
+      "min_hold_multiplier": 0.9929666059663249,
+      "fraction_holds_destroyed": 0.0,
+      "note": "exp(A_HOLD * w) for slots the event should not write"
+    },
+    "hand_set": {
+      "held_slots": 850,
+      "mean_hold_multiplier": 1.0,
+      "min_hold_multiplier": 1.0,
+      "fraction_holds_destroyed": 0.0,
+      "note": "exp(A_HOLD * w) for slots the event should not write"
+    }
+  },
+  "training_variants": [
+    {
+      "condition": "midpoint_init_final_only",
+      "init": "midpoint",
+      "dense_loss": false,
+      "anneal_to": null,
+      "raw": {
+        "rates": [
+          0.3,
+          0.3
+        ],
+        "mean": 0.3,
+        "min": 0.3,
+        "max": 0.3,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "sharpened": {
+        "rates": [
+          0.26,
+          0.26
+        ],
+        "mean": 0.26,
+        "min": 0.26,
+        "max": 0.26,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "final_losses": [
+        13.222695,
+        13.222728
+      ]
+    },
+    {
+      "condition": "midpoint_init_dense",
+      "init": "midpoint",
+      "dense_loss": true,
+      "anneal_to": null,
+      "raw": {
+        "rates": [
+          0.16,
+          0.16
+        ],
+        "mean": 0.16,
+        "min": 0.16,
+        "max": 0.16,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "sharpened": {
+        "rates": [
+          0.92,
+          0.92
+        ],
+        "mean": 0.92,
+        "min": 0.92,
+        "max": 0.92,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "final_losses": [
+        9.348515,
+        9.348511
+      ]
+    },
+    {
+      "condition": "hold_init_final_only",
+      "init": "hold",
+      "dense_loss": false,
+      "anneal_to": null,
+      "raw": {
+        "rates": [
+          0.4,
+          0.4
+        ],
+        "mean": 0.4,
+        "min": 0.4,
+        "max": 0.4,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "sharpened": {
+        "rates": [
+          0.5,
+          0.5
+        ],
+        "mean": 0.5,
+        "min": 0.5,
+        "max": 0.5,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "final_losses": [
+        12.173425,
+        12.173465
+      ]
+    },
+    {
+      "condition": "hold_init_dense",
+      "init": "hold",
+      "dense_loss": true,
+      "anneal_to": null,
+      "raw": {
+        "rates": [
+          0.42,
+          0.42
+        ],
+        "mean": 0.42,
+        "min": 0.42,
+        "max": 0.42,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "sharpened": {
+        "rates": [
+          1.0,
+          1.0
+        ],
+        "mean": 1.0,
+        "min": 1.0,
+        "max": 1.0,
+        "stdev": 0.0,
+        "tasks": null
+      },
+      "final_losses": [
+        7.419305,
+        7.419321
+      ]
+    },
+    {
+      "condition": "hold_init_dense_annealed",
+      "init": "hold",
+      "dense_loss": true,
+      "anneal_to": 0.05,
+      "raw": {
+        "rates": [
+          0.1,
+          0.08
+        ],
+        "mean": 0.09,
+        "min": 0.08,
+        "max": 0.1,
+        "stdev": 0.014142,
+        "tasks": null
+      },
+      "sharpened": {
+        "rates": [
+          0.88,
+          0.96
+        ],
+        "mean": 0.92,
+        "min": 0.88,
+        "max": 0.96,
+        "stdev": 0.056569,
+        "tasks": null
+      },
+      "final_losses": [
+        2.696265,
+        0.654751
+      ]
+    }
+  ],
+  "training_reports": [
+    {
+      "kind": "raw",
+      "seed": 0,
+      "steps": 2000,
+      "lr": 0.05,
+      "init": "hold",
+      "key_mode": "key",
+      "noise_operand": false,
+      "dense": true,
+      "anneal_to": null,
+      "initial_loss": 17.738365437266726,
+      "final_loss": 7.419305006683049,
+      "final_state_loss": 14.443230571333068,
+      "parameters": 72
+    },
+    {
+      "kind": "raw",
+      "seed": 1,
+      "steps": 2000,
+      "lr": 0.05,
+      "init": "hold",
+      "key_mode": "key",
+      "noise_operand": false,
+      "dense": true,
+      "anneal_to": null,
+      "initial_loss": 17.738466592984114,
+      "final_loss": 7.41932142938978,
+      "final_state_loss": 14.443256952904889,
+      "parameters": 72
+    },
+    {
+      "kind": "raw",
+      "seed": 2,
+      "steps": 2000,
+      "lr": 0.05,
+      "init": "hold",
+      "key_mode": "key",
+      "noise_operand": false,
+      "dense": true,
+      "anneal_to": null,
+      "initial_loss": 17.738368531776334,
+      "final_loss": 7.419307352842135,
+      "final_state_loss": 14.443401007601501,
+      "parameters": 72
+    },
+    {
+      "kind": "raw",
+      "seed": 3,
+      "steps": 2000,
+      "lr": 0.05,
+      "init": "hold",
+      "key_mode": "key",
+      "noise_operand": false,
+      "dense": true,
+      "anneal_to": null,
+      "initial_loss": 17.73845723391978,
+      "final_loss": 7.419319561351811,
+      "final_state_loss": 14.443260301704942,
+      "parameters": 72
+    },
+    {
+      "kind": "raw",
+      "seed": 4,
+      "steps": 2000,
+      "lr": 0.05,
+      "init": "hold",
+      "key_mode": "key",
+      "noise_operand": false,
+      "dense": true,
+      "anneal_to": null,
+      "initial_loss": 17.738419797342253,
+      "final_loss": 7.41932895244224,
+      "final_state_loss": 14.443230363903076,
+      "parameters": 72
+    },
+    {
+      "kind": "annealed",
+      "seed": 0,
+      "steps": 2000,
+      "lr": 0.05,
+      "init": "hold",
+      "key_mode": "key",
+      "noise_operand": false,
+      "dense": true,
+      "anneal_to": 0.05,
+      "initial_loss": 17.738365437266726,
+      "final_loss": 2.6962647679388363,
+      "final_state_loss": 4.608636788991584,
+      "parameters": 72
+    },
+    {
+      "kind": "annealed",
+      "seed": 1,
+      "steps": 2000,
+      "lr": 0.05,
+      "init": "hold",
+      "key_mode": "key",
+      "noise_operand": false,
+      "dense": true,
+      "anneal_to": 0.05,
+      "initial_loss": 17.738466592984114,
+      "final_loss": 0.654751108411719,
+      "final_state_loss": 1.883559074820416,
+      "parameters": 72
+    },
+    {
+      "kind": "annealed",
+      "seed": 2,
+      "steps": 2000,
+      "lr": 0.05,
+      "init": "hold",
+      "key_mode": "key",
+      "noise_operand": false,
+      "dense": true,
+      "anneal_to": 0.05,
+      "initial_loss": 17.738368531776334,
+      "final_loss": 2.8002306694085997,
+      "final_state_loss": 6.2697027203326385,
+      "parameters": 72
+    },
+    {
+      "kind": "annealed",
+      "seed": 3,
+      "steps": 2000,
+      "lr": 0.05,
+      "init": "hold",
+      "key_mode": "key",
+      "noise_operand": false,
+      "dense": true,
+      "anneal_to": 0.05,
+      "initial_loss": 17.73845723391978,
+      "final_loss": 6.09081859731043e-17,
+      "final_state_loss": 1.9849920816346477e-16,
+      "parameters": 72
+    },
+    {
+      "kind": "annealed",
+      "seed": 4,
+      "steps": 2000,
+      "lr": 0.05,
+      "init": "hold",
+      "key_mode": "key",
+      "noise_operand": false,
+      "dense": true,
+      "anneal_to": 0.05,
+      "initial_loss": 17.738419797342253,
+      "final_loss": 2.118122277174636,
+      "final_state_loss": 3.978616007912703,
+      "parameters": 72
+    }
+  ],
+  "representation": {
+    "saturation_weights_match_hand_set": true,
+    "note": "the linear layer can represent the hand-set gate exactly; whether gradient descent finds it is a separate question"
+  },
+  "reference_agreement": {
+    "tasks": 50,
+    "task_seed": 0,
+    "budget": 6,
+    "agent_py_rate": 1.0,
+    "experiment_hand_set_rate": 1.0,
+    "agent_loop_json_rate": 1.0,
+    "agree": true
+  },
+  "wall_seconds": 131.49
+}

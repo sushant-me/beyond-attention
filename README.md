@@ -412,6 +412,17 @@ python experiments/render_readme.py --agent agent-loop.json --readme README.md
 python experiments/long_memory.py --out long-memory.json
 python experiments/render_readme.py --memory long-memory.json --readme README.md
 
+# the learned gate: can the selective family's write gate be learned? (~85 s)
+python experiments/learned_gate.py --out learned-gate.json
+python experiments/render_readme.py --learned-gate learned-gate.json \
+    --readme README.md
+
+# the results file is committed, so check that it still matches the code instead
+# of trusting that it does: re-runs the experiment and diffs every number. This
+# exists because the file silently went stale once — four fields were added to a
+# block and nothing noticed, since the tests only check the file against itself.
+python experiments/learned_gate.py --verify
+
 # the dashboard, from the committed results (deterministic, no clock)
 python experiments/render_dashboard.py --voice voice-affect.json \
     --agent agent-loop.json --out dashboard.html
@@ -420,8 +431,9 @@ python experiments/render_dashboard.py --voice voice-affect.json \
 `experiments/run.py --help` lists the knobs; `--steps`, `--seeds`, `--pairs`,
 `--queries` and `--blocks` are the ones that cost time.
 
-The voice, agent and memory blocks render on their own (`--voice`, `--agent`,
-`--memory`) rather than as part of the results command, so each can be
+The voice, agent, memory and learned-gate blocks render on their own (`--voice`,
+`--agent`, `--memory`, `--learned-gate`) rather than as part of the results
+command, so each can be
 regenerated without touching the others. The results command takes
 `--length-extrapolation` as well: that section is *inside* the results block, and
 the renderer **refuses** to write the block without the file rather than silently
@@ -1117,6 +1129,52 @@ Three claims this table makes easy, and that are false:
 
 * *"This generalises."* It does not. The family is closed and synthetic: a fixed grammar, a shuffled event stream, a bounded key space, and an answer computed by a dict. Nothing is trained — no gradient anywhere in this path — the controller is hand-written branching, and the gate is set by hand. The clearest evidence that the *selectivity* rather than the capacity is what this family measures is the fixed-decay row of the width table: it scores 0.200 at 1 slot and 0.200 at 8 slots, so widening it changes nothing, while the gated state at the same 8 slots reaches 1.000. The part of the model this repository has never learned is the part that decides what to write.
 <!-- AGENT:END -->
+
+<!-- LEARNED-GATE:BEGIN -->
+### Is the gate learnable, or is it still hand-set?
+
+`experiments/learned_gate.py`, rendered from `learned-gate.json`. The gate is a single `nn.Linear` over one-hot features — one-hot opcode concatenated with one-hot key — followed by a sigmoid, trained by gradient descent on the *state*. Every row runs the agent's own `choose_action` on the decoded state, so the reader is identical everywhere and a difference between rows is a difference in the gate.
+
+Selective family, 50 eval tasks (seed 1), trained on 64 tasks (seed 0), 2000 steps, 5 seeds.
+
+| condition | solve rate | spread over seeds |
+|---|---|---|
+| hand-set gate (`agent.py`) | 1.000 | [1.000, 1.000] |
+| hand-set gate through the learned path | 1.000 | — |
+| fixed / constant gate (`memory="fixed"`) | 0.160 | — |
+| learned gate, trained, **raw sigmoid** | 0.420 | [0.420, 0.420] |
+| learned gate, trained, sharpened | 1.000 | [1.000, 1.000] |
+| learned gate, temperature annealed in training | 0.928 | [0.880, 1.000] |
+| learned gate, untrained (hold init) | 0.000 | [0.000, 0.000] |
+| learned gate, untrained (midpoint init) | 0.096 | [0.060, 0.120] |
+| saturation weights (exactly the hand-set gate) | 1.000 | — |
+
+**The gap is hardness, not addressing.** At a raw sigmoid the trained gate solves 0.420 against the hand-set gate's 1.000. It has learned *which* slot a value belongs in — its 0.5-threshold is exactly the hand-set gate on every eval event (rounded one-hot fraction 1.000) — but it is soft: mean deviation of the gate from 0/1 is 0.1114 (max 0.3721), and it puts 0.1301 on slots that must hold rather than the 0.0000 the hand-set gate puts there. A hold multiplies the slot by `exp(-800·w)`, so the raw gate leaves a mean hold multiplier of 0.4676 and loses more than 1% on 64.7% of held slots, against 0.0% for the hand-set gate.
+
+| sigmoid temperature | trained | untrained (hold init) |
+|---|---|---|
+| 1.0 | 0.420 | 0.000 |
+| 0.5 | 0.420 | 0.000 |
+| 0.2 | 0.500 | 0.000 |
+| 0.1 | 0.800 | 0.000 |
+| 0.05 | 1.000 | 0.000 |
+
+So a temperature choice supplies the hardness gradient descent did not: sharpened to 0.05 the learned gate reaches 1.000, equal to the hand-set gate, while the untrained control stays at 0.000 at every temperature. Annealing the temperature *during* training reaches 0.928 — closer, and not exact.
+
+**The prescribed feature map does not generalise to unseen keys.** Train on keys 0–15 and evaluate on 16–31 of a vocabulary of 32:
+
+| feature map | train keys | held-out keys |
+|---|---|---|
+| one-hot **per key** (as prescribed) | 1.000 | 0.000 |
+| one-hot per slot (`key % state_width`) | 1.000 | 1.000 |
+
+The per-key map memorises: a held-out key's weight row is still at its initialisation, so nothing is written and the rate is zero. Sharing weights between keys that address the same slot generalises fully. The failure therefore belongs to the prescribed feature map rather than to the mechanism — but the map that works is a different map, and the hand-set gate scores 1.000 on both.
+
+**Three things this does not establish.** Only the gate is trained: `A` is still `A_HOLD` and the reader is unchanged, so a Python dict in `evaluate_plan` still computes every answer and the *"no model is needed"* half of the objection stands. The exact hand-set behaviour needs an evaluation-time temperature, so the hardness is chosen rather than learned. And nothing here tests other shapes, other objectives, or the model's own learned `delta`.
+
+Agreement check: `agent.py` 1.000, this experiment's hand-set row 1.000, the agent-loop run 1.0.
+
+<!-- LEARNED-GATE:END -->
 
 ### What the numbers say, including the unflattering parts
 
