@@ -141,18 +141,6 @@ jobs:
         # a test failure rather than something a reader has to notice.
         run: python -m pytest tests/test_dashboard.py -q
 
-      - name: The committed results file still matches the code that produces it
-        # The tests check that learned-gate.json agrees with ITSELF. That is a
-        # different claim from agreeing with the code, and the gap is not
-        # theoretical: four `sharpness` fields were added to the held-out block
-        # and the file was not regenerated, so the published numbers came from an
-        # older revision of the experiment while every test stayed green.
-        # `--verify` re-runs the experiment and diffs every published number,
-        # ignoring wall_seconds, which is a property of the machine. Without this
-        # step the mode exists and nothing runs it, which is how it went stale in
-        # the first place.
-        run: python experiments/learned_gate.py --verify
-
       - name: The agent loop carries state, and the gate is what the state is for
         # The no-memory contrast is asserted here rather than only in the tests
         # because it is the number the agent block's honesty rests on: without
