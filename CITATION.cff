@@ -1,0 +1,32 @@
+cff-version: 1.2.0
+message: "If you use this software in work you publish, please cite it as below."
+title: "beyond-attention"
+type: software
+version: 0.1.0
+date-released: 2026-09-19
+authors:
+  - family-names: Poudel
+    given-names: Sushant
+    email: sushant.poudel2028@gmail.com
+    affiliation: "Nepal Engineering College, Bhaktapur, Nepal"
+    # Register an ORCID iD and add it here — it is the identifier that
+    # disambiguates this author from other researchers of the same name:
+    # orcid: "https://orcid.org/0000-0000-0000-0000"
+abstract: >-
+  A from-scratch implementation of the selective state-space recurrence
+  (Mamba's S6), with the scan checked three independent ways — a reference
+  loop, a chunked kernel-style path, and an associative Hillis-Steele scan —
+  asserted equal to float64 tolerance and mutation-tested, alongside an honest
+  parameter-matched comparison against a Transformer on multi-query associative
+  recall, including the control that overturns the headline result.
+keywords:
+  - state-space-model
+  - mamba
+  - selective-scan
+  - sequence-models
+  - attention
+  - deep-learning
+  - pytorch
+  - numpy
+license: MIT
+repository-code: "https://github.com/sushant-me/beyond-attention"
