@@ -141,6 +141,24 @@ jobs:
         # a test failure rather than something a reader has to notice.
         run: python -m pytest tests/test_dashboard.py -q
 
+      - name: The committed results file still matches the code that produces it
+        # The tests check that learned-gate.json agrees with ITSELF. That is a
+        # different claim from agreeing with the code, and the gap is not
+        # theoretical: four `sharpness` fields were added to the held-out block
+        # and the file was not regenerated, so the published numbers came from an
+        # older revision of the experiment while every test stayed green.
+        #
+        # Pinned to ONE interpreter on purpose. This was first added across the
+        # whole matrix and failed on 3.12 alone -- and the cause is in the results
+        # themselves: the annealed row spans ten orders of magnitude across seeds,
+        # so it is numerically sensitive and moves between Python builds. 3.11 and
+        # 3.13 reproduce the committed file exactly. Running the exact-match check
+        # where it means something is worth more than a tolerance that would hide
+        # the drift it exists to catch; the README's "Reproducing this" section
+        # records which row is affected and why.
+        if: matrix.python-version == '3.11'
+        run: python experiments/learned_gate.py --verify
+
       - name: The agent loop carries state, and the gate is what the state is for
         # The no-memory contrast is asserted here rather than only in the tests
         # because it is the number the agent block's honesty rests on: without
