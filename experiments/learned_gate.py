@@ -182,7 +182,7 @@ def noise_hold_fraction(gate, tasks: tuple[Task, ...], state_width: int,
     return hard / total
 
 
-def hold_cost(gate, tasks: tuple[Task, ...], n_keys: int, state_width: int,
+def hold_cost(gate, tasks: tuple[Task, ...], state_width: int,
               temperature: float) -> dict:
     """What a soft gate costs the slots it is supposed to leave alone.
 
@@ -191,6 +191,10 @@ def hold_cost(gate, tasks: tuple[Task, ...], n_keys: int, state_width: int,
     untouched); anything above a few thousandths is a decay the reader has to
     survive. Reported as the mean multiplier, the worst one, and the fraction of
     held slots that lose more than 1% of their contents in a single event.
+
+    No ``n_keys`` argument: this measurement iterates every slot of the state,
+    so the key vocabulary never enters it. The parameter was there and unused,
+    and it was the only one in this experiment that was.
     """
     multipliers: list[float] = []
     for task in tasks:
@@ -212,10 +216,10 @@ def hold_cost(gate, tasks: tuple[Task, ...], n_keys: int, state_width: int,
     }
 
 
-def soft_gate_cost_block(gates: dict, tasks: tuple[Task, ...], n_keys: int,
+def soft_gate_cost_block(gates: dict, tasks: tuple[Task, ...],
                          state_width: int) -> dict:
     return {
-        name: hold_cost(gate, tasks, n_keys, state_width, temperature)
+        name: hold_cost(gate, tasks, state_width, temperature)
         for name, (gate, temperature) in gates.items()
     }
 
@@ -605,7 +609,7 @@ def main() -> int:
         "trained_sharpened": (trained[args.seeds[0]], SHARP_TEMPERATURE),
         "untrained_hold_raw": (untrained[("hold", args.seeds[0])], 1.0),
         "hand_set": (handset, 1.0),
-    }, eval_tasks, keys, width)
+    }, eval_tasks, width)
 
     # --- agreement with the published results -----------------------------
     reference_tasks = selective_suite(args.eval_tasks, seed=0, **family)
