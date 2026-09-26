@@ -260,11 +260,11 @@ A = -torch.rand(dim, state) - 0.05
 B = torch.randn(batch, length, state)
 C = torch.randn(batch, length, state)
 
+# One assignment, and it is the one that decides which path is measured: this
+# was written twice -- a ternary immediately followed by the same if/else -- so
+# the first line was dead, and a mutation applied to it changed nothing while the
+# test stayed green. That is how it was found.
 fn = selective_scan_streaming if path == "streaming" else selective_scan_chunked
-if path == "streaming":
-    fn = selective_scan_streaming
-else:
-    fn = selective_scan_chunked
 
 with torch.no_grad():
     out, rise_kb = peak_rss_during(fn, x, delta, A, B, C, chunk=64)
@@ -303,13 +303,25 @@ def test_the_streaming_path_does_not_materialise_the_whole_sequence():
     streaming = measure("streaming")
     assert chunked["finite"] and streaming["finite"]
 
-    # At this size the materialised terms are tens of megabytes and the streaming
-    # footprint is a fraction of one, so the gap must be unambiguous rather than
-    # a close call a noisy allocator could flip.
-    assert chunked["growth_kb"] > 8 * 1024, (
-        f"expected the whole-sequence path to allocate tens of MB, saw "
+    # The magnitudes the README publishes, not a ratio that any two small
+    # numbers satisfy. The table says 131 MB against 6.6 MB and "a 20x
+    # reduction"; the assertion here used to be `chunked > 8 MB` and
+    # `streaming < chunked / 4`, which a 50 MB / 12 MB pair would pass while
+    # contradicting every figure in the table.
+    #
+    # Absolute bounds rather than the exact numbers, because these are RSS rises
+    # and move a few percent between runs -- a re-measurement gave 131.3 MB and
+    # 6.1 MB. The margins are not tight: the materialised terms are four
+    # `(B, L, D, N)` float32 tensors, which is ~131 MB structurally at this
+    # size, and the streaming path holds one chunk of 64 steps.
+    assert chunked["growth_kb"] > 64 * 1024, (
+        f"expected the whole-sequence path to allocate over 64 MB, saw "
         f"{chunked['growth_kb'] / 1024:.1f} MB — the measurement is not "
         f"discriminating and cannot support the claim"
+    )
+    assert streaming["growth_kb"] < 16 * 1024, (
+        f"the streaming path used {streaming['growth_kb'] / 1024:.1f} MB, which "
+        f"is more than one chunk's worth and contradicts the table's 6.6 MB"
     )
     assert streaming["growth_kb"] < chunked["growth_kb"] / 4, (
         f"streaming used {streaming['growth_kb'] / 1024:.1f} MB against the "

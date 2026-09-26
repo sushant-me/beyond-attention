@@ -8,9 +8,13 @@ not expect and a control that explains it.
 ## What this is, and what it is not
 
 **It is** a working, tested implementation of a non-attention sequence model,
-plus a measurement of it. Every number below is generated from a JSON results
-file by `experiments/render_readme.py`; re-running the experiment and the
-renderer reproduces the tables.
+plus a measurement of it. Every table inside a rendered region below — the
+`BEGIN`/`END` markers say which — is generated from a JSON results file by
+`experiments/render_readme.py`, and re-running the experiment and the renderer
+reproduces it; `tests/test_render_readme.py` fails if any region stops matching
+its file. Everything outside those markers is written by hand from the same
+committed files, and where a figure there comes from a test or a probe rather
+than from a results file, it names the source.
 
 **It is not** a new architecture, and not a replacement for attention. Three
 claims that would be easy to make from the main table, and are all false:
@@ -226,8 +230,8 @@ The table above is one length. `scan_inner.py` now sweeps several, because a
 configuration that wins at 8,192 tokens need not win at 1,024 — and the chunk
 size is the setting most likely to behave that way.
 
-Cost is fitted as `length ** exponent` by least squares over 1,024 / 2,048 /
-4,096 / 8,192 (batch=4, d_inner=128, d_state=16):
+<!-- INNER-SCAN-SWEEP:BEGIN -->
+Cost is fitted as `length ** exponent` by least squares over 1,024 / 2,048 / 4,096 / 8,192 (batch=4, d_inner=128, d_state=16):
 
 | configuration | exponent | at 8,192 | peak MB |
 |---|---:|---:|---:|
@@ -236,15 +240,13 @@ Cost is fitted as `length ** exponent` by least squares over 1,024 / 2,048 /
 | loop @ chunk 256 | 0.89 | 14.93 s | 489 |
 | vectorized @ chunk 256 | 0.81 | 8.91 s | 4,827 |
 
-`loop` at chunk 64 is the fastest configuration at **every** length measured
-(1,024: 0.99 s, 2,048: 1.21 s, 4,096: 1.79 s, 8,192: 3.58 s), so the default is
-not a compromise that happens to hold at one size.
+`loop` at chunk 64 is the fastest configuration at **every** length measured (1,024: 0.99 s, 2,048: 1.21 s, 4,096: 1.79 s, 8,192: 3.58 s), so the default is not a compromise that happens to hold at one size.
 
-The more useful number is what actually moves the result. Changing the inner
-scan at a fixed chunk changes the time by about 20% (3.58 → 4.33 s at chunk 64).
-Changing the **chunk** at a fixed inner scan changes it by **4.2x** (3.58 →
-14.93 s at chunk 256). The chunk is the setting worth tuning — and it is the one
-the single-length table could not show, which is why the sweep exists.
+The more useful number is what actually moves the result. Changing the inner scan at a fixed chunk changes the time by about 21% (3.58 → 4.33 s at chunk 64). Changing the **chunk** at a fixed inner scan changes it by **4.2x** (3.58 → 14.93 s at chunk 256).
+<!-- INNER-SCAN-SWEEP:END -->
+
+The chunk is the setting worth tuning — and it is the one the single-length table
+could not show, which is why the sweep exists.
 
 An exponent below 1.0 means cost is growing *slower* than the sequence, because
 fixed per-call overhead is still being amortised over this range. It is not
@@ -326,17 +328,24 @@ at `(B, L, D, N)` for the whole sequence at once, so a linear-time algorithm cos
 
 The rewrite streams one chunk at a time and wraps each chunk in
 `torch.utils.checkpoint`, so the backward pass recomputes chunks instead of
-retaining them. Measured by the same method, on the same inputs, at `L = 4096`:
+retaining them. The two paths are measured by
+`tests/test_scan.py::test_the_streaming_path_does_not_materialise_the_whole_sequence`,
+each in its own process — batch 2, length 4,096, d_inner 32, d_state 16, chunk
+64, forward pass only, at `L = 4096`:
 
 | path | peak rise in RSS |
 |---|---|
 | whole-sequence (materialising) | 131 MB |
 | streaming (one chunk) | 6.6 MB |
 
-a **20× reduction**, and the test that asserts it was mutation-checked — pointing
-the streaming path back at the materialising implementation makes it fail. The
-per-token memory of the model then falls to 0.036 MB and stays flat as length
-grows, which is the property the architecture is supposed to have.
+a **20× reduction**. Both figures move a few percent between runs, because they
+are RSS rises rather than exact arithmetic — a re-run here measured 131.3 MB and
+6.1 MB — so the test asserts what is stable about them (the materialising path
+over 64 MB, the streaming path under 16 MB) rather than the two exact numbers. It
+was also mutation-checked: pointing the streaming path back at the materialising
+implementation makes it fail. The per-token memory of the model then falls to
+0.036 MB and stays flat as length grows, which is the property the architecture is
+supposed to have.
 
 Two mistakes of my own are worth recording, because both produced results I
 nearly published:
@@ -384,6 +393,8 @@ python -u experiments/stream_memory.py --out stream-memory.json
 # inner scan and chunk size across lengths (each child address-space capped)
 python experiments/scan_inner.py --lengths 1024 2048 4096 8192 --chunks 64 256 \
     --out scan-inner-scaling.json
+python experiments/render_readme.py \
+    --scan-inner-scaling scan-inner-scaling.json --readme README.md
 
 # the single-length inner-scan comparison the results block renders, which is a
 # different file from the sweep above: two configurations at one length, with the

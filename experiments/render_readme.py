@@ -61,6 +61,20 @@ subsection is rendered from `straight-through.json` and lives inside the
     python experiments/learned_gate_straight_through.py --out straight-through.json
     python experiments/render_readme.py --learned-gate learned-gate.json \
         --straight-through straight-through.json --readme README.md
+
+`--scan-inner-scaling` renders the inner-scan and chunk sweep from
+`scan-inner-scaling.json` into `INNER-SCAN-SWEEP:BEGIN`/`INNER-SCAN-SWEEP:END`.
+It is a separate block rather than part of the results render because it is a
+separate measurement file, but it is the *same* file that made this necessary:
+that table was the last one in Results written with its numbers typed in, so the
+README's claim that every number comes from a JSON file through this renderer was
+false for it. Note that this is not `--scan-inner`, which is the single-length
+comparison inside the results block.
+
+    python experiments/scan_inner.py --lengths 1024 2048 4096 8192 \
+        --chunks 64 256 --out scan-inner-scaling.json
+    python experiments/render_readme.py \
+        --scan-inner-scaling scan-inner-scaling.json --readme README.md
 """
 
 from __future__ import annotations
@@ -82,6 +96,8 @@ MEMORY_BEGIN = "<!-- MEMORY:BEGIN -->"
 MEMORY_END = "<!-- MEMORY:END -->"
 LEARNED_GATE_BEGIN = "<!-- LEARNED-GATE:BEGIN -->"
 LEARNED_GATE_END = "<!-- LEARNED-GATE:END -->"
+INNER_SWEEP_BEGIN = "<!-- INNER-SCAN-SWEEP:BEGIN -->"
+INNER_SWEEP_END = "<!-- INNER-SCAN-SWEEP:END -->"
 
 
 def _load(path: str | None, label: str) -> dict | None:
@@ -255,6 +271,117 @@ def straight_through_table(payload: dict | None) -> str:
             lines.append(f"| **{label}** | **{mean}** {detail} |")
         else:
             lines.append(f"| {label} | {mean} {detail} |")
+    return "\n".join(lines)
+
+
+def inner_scan_sweep_section(payload: dict | None) -> str:
+    """The inner-scan and chunk sweep across lengths, from `scan-inner-scaling.json`.
+
+    This was the last table in Results written with its numbers typed in, so it
+    was the one place the README's own claim -- every number below is generated
+    from a JSON results file through this renderer -- did not hold. The prose is
+    the same prose; the numbers come from the payload now, and the emphasised row
+    is whichever configuration is actually fastest rather than whichever one was
+    fastest when the sentence was written.
+    """
+    if payload is None:
+        return ("_inner-scan sweep: not run_ (pass "
+                "`--scan-inner-scaling scan-inner-scaling.json`)")
+    results = payload.get("results", {})
+    configurations = sorted({key.rsplit("@L", 1)[0] for key in results
+                             if key != "_exponents"})
+    if not configurations:
+        return "_inner-scan sweep: no rows_"
+
+    config = payload.get("config", {})
+    lengths = config.get("lengths") or [config["length"]]
+    longest = max(lengths)
+    exponents = results.get("_exponents", {})
+
+    def seconds(key: str, length: int) -> float:
+        return results[f"{key}@L{length}"]["seconds"]
+
+    # Chunk-major, inner-minor, which is how the sweep reads and how the table
+    # was ordered by hand. Anything the order does not name is still rendered
+    # rather than dropped, at the end.
+    order = [f"{inner}@{chunk}" for chunk in config.get("chunks", [])
+             for inner in ("loop", "vectorized")]
+    order = [key for key in order if key in configurations]
+    order += [key for key in configurations if key not in order]
+
+    at_longest = {key: seconds(key, longest) for key in order}
+    fastest = min(at_longest, key=at_longest.get)
+    fastest_at = {
+        length: min(order, key=lambda key: seconds(key, length))
+        for length in lengths
+    }
+
+    def label(key: str) -> str:
+        """The table's form: `loop @ chunk 64`."""
+        inner, chunk = key.split("@")
+        return f"{inner} @ chunk {chunk}"
+
+    def phrase(key: str) -> str:
+        """The prose form: `loop` at chunk 64."""
+        inner, chunk = key.split("@")
+        return f"`{inner}` at chunk {chunk}"
+
+    lines = [
+        "Cost is fitted as `length ** exponent` by least squares over "
+        + " / ".join(f"{length:,}" for length in lengths)
+        + f" (batch={config.get('batch')}, d_inner={config.get('dim')}, "
+          f"d_state={config.get('state')}):",
+        "",
+        f"| configuration | exponent | at {longest:,} | peak MB |",
+        "|---|---:|---:|---:|",
+    ]
+    for key in order:
+        exposure = exponents.get(key)
+        exponent = f"{exposure:.2f}" if exposure is not None else "—"
+        peak_mb = results[f"{key}@L{longest}"]["peak_rss_kb"] / 1024
+        time = at_longest[key]
+        if key == fastest:
+            lines.append(f"| **{label(key)}** | **{exponent}** | "
+                         f"**{time:.2f} s** | {peak_mb:,.0f} |")
+        else:
+            lines.append(f"| {label(key)} | {exponent} | {time:.2f} s | "
+                         f"{peak_mb:,.0f} |")
+
+    measured = ", ".join(
+        f"{length:,}: {seconds(fastest_at[length], length):.2f} s"
+        for length in lengths)
+    if set(fastest_at.values()) == {fastest}:
+        verdict = (f"{phrase(fastest)} is the fastest configuration at "
+                   f"**every** length measured ({measured}), so the default is "
+                   f"not a compromise that happens to hold at one size.")
+    else:
+        # The claim above is not a fact about the code, it is a fact about this
+        # run: a sweep that reversed somewhere must say so rather than keep the
+        # sentence it was written with.
+        per_length = ", ".join(
+            f"{length:,}: `{label(fastest_at[length])}` at "
+            f"{seconds(fastest_at[length], length):.2f} s"
+            for length in lengths)
+        verdict = (f"The fastest configuration is not the same at every length "
+                   f"({per_length}), so the default is a compromise between "
+                   f"sizes and the table's emphasis is the longest one only.")
+
+    lines += ["", verdict, ""]
+
+    first_chunk = config["chunks"][0]
+    last_chunk = config["chunks"][-1]
+    loop_short = seconds(f"loop@{first_chunk}", longest)
+    vec_short = seconds(f"vectorized@{first_chunk}", longest)
+    loop_long = seconds(f"loop@{last_chunk}", longest)
+    lines += [
+        "The more useful number is what actually moves the result. Changing the "
+        f"inner scan at a fixed chunk changes the time by about "
+        f"{100 * (vec_short - loop_short) / loop_short:.0f}% "
+        f"({loop_short:.2f} → {vec_short:.2f} s at chunk {first_chunk}). Changing "
+        f"the **chunk** at a fixed inner scan changes it by "
+        f"**{loop_long / loop_short:.1f}x** "
+        f"({loop_short:.2f} → {loop_long:.2f} s at chunk {last_chunk}).",
+    ]
     return "\n".join(lines)
 
 
@@ -1885,6 +2012,10 @@ def main() -> int:
                         help="repeatable: one table per baseline")
     parser.add_argument("--control")
     parser.add_argument("--scan-inner")
+    parser.add_argument("--scan-inner-scaling",
+                        help="scan-inner-scaling.json, which renders the "
+                             "inner-scan sweep section of the results block "
+                             "(a different file from --scan-inner)")
     parser.add_argument("--voice",
                         help="voice-affect.json, which renders the voice block")
     parser.add_argument("--emotion",
@@ -1909,13 +2040,14 @@ def main() -> int:
     args = parser.parse_args()
 
     if not (args.mqar or args.voice or args.emotion or args.agent
-            or args.memory or args.learned_gate):
+            or args.memory or args.learned_gate or args.scan_inner_scaling):
         parser.error("give --mqar (to render the results block), --voice "
                      "(to render the voice block), --emotion (to render the "
                      "trained-classifier block), --agent (to render the agent "
                      "block), --memory (to render the memory block), "
                      "--learned-gate (to render the gate-learnability block), "
-                     "or a combination")
+                     "--scan-inner-scaling (to render the inner-scan sweep "
+                     "section), or a combination")
 
     readme = pathlib.Path(args.readme)
     text = readme.read_text()
@@ -1999,6 +2131,34 @@ def main() -> int:
 
         text = f"{head}{BEGIN}\n{rendered}\n{END}{tail}"
         print(f"wrote {args.readme} results block "
+              f"({len(rendered.splitlines())} lines)")
+
+    if args.scan_inner_scaling:
+        sweep = _load(args.scan_inner_scaling, "the inner-scan sweep")
+        if sweep is None:
+            return 1
+        if INNER_SWEEP_BEGIN not in text or INNER_SWEEP_END not in text:
+            print(f"{args.readme} has no {INNER_SWEEP_BEGIN} / "
+                  f"{INNER_SWEEP_END} block", file=sys.stderr)
+            return 1
+        head, rest = text.split(INNER_SWEEP_BEGIN, 1)
+        _, tail = rest.split(INNER_SWEEP_END, 1)
+
+        rendered = inner_scan_sweep_section(sweep)
+        for marker in ("| configuration | exponent |", "| loop @ chunk "):
+            if marker not in rendered:
+                print(f"refusing to write: {marker!r} missing from the inner-scan "
+                      f"sweep render", file=sys.stderr)
+                return 1
+        for sentinel in ("not run_", "no rows_", "missing_"):
+            if sentinel in rendered:
+                print(f"refusing to write: the inner-scan sweep render contains "
+                      f"{sentinel!r}, so the payload rendered as a placeholder",
+                      file=sys.stderr)
+                return 1
+
+        text = f"{head}{INNER_SWEEP_BEGIN}\n{rendered}\n{INNER_SWEEP_END}{tail}"
+        print(f"wrote {args.readme} inner-scan sweep block "
               f"({len(rendered.splitlines())} lines)")
 
     if args.voice:

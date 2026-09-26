@@ -90,6 +90,10 @@ BLOCKS = (
      render_readme.LEARNED_GATE_END,
      lambda: render_readme.learned_gate_section(
          _json("learned-gate.json"), _json("straight-through.json"))),
+    ("inner-scan-sweep", render_readme.INNER_SWEEP_BEGIN,
+     render_readme.INNER_SWEEP_END,
+     lambda: render_readme.inner_scan_sweep_section(
+         _json("scan-inner-scaling.json"))),
 )
 
 
@@ -300,3 +304,70 @@ def test_the_straight_through_table_refuses_a_payload_that_cannot_argue() -> Non
         "_straight-through attempt: missing_"
     assert render_readme.straight_through_table({}) == \
         "_straight-through attempt: no rows_"
+
+
+def test_the_inner_scan_sweep_is_the_jsons_and_emphasises_the_fastest() -> None:
+    """The sweep's table was the last one in Results with typed-in numbers.
+
+    Every cell is checked against `scan-inner-scaling.json` rather than against
+    the README, and the row that is bold has to be the row that is actually
+    fastest at the longest length -- an emphasis that is written into the render
+    rather than derived would survive the measurement reversing.
+    """
+    block = _block(README.read_text(), render_readme.INNER_SWEEP_BEGIN,
+                   render_readme.INNER_SWEEP_END)
+    payload = _json("scan-inner-scaling.json")
+    results = payload["results"]
+    longest = max(payload["config"]["lengths"])
+
+    configurations = sorted({key.rsplit("@L", 1)[0] for key in results
+                             if key != "_exponents"})
+    checked = 0
+    for key in configurations:
+        inner, chunk = key.split("@")
+        times = {k: results[f"{k}@L{longest}"]["seconds"]
+                 for k in configurations}
+        fastest = min(times, key=times.get)
+        expected = (f"| **{inner} @ chunk {chunk}** | "
+                    f"**{results['_exponents'][key]:.2f}** | "
+                    f"**{times[key]:.2f} s** | "
+                    f"{results[f'{key}@L{longest}']['peak_rss_kb'] / 1024:,.0f} |"
+                    if key == fastest else
+                    f"| {inner} @ chunk {chunk} | "
+                    f"{results['_exponents'][key]:.2f} | {times[key]:.2f} s | "
+                    f"{results[f'{key}@L{longest}']['peak_rss_kb'] / 1024:,.0f} |")
+        assert expected in block, (key, expected)
+        checked += 1
+    assert checked == len(configurations) >= 4, checked
+
+    # The per-length evidence the sentence rests on, from the same file.
+    for length in payload["config"]["lengths"]:
+        at_length = {k: results[f"{k}@L{length}"]["seconds"]
+                     for k in configurations}
+        best = min(at_length, key=at_length.get)
+        assert f"{length:,}: {at_length[best]:.2f} s" in block, length
+
+
+def test_the_sweep_verdict_changes_when_the_fastest_configuration_does() -> None:
+    """The sentence is a claim about this run, so it has to be able to fail.
+
+    Making one configuration much slower at the shortest length moves the winner
+    there. The renderer must then say that the fastest configuration is not the
+    same at every length, instead of keeping the sentence it was written with.
+    """
+    payload = _json("scan-inner-scaling.json")
+    shortest = min(payload["config"]["lengths"])
+    baseline = render_readme.inner_scan_sweep_section(payload)
+    assert "at **every** length measured" in baseline
+
+    payload["results"][f"loop@64@L{shortest}"]["seconds"] = 999.0
+    flipped = render_readme.inner_scan_sweep_section(payload)
+    assert "at **every** length measured" not in flipped
+    assert "not the same at every length" in flipped
+    assert f"{shortest:,}: " in flipped
+
+
+def test_the_sweep_section_handles_a_payload_it_cannot_render() -> None:
+    assert "not run_" in render_readme.inner_scan_sweep_section(None)
+    assert render_readme.inner_scan_sweep_section({}) == \
+        "_inner-scan sweep: no rows_"
