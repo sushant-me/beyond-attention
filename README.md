@@ -13,8 +13,11 @@ plus a measurement of it. Every table inside a rendered region below — the
 `experiments/render_readme.py`, and re-running the experiment and the renderer
 reproduces it; `tests/test_render_readme.py` fails if any region stops matching
 its file. Everything outside those markers is written by hand from the same
-committed files, and where a figure there comes from a test or a probe rather
-than from a results file, it names the source.
+committed files, and `tests/test_readme_claims.py` recomputes the four
+measurement tables that sit outside them — the training-variant losses, the
+carried-state table, the measured RSS table and the parallel-forward wall — and
+fails if a figure in any of them drifts from its JSON. Where a figure comes from
+a test or a probe rather than from a results file, it names the source.
 
 **It is not** a new architecture, and not a replacement for attention. Three
 claims that would be easy to make from the main table, and are all false:

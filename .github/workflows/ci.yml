@@ -135,6 +135,15 @@ jobs:
         # re-renders every block from its JSON and compares it with the README.
         run: python -m pytest tests/test_render_readme.py -q
 
+      - name: The tables the renderer does not produce still match their JSON
+        # The other half of the same claim. Four measurement tables sit inside
+        # narrative sections rather than in rendered regions, so they are written
+        # by hand -- and nothing checked them against their files, which is how a
+        # published figure drifts with every test still green. Its own step
+        # because its failure means a published number is wrong, which is worth
+        # reading as itself rather than as one line among four hundred.
+        run: python -m pytest tests/test_readme_claims.py -q
+
       - name: The dashboard is a render of the committed results
         # The dashboard is the one artifact whose test needs the committed file
         # to match a fresh render of the committed JSON, so a stale dashboard is
