@@ -99,6 +99,16 @@ LEARNED_GATE_END = "<!-- LEARNED-GATE:END -->"
 INNER_SWEEP_BEGIN = "<!-- INNER-SCAN-SWEEP:BEGIN -->"
 INNER_SWEEP_END = "<!-- INNER-SCAN-SWEEP:END -->"
 
+#: The scan the model ships with, as `(inner, chunk)`.
+#:
+#: It is a constant here rather than something the renderer imports, because
+#: importing the model would make rendering depend on torch. The sentence that
+#: uses it claims the fastest configuration is or is not this one, so
+#: `tests/test_render_readme.py` reads it off `SelectiveSSMBlock.__init__`'s own
+#: signature and fails if the two ever differ -- a renderer that asserted "the
+#: default" while guessing at it is how that sentence would go wrong.
+DEFAULT_SCAN = ("loop", 64)
+
 
 def _load(path: str | None, label: str) -> dict | None:
     if not path:
@@ -294,27 +304,38 @@ def inner_scan_sweep_section(payload: dict | None) -> str:
         return "_inner-scan sweep: no rows_"
 
     config = payload.get("config", {})
-    lengths = config.get("lengths") or [config["length"]]
+    lengths = config.get("lengths") or []
+    chunks = config.get("chunks") or []
+    # The section is about how cost moves with length, so one length cannot
+    # support it: there is no least-squares fit over a single point, and "at
+    # every length measured" would mean one length. The experiment only writes
+    # `_exponents` for a multi-length run for the same reason.
+    if len(lengths) < 2:
+        return (f"_inner-scan sweep: too few lengths_ (a sweep needs at least "
+                f"two; this payload has {len(lengths)})")
     longest = max(lengths)
     exponents = results.get("_exponents", {})
 
-    def seconds(key: str, length: int) -> float:
-        return results[f"{key}@L{length}"]["seconds"]
+    def measured(key: str, length: int) -> dict | None:
+        """The row, or None when the configuration has no measurement there.
+
+        `scan_inner.py` records a refused allocation as `{"failed": True}` with
+        no timing and no peak -- a result, not a crash -- so a renderer that
+        indexed `["seconds"]` would crash on the experiment's own output. A
+        failed row renders as an em dash and is excluded from every comparison.
+        """
+        entry = results.get(f"{key}@L{length}")
+        if not isinstance(entry, dict) or entry.get("failed"):
+            return None
+        return entry
 
     # Chunk-major, inner-minor, which is how the sweep reads and how the table
     # was ordered by hand. Anything the order does not name is still rendered
     # rather than dropped, at the end.
-    order = [f"{inner}@{chunk}" for chunk in config.get("chunks", [])
+    order = [f"{inner}@{chunk}" for chunk in chunks
              for inner in ("loop", "vectorized")]
     order = [key for key in order if key in configurations]
     order += [key for key in configurations if key not in order]
-
-    at_longest = {key: seconds(key, longest) for key in order}
-    fastest = min(at_longest, key=at_longest.get)
-    fastest_at = {
-        length: min(order, key=lambda key: seconds(key, length))
-        for length in lengths
-    }
 
     def label(key: str) -> str:
         """The table's form: `loop @ chunk 64`."""
@@ -325,6 +346,24 @@ def inner_scan_sweep_section(payload: dict | None) -> str:
         """The prose form: `loop` at chunk 64."""
         inner, chunk = key.split("@")
         return f"`{inner}` at chunk {chunk}"
+
+    at_longest = {key: measured(key, longest) for key in order}
+    timed = [key for key in order if at_longest[key]]
+    if not timed:
+        return (f"_inner-scan sweep: no rows_ (no configuration has a timing at "
+                f"{longest:,}, the longest length)")
+
+    # Per length, the fastest configuration that actually has a measurement
+    # there, and the lengths where nothing does.
+    fastest_at: dict[int, str] = {}
+    refused: list[int] = []
+    for length in lengths:
+        candidates = [key for key in order if measured(key, length)]
+        if candidates:
+            fastest_at[length] = min(
+                candidates, key=lambda key: measured(key, length)["seconds"])
+        else:
+            refused.append(length)
 
     lines = [
         "Cost is fitted as `length ** exponent` by least squares over "
@@ -337,51 +376,94 @@ def inner_scan_sweep_section(payload: dict | None) -> str:
     ]
     for key in order:
         exposure = exponents.get(key)
+        row = at_longest[key]
+        # No exponent means either the fit had too few points or the
+        # configuration never ran successfully; both are an em dash rather than
+        # a number, and neither is a zero.
         exponent = f"{exposure:.2f}" if exposure is not None else "—"
-        peak_mb = results[f"{key}@L{longest}"]["peak_rss_kb"] / 1024
-        time = at_longest[key]
-        if key == fastest:
-            lines.append(f"| **{label(key)}** | **{exponent}** | "
-                         f"**{time:.2f} s** | {peak_mb:,.0f} |")
+        time = f"{row['seconds']:.2f} s" if row else "—"
+        peak = f"{row['peak_rss_kb'] / 1024:,.0f}" if row else "—"
+        bold = row is not None and key == min(
+            timed, key=lambda k: at_longest[k]["seconds"])
+        if bold:
+            lines.append(f"| **{label(key)}** | **{exponent}** | **{time}** | "
+                         f"{peak} |")
         else:
-            lines.append(f"| {label(key)} | {exponent} | {time:.2f} s | "
-                         f"{peak_mb:,.0f} |")
+            lines.append(f"| {label(key)} | {exponent} | {time} | {peak} |")
 
-    measured = ", ".join(
-        f"{length:,}: {seconds(fastest_at[length], length):.2f} s"
-        for length in lengths)
-    if set(fastest_at.values()) == {fastest}:
-        verdict = (f"{phrase(fastest)} is the fastest configuration at "
-                   f"**every** length measured ({measured}), so the default is "
-                   f"not a compromise that happens to hold at one size.")
+    same_winner = len(set(fastest_at.values())) == 1 and not refused
+    winner = next(iter(set(fastest_at.values()))) if same_winner else None
+    # "At every length measured" additionally requires the winner to have been
+    # measured at all of them, or the sentence would be claiming coverage it
+    # does not have.
+    if winner is not None and any(measured(winner, L) is None for L in lengths):
+        same_winner, winner = False, None
+
+    if same_winner:
+        spans = ", ".join(
+            f"{length:,}: {measured(winner, length)['seconds']:.2f} s"
+            for length in lengths)
+        verdict = (f"{phrase(winner)} is the fastest configuration at "
+                   f"**every** length measured ({spans}).")
+        # Whether that is the configuration the model ships with is a fact about
+        # the code, not about this run, so it is read from the constant above
+        # rather than assumed.
+        if winner == f"{DEFAULT_SCAN[0]}@{DEFAULT_SCAN[1]}":
+            verdict += (" So the default is not a compromise that happens to "
+                        "hold at one size.")
+        else:
+            verdict += (f" The shipped default is `{DEFAULT_SCAN[0]}` at chunk "
+                        f"{DEFAULT_SCAN[1]}, which is not the fastest here.")
     else:
         # The claim above is not a fact about the code, it is a fact about this
-        # run: a sweep that reversed somewhere must say so rather than keep the
+        # run: a sweep whose winner moves must say so rather than keep the
         # sentence it was written with.
         per_length = ", ".join(
             f"{length:,}: `{label(fastest_at[length])}` at "
-            f"{seconds(fastest_at[length], length):.2f} s"
-            for length in lengths)
+            f"{measured(fastest_at[length], length)['seconds']:.2f} s"
+            for length in sorted(fastest_at))
         verdict = (f"The fastest configuration is not the same at every length "
-                   f"({per_length}), so the default is a compromise between "
-                   f"sizes and the table's emphasis is the longest one only.")
-
+                   f"({per_length}), so no single configuration is the default "
+                   f"for a reason the longest table alone would show.")
+        if refused:
+            verdict += (" At " + ", ".join(f"{L:,}" for L in refused)
+                        + " nothing completed, so those lengths have no row.")
     lines += ["", verdict, ""]
 
-    first_chunk = config["chunks"][0]
-    last_chunk = config["chunks"][-1]
-    loop_short = seconds(f"loop@{first_chunk}", longest)
-    vec_short = seconds(f"vectorized@{first_chunk}", longest)
-    loop_long = seconds(f"loop@{last_chunk}", longest)
-    lines += [
-        "The more useful number is what actually moves the result. Changing the "
-        f"inner scan at a fixed chunk changes the time by about "
-        f"{100 * (vec_short - loop_short) / loop_short:.0f}% "
-        f"({loop_short:.2f} → {vec_short:.2f} s at chunk {first_chunk}). Changing "
-        f"the **chunk** at a fixed inner scan changes it by "
-        f"**{loop_long / loop_short:.1f}x** "
-        f"({loop_short:.2f} → {loop_long:.2f} s at chunk {last_chunk}).",
-    ]
+    # The comparison of what moves the result. Both halves are conditional on
+    # the run actually containing the comparison: with one chunk there is no
+    # chunk effect to measure, and reporting "1.0x" for a chunk against itself
+    # would be a number that cannot be wrong.
+    movers = []
+    if chunks:
+        first = chunks[0]
+        inner_rows = {inner: measured(f"{inner}@{first}", longest)
+                      for inner in ("loop", "vectorized")}
+        if all(inner_rows.values()):
+            fast, slow = sorted(
+                inner_rows, key=lambda inner: inner_rows[inner]["seconds"])
+            ratio = inner_rows[slow]["seconds"] / inner_rows[fast]["seconds"]
+            movers.append(
+                f"Changing the inner scan at a fixed chunk changes the time by "
+                f"about {100 * (ratio - 1):.0f}% "
+                f"({inner_rows[fast]['seconds']:.2f} → "
+                f"{inner_rows[slow]['seconds']:.2f} s, {fast} → {slow} at chunk "
+                f"{first}).")
+    if len(chunks) >= 2:
+        first, last = chunks[0], chunks[-1]
+        for inner in ("loop", "vectorized"):
+            short, long = measured(f"{inner}@{first}", longest), \
+                measured(f"{inner}@{last}", longest)
+            if short and long:
+                movers.append(
+                    f"Changing the **chunk** at a fixed inner scan changes it "
+                    f"by **{long['seconds'] / short['seconds']:.1f}x** "
+                    f"({short['seconds']:.2f} → {long['seconds']:.2f} s, "
+                    f"`{inner}` at chunk {first} → {last}).")
+                break
+    if movers:
+        lines.append("The more useful number is what actually moves the "
+                     "result. " + " ".join(movers))
     return "\n".join(lines)
 
 
@@ -2144,16 +2226,30 @@ def main() -> int:
         head, rest = text.split(INNER_SWEEP_BEGIN, 1)
         _, tail = rest.split(INNER_SWEEP_END, 1)
 
-        rendered = inner_scan_sweep_section(sweep)
-        for marker in ("| configuration | exponent |", "| loop @ chunk "):
+        try:
+            rendered = inner_scan_sweep_section(sweep)
+        except (KeyError, TypeError, ValueError, IndexError) as exc:
+            # Same guard as the results block. A sweep payload can be a different
+            # file with a similar name, or a run whose rows are shaped
+            # differently; the exit code is non-zero either way, but a traceback
+            # says the renderer is broken when the payload is.
+            print(f"refusing to write the inner-scan sweep block: {exc!r} while "
+                  f"rendering it, so the file is not the sweep this renderer "
+                  f"reads", file=sys.stderr)
+            return 1
+        # Markers that do not depend on which row is emphasised: the first
+        # version checked `"| loop @ chunk "`, which is absent when the loop row
+        # is the bolded fastest one, so a perfectly good single-chunk render was
+        # refused for a reason that had nothing to do with policy.
+        for marker in ("| configuration | exponent |", "@ chunk "):
             if marker not in rendered:
                 print(f"refusing to write: {marker!r} missing from the inner-scan "
                       f"sweep render", file=sys.stderr)
                 return 1
-        for sentinel in ("not run_", "no rows_", "missing_"):
+        for sentinel in ("not run_", "no rows_", "missing_", "too few lengths_"):
             if sentinel in rendered:
                 print(f"refusing to write: the inner-scan sweep render contains "
-                      f"{sentinel!r}, so the payload rendered as a placeholder",
+                      f"{sentinel!r}, so the payload cannot support the section",
                       file=sys.stderr)
                 return 1
 

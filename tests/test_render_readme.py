@@ -163,8 +163,8 @@ def _results_argv(copy: pathlib.Path, *, omit: str | None = None,
 @pytest.mark.parametrize("omit", ["--scaling", "--control", "--scan-inner",
                                   "--length-extrapolation"])
 def test_the_results_command_refuses_to_delete_any_of_its_sections(
-        omit: str, tmp_path: pathlib.Path,
-        monkeypatch: pytest.MonkeyPatch) -> None:
+        omit: str, tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str]) -> None:
     """The documented command refuses rather than dropping a section.
 
     This was the bug found in the repository, and it was fixed for one file: the
@@ -173,6 +173,12 @@ def test_the_results_command_refuses_to_delete_any_of_its_sections(
     One of those casualties is the control that falsifies the headline. Each of
     the four is omitted in turn, against a copy of the README, and the copy must
     come back byte-identical every time because the run refused.
+
+    The refusal has to **name the flag**, which is what makes this test pin the
+    guard it is named for. The property is defended more than once -- a missing
+    file also renders as a placeholder that the sentinel check catches -- so
+    without this assertion, deleting the `required` guard entirely left the test
+    green while the command's failure message degraded to nothing at all.
     """
     copy = tmp_path / "README.md"
     original = README.read_text()
@@ -180,6 +186,9 @@ def test_the_results_command_refuses_to_delete_any_of_its_sections(
 
     monkeypatch.setattr(sys, "argv", _results_argv(copy, omit=omit))
     assert render_readme.main() == 1, f"{omit} was not required"
+    assert omit in capsys.readouterr().err, (
+        f"the refusal does not say {omit} is missing, so it is not the guard "
+        f"this test is named for that refused")
     assert copy.read_text() == original, "a refused render must not write"
     assert ("### Does either model read longer than it trained?"
             in copy.read_text())
@@ -219,13 +228,16 @@ def test_the_results_render_refuses_a_payload_it_cannot_render(
 
 
 def test_the_gate_command_refuses_to_delete_the_straight_through_subsection(
-        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch,
+        capsys: pytest.CaptureFixture[str]) -> None:
     """The same bug, in the other block that can have it.
 
     The straight-through subsection is rendered into the gate block, so a
     `--learned-gate` render without `--straight-through` would replace a
     published result with a missing-file note. The command is run against a copy
-    and the copy must come back byte-identical, because the run refused.
+    and the copy must come back byte-identical, because the run refused — and the
+    refusal has to name the flag, for the same reason as above: the property is
+    defended twice, so without that the test passes whichever guard fires.
     """
     copy = tmp_path / "README.md"
     original = README.read_text()
@@ -237,6 +249,7 @@ def test_the_gate_command_refuses_to_delete_the_straight_through_subsection(
         "--readme", str(copy),
     ])
     assert render_readme.main() == 1
+    assert "--straight-through" in capsys.readouterr().err
     assert copy.read_text() == original, "a refused render must not write"
     assert "### The straight-through hard gate" in copy.read_text()
 
@@ -371,3 +384,194 @@ def test_the_sweep_section_handles_a_payload_it_cannot_render() -> None:
     assert "not run_" in render_readme.inner_scan_sweep_section(None)
     assert render_readme.inner_scan_sweep_section({}) == \
         "_inner-scan sweep: no rows_"
+
+    # A sweep with one length cannot support this section: there is no
+    # least-squares fit over a single point, and "at every length measured" would
+    # mean one length. It used to publish exactly that, over a payload the
+    # documented `scan_inner.py --lengths 8192` produces.
+    single = _json("scan-inner-scaling.json")
+    keep = max(single["config"]["lengths"])
+    single["config"]["lengths"] = [keep]
+    single["results"] = {k: v for k, v in single["results"].items()
+                         if k.endswith(f"@L{keep}") or k == "_exponents"}
+    rendered = render_readme.inner_scan_sweep_section(single)
+    assert "too few lengths_" in rendered
+    assert "least squares" not in rendered
+
+    # The near-identical name: `--scan-inner-scaling scan-inner.json` is the
+    # mistake this flag invites, and the single-length comparison file has no
+    # `lengths`, so it is the same refusal rather than a traceback.
+    assert "too few lengths_" in render_readme.inner_scan_sweep_section(
+        _json("scan-inner.json"))
+
+
+def test_a_refused_allocation_is_a_row_not_a_crash() -> None:
+    """`scan_inner.py` records a refused allocation as a result without timings.
+
+    A renderer that indexed `["seconds"]` crashed on the experiment's own output
+    rather than publishing the refusal. The row is an em dash, and it is excluded
+    from every comparison rather than counted as zero.
+    """
+    payload = _json("scan-inner-scaling.json")
+    longest = max(payload["config"]["lengths"])
+    refused = f"vectorized@64@L{longest}"
+    payload["results"][refused] = {
+        "inner": "vectorized", "chunk": 64, "length": longest,
+        "failed": True, "note": "exit 137",
+    }
+    rendered = render_readme.inner_scan_sweep_section(payload)
+    assert "| vectorized @ chunk 64 | 0.69 | — | — |" in rendered
+    # The configuration that did complete is still the fastest, and the one that
+    # refused is not silently treated as an instant zero.
+    assert "| **loop @ chunk 64** |" in rendered
+    assert "0.00 s" not in rendered
+
+    every = _json("scan-inner-scaling.json")
+    for key, row in list(every["results"].items()):
+        if isinstance(row, dict):
+            every["results"][key] = dict(row, failed=True)
+            every["results"][key].pop("seconds", None)
+            every["results"][key].pop("peak_rss_kb", None)
+    assert "no rows_" in render_readme.inner_scan_sweep_section(every)
+
+
+def test_the_default_the_sweep_names_is_the_models_own_default() -> None:
+    """The sentence says "the default", so it has to be the real one.
+
+    The renderer keeps `DEFAULT_SCAN` as a constant rather than importing the
+    model, because importing it would pull torch into rendering. That leaves one
+    way for the sentence to be false: the constant drifting from the class. A run
+    where `vectorized` is fastest must say the shipped default is *not* it, which
+    the renderer only gets right if this constant is right.
+    """
+    import inspect
+
+    from beyond_attention.model import SelectiveSSMBlock
+
+    parameters = inspect.signature(SelectiveSSMBlock.__init__).parameters
+    assert render_readme.DEFAULT_SCAN == (
+        parameters["scan_inner"].default, parameters["scan_chunk"].default), (
+        "DEFAULT_SCAN has drifted from SelectiveSSMBlock's own defaults, so the "
+        "sweep section names the wrong configuration as shipped")
+
+    payload = _json("scan-inner-scaling.json")
+    for key in list(payload["results"]):
+        if not isinstance(payload["results"][key], dict):
+            continue
+        payload["results"][key]["seconds"] = (
+            0.5 if key.startswith("vectorized@64") else 99.0)
+    rendered = render_readme.inner_scan_sweep_section(payload)
+    assert "The shipped default is `loop` at chunk 64" in rendered
+    assert "So the default is not a compromise" not in rendered
+    # The emphasis is the data's too: hardcoding the bold row to `loop@64` is
+    # invisible against the committed payload, where loop@64 happens to win.
+    assert "| **vectorized @ chunk 64** |" in rendered
+    assert "| **loop @ chunk 64** |" not in rendered
+
+
+def test_the_sweep_movers_are_computed_and_signed() -> None:
+    """The closing comparison is derived, both in size and in direction.
+
+    It used to hardcode loop-first and first-chunk-versus-last, so a run where
+    the vectorised scan won printed a negative percentage, and a single-chunk run
+    printed a 1.0x chunk effect for a chunk compared with itself.
+    """
+    payload = _json("scan-inner-scaling.json")
+    results, config = payload["results"], payload["config"]
+    longest, first = max(config["lengths"]), config["chunks"][0]
+    block = _block(README.read_text(), render_readme.INNER_SWEEP_BEGIN,
+                   render_readme.INNER_SWEEP_END)
+
+    times = {"loop": results[f"loop@{first}@L{longest}"]["seconds"],
+             "vectorized": results[f"vectorized@{first}@L{longest}"]["seconds"]}
+    fast, slow = sorted(times, key=times.get)
+    assert f"{100 * (times[slow] / times[fast] - 1):.0f}%" in block
+    assert f"{times[fast]:.2f} → {times[slow]:.2f} s" in block
+    assert f"{fast} → {slow}" in block
+
+    # The percentage has to follow the payload, not just be present: against the
+    # committed file "21%" is also what a hardcoded 21% would print. Making the
+    # slow configuration exactly three times the fast one must print 200%.
+    tripled = _json("scan-inner-scaling.json")
+    tripled["results"][f"{slow}@{first}@L{longest}"]["seconds"] = 3 * times[fast]
+    movers = render_readme.inner_scan_sweep_section(tripled).split(
+        "moves the result.")[1]
+    assert "about 200%" in movers, movers
+    assert f"{3 * times[fast]:.2f} s" in movers, movers
+
+    last = config["chunks"][-1]
+    loop_short = times["loop"]
+    loop_long = results[f"loop@{last}@L{longest}"]["seconds"]
+    assert f"{loop_long / loop_short:.1f}x" in block
+
+    # Reversed, so the same sentence has to come out with the direction flipped
+    # and no negative percentage.
+    payload["results"][f"loop@{first}@L{longest}"]["seconds"] = 99.0
+    flipped = render_readme.inner_scan_sweep_section(payload)
+    movers = flipped.split("moves the result.")[1]
+    assert "vectorized → loop" in movers
+    assert "% (" in movers and "-" not in movers.split("% (")[0].split()[-1]
+
+    # One chunk is no chunk effect: the clause is absent rather than 1.0x.
+    payload = _json("scan-inner-scaling.json")
+    payload["config"]["chunks"] = [first]
+    payload["results"] = {k: v for k, v in payload["results"].items()
+                          if f"@{first}@" in k or k == "_exponents"}
+    single = render_readme.inner_scan_sweep_section(payload)
+    assert "Changing the **chunk**" not in single
+    assert "Changing the inner scan" in single
+
+
+@pytest.mark.parametrize("body", [
+    "{}",
+    '{"config": {"lengths": [8192]}, '
+    '"results": {"loop@64@L8192": {"seconds": 1.0}}}',
+])
+def test_the_sweep_block_refuses_a_payload_it_cannot_publish(
+        body: str, tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """The newest block's guard, which had no test of its own.
+
+    Deleting the whole guard left the suite green, so nothing pinned the
+    behaviour that the sweep region is never written from a payload that renders
+    as a placeholder. The README copy must come back byte-identical.
+    """
+    bad = tmp_path / "sweep.json"
+    bad.write_text(body)
+    copy = tmp_path / "README.md"
+    original = README.read_text()
+    copy.write_text(original)
+    monkeypatch.setattr(sys, "argv", [
+        "render_readme.py", "--scan-inner-scaling", str(bad),
+        "--readme", str(copy),
+    ])
+    assert render_readme.main() == 1
+    assert copy.read_text() == original, "a refused render must not write"
+
+
+def test_the_sweep_block_accepts_the_single_chunk_run_it_used_to_refuse(
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """A false refusal: the guard's marker depended on which row was bold.
+
+    `"| loop @ chunk "` is absent when the loop row is the emphasised fastest
+    one, so a complete single-chunk sweep was refused for a reason that had
+    nothing to do with the payload's validity.
+    """
+    payload = _json("scan-inner-scaling.json")
+    first = payload["config"]["chunks"][0]
+    payload["config"]["chunks"] = [first]
+    payload["results"] = {k: v for k, v in payload["results"].items()
+                          if f"@{first}@" in k or k == "_exponents"}
+    path = tmp_path / "sweep.json"
+    path.write_text(json.dumps(payload))
+
+    copy = tmp_path / "README.md"
+    copy.write_text(README.read_text())
+    monkeypatch.setattr(sys, "argv", [
+        "render_readme.py", "--scan-inner-scaling", str(path),
+        "--readme", str(copy),
+    ])
+    assert render_readme.main() == 0
+    block = _block(copy.read_text(), render_readme.INNER_SWEEP_BEGIN,
+                   render_readme.INNER_SWEEP_END)
+    assert "| **loop @ chunk 64** |" in block

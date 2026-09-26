@@ -243,13 +243,22 @@ Cost is fitted as `length ** exponent` by least squares over 1,024 / 2,048 / 4,0
 | loop @ chunk 256 | 0.89 | 14.93 s | 489 |
 | vectorized @ chunk 256 | 0.81 | 8.91 s | 4,827 |
 
-`loop` at chunk 64 is the fastest configuration at **every** length measured (1,024: 0.99 s, 2,048: 1.21 s, 4,096: 1.79 s, 8,192: 3.58 s), so the default is not a compromise that happens to hold at one size.
+`loop` at chunk 64 is the fastest configuration at **every** length measured (1,024: 0.99 s, 2,048: 1.21 s, 4,096: 1.79 s, 8,192: 3.58 s). So the default is not a compromise that happens to hold at one size.
 
-The more useful number is what actually moves the result. Changing the inner scan at a fixed chunk changes the time by about 21% (3.58 → 4.33 s at chunk 64). Changing the **chunk** at a fixed inner scan changes it by **4.2x** (3.58 → 14.93 s at chunk 256).
+The more useful number is what actually moves the result. Changing the inner scan at a fixed chunk changes the time by about 21% (3.58 → 4.33 s, loop → vectorized at chunk 64). Changing the **chunk** at a fixed inner scan changes it by **4.2x** (3.58 → 14.93 s, `loop` at chunk 64 → 256).
 <!-- INNER-SCAN-SWEEP:END -->
 
 The chunk is the setting worth tuning — and it is the one the single-length table
 could not show, which is why the sweep exists.
+
+Those two tables are separate runs of the same four configurations at 8,192
+tokens, and they do not agree exactly. `loop` at chunk 256 measured 16.09 s in the
+single-length run and 14.93 s here; `vectorized` at chunk 256 measured 8.56 s and
+8.91 s, so the chunk effect at that length reads **1.9×** in one table and
+**1.7×** in the other. The per-figure difference runs from 0.3% to 7.9%, which is
+the run-to-run variance the limitations quote rather than anything about the code
+— both runs put `loop` at chunk 64 fastest and `loop` at chunk 256 slowest, so no
+conclusion here depends on which table you read.
 
 An exponent below 1.0 means cost is growing *slower* than the sequence, because
 fixed per-call overhead is still being amortised over this range. It is not
@@ -493,13 +502,14 @@ against. Three independent measurements — accuracy, stability across seeds, an
 stability across platforms — point the same way.
 
 `experiments/learned_gate.py --verify` re-runs the experiment and diffs every
-published number against the committed file. It is a local tool, not a CI gate:
-as an exact-match gate it fails on 3.12 for the reason above, and a tolerance
-would hide exactly the drift it exists to catch.
+published number against the committed file. It runs as a CI gate on Python 3.11
+only: as an exact-match gate it fails on 3.12 for the reason above, and running it
+across the whole matrix would mean either a permanent failure or a tolerance that
+hides exactly the drift it exists to catch.
 
-The voice, agent, memory and learned-gate blocks render on their own (`--voice`,
-`--agent`, `--memory`, `--learned-gate`) rather than as part of the results
-command, so each can be
+The voice, emotion, agent, memory, learned-gate and inner-scan-sweep blocks render
+on their own (`--voice`, `--emotion`, `--agent`, `--memory`, `--learned-gate`,
+`--scan-inner-scaling`) rather than as part of the results command, so each can be
 regenerated without touching the others. The results command takes
 `--length-extrapolation` as well: that section is *inside* the results block, and
 the renderer **refuses** to write the block without the file rather than silently
