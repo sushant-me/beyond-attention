@@ -56,6 +56,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import statistics
 import sys
 import time
@@ -233,8 +234,68 @@ def trained_gate(tasks: tuple[Task, ...], n_keys: int, state_width: int, *,
                       noise_operand=noise_operand, anneal_to=anneal_to)
 
 
+#: Relative tolerance for a numeric leaf in `--verify`.
+#:
+#: It is not a licence to drift: a stale file -- the failure this check exists to
+#: catch -- moves numbers by percent or by orders of magnitude, and the smallest
+#: real drift observed from regenerating a block was ~1e-3. 1e-9 absorbs the
+#: last-ULP differences between platforms and nothing else.
+VERIFY_RTOL = 1e-9
+
+#: Path fragments whose values cannot be compared even loosely.
+#:
+#: Annealing the temperature to 0.05 saturates the sigmoid, and the annealed
+#: training runs land anywhere from `6e-17` to `2.8` on seed *and platform*: the
+#: CI gate failed on a commit that touched neither this file nor the experiment,
+#: with `final_loss` differing by twenty orders of magnitude between two runs of
+#: the same code. These are checked for the claim they carry instead of for
+#: equality -- that annealing is worse than training soft and thresholding, which
+#: is the whole reason the row is in the table.
+UNSTABLE_PATH = "trained_annealed"
+
+
+def normalise(payload: dict) -> dict:
+    """The payload with the non-reproducible numbers blanked, keys kept.
+
+    Blanking rather than deleting, so a *shape* change inside those rows -- a key
+    added or removed -- is still reported as a difference. Only the values are
+    allowed to move, and the values are checked for their claim by
+    `annealed_problems`.
+
+    Two things are non-reproducible, and both are identified structurally rather
+    than by where they sit: a training report with `anneal_to` set, and the
+    `conditions` entry built from those runs. `anneal_to` itself is kept, so a
+    change in the temperature that was annealed to is still a difference.
+    """
+    def walk(node, path: str = ""):
+        if isinstance(node, dict):
+            unstable = (node.get("anneal_to") not in (None,)
+                        or UNSTABLE_PATH in path)
+            built = {}
+            for key, value in node.items():
+                if (unstable and key != "anneal_to"
+                        and isinstance(value, (int, float))
+                        and not isinstance(value, bool)):
+                    built[key] = None
+                else:
+                    built[key] = walk(value, f"{path}/{key}")
+            return built
+        if isinstance(node, list):
+            return [walk(item, f"{path}[{index}]")
+                    for index, item in enumerate(node)]
+        return node
+
+    return walk(payload)
+
+
 def differ(a, b, path: str = "") -> list[str]:
-    """Paths at which two result structures disagree, as readable strings."""
+    """Paths at which two result structures disagree, as readable strings.
+
+    Numeric leaves are compared to `VERIFY_RTOL` rather than exactly: the last
+    ULP between two platforms is not drift, and the first version of this
+    comparison failed on it in CI. Values that cannot be compared at all are
+    blanked by `normalise` before they reach here.
+    """
     out: list[str] = []
     if isinstance(a, dict) and isinstance(b, dict):
         for key in sorted(set(a) | set(b)):
@@ -249,9 +310,46 @@ def differ(a, b, path: str = "") -> list[str]:
             out.append(f"length differs ({len(a)} vs {len(b)}): {path}")
         for index, (x, y) in enumerate(zip(a, b)):
             out += differ(x, y, f"{path}[{index}]")
+    elif isinstance(a, float) and isinstance(b, float):
+        if not math.isclose(a, b, rel_tol=VERIFY_RTOL, abs_tol=1e-300):
+            out.append(f"{path}: committed={a!r} fresh={b!r}")
     elif a != b:
         out.append(f"{path}: committed={a!r} fresh={b!r}")
     return out
+
+
+def annealed_problems(payload: dict) -> list[str]:
+    """Check the unstable rows for the claim they carry, not for equality.
+
+    Two of them: every annealed loss is finite, and annealing does worse than
+    training soft and thresholding -- the comparison the README draws the
+    conclusion from. A row that stopped supporting that would be a real failure
+    even though its value is not reproducible.
+    """
+    problems: list[str] = []
+    reports = payload.get("training_reports", [])
+    annealed = [r for r in reports if r.get("anneal_to")]
+    if not annealed:
+        problems.append("no annealed training report in the payload")
+    for row in annealed:
+        for field in ("final_loss", "final_state_loss"):
+            value = row.get(field)
+            if not isinstance(value, float) or not math.isfinite(value):
+                problems.append(f"annealed {field} is {value!r}")
+
+    conditions = payload.get("conditions", {})
+    annealed_rate = conditions.get("learned_gate_trained_annealed", {}) \
+        .get("spread", {}).get("mean")
+    sharpened = conditions.get("learned_gate_trained_sharpened", {}) \
+        .get("spread", {}).get("mean")
+    if annealed_rate is None or sharpened is None:
+        problems.append("the annealed and sharpened rates are not both present")
+    elif not annealed_rate < sharpened:
+        problems.append(
+            f"annealing reaches {annealed_rate}, which is not below the "
+            f"trained-and-sharpened {sharpened} -- the row no longer supports "
+            f"the conclusion it is in the table for")
+    return problems
 
 
 def verify_against(path: Path, payload: dict) -> int:
@@ -265,7 +363,13 @@ def verify_against(path: Path, payload: dict) -> int:
     internally consistent" cannot see that.
 
     ``wall_seconds`` is excluded because it is a property of the machine rather
-    than of the result.
+    than of the result, and the annealed rows are checked for their claim rather
+    than for equality because they are not reproducible even on one machine. The
+    first version of this function compared every field exactly and ran as a CI
+    gate; it failed on a commit that touched neither the experiment nor the file,
+    with two runs of the same code differing by twenty orders of magnitude on one
+    loss. A gate that goes red at random is worse than no gate, because it
+    teaches a reader to ignore the colour.
     """
     if not path.exists():
         print(f"{path} does not exist; nothing to verify against", file=sys.stderr)
@@ -281,12 +385,19 @@ def verify_against(path: Path, payload: dict) -> int:
     committed = scrub(json.loads(path.read_text()))
     fresh = scrub(payload)
 
-    if committed == fresh:
-        print(f"{path} matches a fresh run, apart from wall_seconds")
+    # The unstable numbers are blanked for the structural comparison and then
+    # checked for their claim against the unblanked run, so nothing is dropped.
+    differences = differ(normalise(committed), normalise(fresh))
+    problems = annealed_problems(fresh)
+    if not differences and not problems:
+        print(f"{path} matches a fresh run, apart from wall_seconds and the "
+              f"annealed rows (which are compared for their claim)")
         return 0
 
     print(f"{path} does NOT match a fresh run:", file=sys.stderr)
-    for line in differ(committed, fresh):
+    for line in differences:
+        print(f"  {line}", file=sys.stderr)
+    for line in problems:
         print(f"  {line}", file=sys.stderr)
     print("\nregenerate it with: python experiments/learned_gate.py",
           file=sys.stderr)

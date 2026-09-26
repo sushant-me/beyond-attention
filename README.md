@@ -475,15 +475,18 @@ python experiments/render_dashboard.py --voice voice-affect.json \
 `experiments/run.py --help` lists the knobs; `--steps`, `--seeds`, `--pairs`,
 `--queries` and `--blocks` are the ones that cost time.
 
-### One published row does not reproduce across Python versions
+### One published row does not reproduce, on any interpreter
 
-Stated here rather than left for someone to discover. The learned-gate block is
-reproducible within a Python version, but **the annealed row moves across the CI
-matrix**: on 3.12 it reads 0.94 where 3.11 and 3.13 both reproduce the committed
-0.928.
+Stated here rather than left for someone to discover — and corrected, because the
+first version of this section was wrong. It said the annealed row moved on 3.12
+while 3.11 and 3.13 reproduced the committed 0.928. Then the CI gate — an exact
+match, running on 3.11 — went red on a commit that touched neither the experiment
+nor the file, reading 0.94 there as well. The row moves on seed *and* on platform,
+and 3.11 is not an exception; that it was believed to be one is what made the
+check fail at random.
 
-The cause is measured and it is not the platform. The committed `training_reports`
-give the same configuration at five seeds:
+The cause is in the arithmetic rather than the platform. The committed
+`training_reports` give the same configuration at five seeds:
 
 | variant | final losses, seeds 0–4 | spread |
 |---|---|---|
@@ -491,21 +494,31 @@ give the same configuration at five seeds:
 | annealed to 0.05 | 2.69626, 0.654751, 2.80023, 6.09e-17, 2.11812 | ~2.8, ten orders of magnitude |
 
 Plain training agrees to five significant figures across seeds; annealing lands
-anywhere from `6e-17` to `2.8` on seed alone. **Annealing is the only numerically
-sensitive part of the experiment**, which is why it is the only row that varies
-across platforms.
+anywhere from `6e-17` to `2.8` on seed alone. Annealing the temperature to 0.05
+saturates the sigmoid, so which of those a run lands on is decided in the last
+bits of the arithmetic rather than by the code — on the 3.11 runner the same
+command returned `3.96e-24` for a loss this file records as `0.65`. The raw rows
+are not bit-identical across platforms either: they differ by one unit in the last
+place, `14.443256952904889` against `14.443256952904886`.
 
 It is also the row the conclusion rejects: annealing reaches 0.928 where training
 soft and thresholding reaches 1.000. So **every row the conclusion rests on
-reproduces**, and the one that does not belongs to the approach the results argue
-against. Three independent measurements — accuracy, stability across seeds, and
-stability across platforms — point the same way.
+reproduces** — to the last unit in the last place, which is the resolution the raw
+rows hold across platforms — and the row that does not belongs to the approach the
+results argue against. Accuracy, stability across seeds, and the fact that the one
+unstable row is the one the argument rejects, all point the same way.
 
-`experiments/learned_gate.py --verify` re-runs the experiment and diffs every
-published number against the committed file. It runs as a CI gate on Python 3.11
-only: as an exact-match gate it fails on 3.12 for the reason above, and running it
-across the whole matrix would mean either a permanent failure or a tolerance that
-hides exactly the drift it exists to catch.
+`experiments/learned_gate.py --verify` re-runs the experiment and compares it
+against the committed file. Every field is compared exactly except two: numeric
+leaves are compared to a relative `1e-9`, which absorbs the last unit in the last
+place between platforms and nothing else — a stale file, the failure this check
+exists to catch, moves figures by percent or by orders of magnitude — and the
+annealed rows are excluded from the comparison altogether and checked instead for
+the claim they carry, that annealing does worse than training soft and
+thresholding. Running it as a CI gate on one interpreter is what `tests/test_learned_gate_verify.py`
+exercises: an identical payload passes, a one-ULP difference passes, a 1%
+difference fails, a missing key fails, and an annealed row that stopped being
+worse than the sharpened gate fails.
 
 The voice, emotion, agent, memory, learned-gate and inner-scan-sweep blocks render
 on their own (`--voice`, `--emotion`, `--agent`, `--memory`, `--learned-gate`,
