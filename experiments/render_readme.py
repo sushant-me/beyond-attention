@@ -7,14 +7,25 @@ whole reproduction procedure.
 
     python experiments/run.py --pairs 2 4 8 16 --steps 3000 --seeds 0 \
         --out results.json
-    python experiments/run.py --skip-sweep --out scaling.json
     python experiments/run.py --pairs 8 16 --steps 20000 --blocks attention \
         --out control-attention.json
+    python experiments/run.py --skip-sweep --causal-mode sdpa \
+        --lengths 256 1024 4096 8192 16384 32768 --out scaling-final.json
+    python experiments/run.py --skip-sweep --causal-mode mask \
+        --lengths 8192 16384 32768 --out scaling-mask.json
+    python experiments/length_extrapolation.py --out length-extrapolation.json
+    python experiments/scan_inner.py --chunks 64 256 --out scan-inner.json
     python experiments/render_readme.py --mqar results.json \
-        --scaling scaling.json --control control-attention.json --readme README.md
+        --scaling scaling-final.json --scaling scaling-mask.json \
+        --control control-attention.json --scan-inner scan-inner.json \
+        --length-extrapolation length-extrapolation.json --readme README.md
 
-Each section is rendered from its own file, and a missing file is reported as a
-missing file rather than rendered as an empty table.
+Five of those files are required together and only `--readme` has a default,
+because the results block contains a section produced from each one. A missing
+one is a refusal rather than an empty table: this command has deleted a published
+section once, and the placeholder that replaces it -- "_control: not run_" is the
+worst of them, since that table is the control the headline rests on -- is not
+something a reader can tell apart from a control that was never run.
 
 `--voice` renders the voice/affect section from `voice-affect.json` into its own
 `VOICE:BEGIN`/`VOICE:END` block, so it can be regenerated without touching the
@@ -1914,24 +1925,38 @@ def main() -> int:
         mqar = _load(args.mqar, "the main sweep")
         if mqar is None:
             return 1
+
+        # Refuse rather than delete, for every section of this block and not
+        # just one of them. The block contains four sections that are only
+        # producible from their own files; rendering without any of them
+        # replaces a published result with a placeholder -- "_control: not
+        # run_" in the worst case, since the control table is the one that
+        # falsifies the headline. The guard originally covered only the
+        # length-extrapolation file, which is the one that had already been
+        # deleted by this command in the repository's history.
+        required = (
+            ("--scaling", args.scaling, "the length-scaling tables"),
+            ("--control", args.control, "the control table"),
+            ("--scan-inner", args.scan_inner, "the inner-scan comparison"),
+            ("--length-extrapolation", args.length_extrapolation,
+             "the length-extrapolation section"),
+        )
+        missing = [(flag, what) for flag, value, what in required if not value]
+        if missing:
+            print("refusing to write the results block: "
+                  + "; ".join(f"{what} needs {flag}" for flag, what in missing)
+                  + ". Each is part of the block, so rendering without it "
+                    "would delete that section rather than reproduce it",
+                  file=sys.stderr)
+            return 1
+
         scaling = [p for p in (_load(path, "a scaling run")
                                for path in args.scaling) if p]
         control = _load(args.control, "the control run")
         scan_inner = _load(args.scan_inner, "the inner-scan comparison")
-
-        if not args.length_extrapolation:
-            # Refuse rather than delete. The results block contains a section
-            # this renderer has to be able to reproduce; rendering without it
-            # would silently remove a published section, which is the failure
-            # this flag exists to fix.
-            print("refusing to write the results block without "
-                  "--length-extrapolation: the length-extrapolation section is "
-                  "part of it, and rendering without it would delete that "
-                  "section rather than reproduce it", file=sys.stderr)
-            return 1
         extrapolation = _load(args.length_extrapolation,
                               "the length-extrapolation run")
-        if extrapolation is None:
+        if any(payload is None for payload in (control, scan_inner, extrapolation)):
             return 1
 
         if BEGIN not in text or END not in text:
@@ -1940,16 +1965,36 @@ def main() -> int:
         head, rest = text.split(BEGIN, 1)
         _, tail = rest.split(END, 1)
 
-        rendered = render(mqar, scaling, control, scan_inner, extrapolation)
+        try:
+            rendered = render(mqar, scaling, control, scan_inner, extrapolation)
+        except (KeyError, TypeError, ValueError) as exc:
+            # A file that parsed but is not the file this renderer expects. The
+            # exit code would be non-zero anyway, but a traceback says the
+            # renderer is broken when the payload is, and the message is the only
+            # thing that tells the two apart.
+            print(f"refusing to write the results block: {exc!r} while rendering "
+                  f"it, so one of the five files is missing a field this renderer "
+                  f"reads", file=sys.stderr)
+            return 1
         # Refuse to publish a table that lost its content: a broken renderer
         # produces an empty block, and a reader cannot tell an empty result from
-        # a bug.
+        # a bug. Two checks, because they catch different failures: the markers
+        # below are headings and table headers a whole section would be missing
+        # from, and the sentinels after them are what every placeholder in this
+        # module contains -- so a payload that parsed but held no rows stops the
+        # write instead of being published as "_control: not run_".
         for marker in ("| pairs in context |", "| sequence length |",
                        "### Does either model read longer than it trained?",
-                       "| x train |"):
+                       "| x train |", "| inner scan |", "| agrees with loop |"):
             if marker not in rendered:
                 print(f"refusing to write: {marker!r} missing from the render",
                       file=sys.stderr)
+                return 1
+        for sentinel in ("not run_", "no rows_", "missing_"):
+            if sentinel in rendered:
+                print(f"refusing to write: the render contains {sentinel!r}, so a "
+                      f"required payload rendered as a placeholder rather than a "
+                      f"table", file=sys.stderr)
                 return 1
 
         text = f"{head}{BEGIN}\n{rendered}\n{END}{tail}"

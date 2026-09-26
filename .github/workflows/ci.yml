@@ -269,19 +269,41 @@ jobs:
           assert controls["fixed_decay"]["selective@6"]["rate"] < 1.0
           assert controls["fixed_equals_scalar_at_zero_distractors"]
 
-          # Width is the capacity: one slot is the scalar, and enough slots for
-          # the key space solve the family.
+          # Width is the capacity: one slot is the scalar register, and widening
+          # the gated state makes it better. This comparison used to read
+          # `agent >= scalar or int(slots) < width`, which short-circuits for
+          # every width below `width` -- exactly the range it was written to
+          # constrain -- so it enforced nothing at all, and only slots 4 and 8
+          # were ever compared. The `or` is gone.
           widths = controls["state_width"]
           assert widths["0"]["agent"]["rate"] == 0.0, widths["0"]
-          for slots, row in widths.items():
-              if int(slots) == 0:
-                  continue
-              assert row["agent"]["rate"] >= row["scalar"]["rate"] or \
-                  int(slots) < width, row
+          for slots in (key for key in widths if int(key) != 0):
+              row = widths[slots]
+              assert row["agent"]["rate"] >= row["scalar"]["rate"], row
           for slots in (str(width), "8"):
               assert widths[slots]["agent"]["rate"] == 1.0, widths[slots]
               assert widths[slots]["fixed"]["rate"] < 1.0, widths[slots]
           assert widths["1"]["agent"]["rate"] == widths["1"]["scalar"]["rate"]
+
+          # The progression itself is checked against the committed file, not
+          # the reduced run above: ten tasks per family puts those rates in
+          # tenths, and the 2-slot and 3-slot rates cross under that
+          # quantisation. The published table has the resolution to state the
+          # property, so the property is stated there -- monotonically widening
+          # the gated state never hurts and eventually solves the family, while
+          # the fixed-decay state of the same width never does.
+          committed = json.loads(pathlib.Path("agent-loop.json").read_text())
+          cw = committed["controls"]["state_width"]
+          slots = sorted(int(key) for key in cw if int(key) != 0)
+          for slot in slots:
+              assert cw[str(slot)]["agent"]["rate"] >= cw[str(slot)]["scalar"]["rate"], cw[str(slot)]
+          for narrower, wider in zip(slots, slots[1:]):
+              assert (cw[str(wider)]["agent"]["rate"]
+                      >= cw[str(narrower)]["agent"]["rate"]), (narrower, wider)
+          full = committed["config"]["selective"]["state_width"]
+          for slot in (str(full), "8"):
+              assert cw[slot]["agent"]["rate"] == 1.0, cw[slot]
+              assert cw[slot]["fixed"]["rate"] < 1.0, cw[slot]
 
           # More distractors do not touch the gated state and do bury the
           # constant gate.

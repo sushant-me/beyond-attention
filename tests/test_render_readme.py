@@ -124,35 +124,58 @@ def test_the_results_block_is_not_hand_written_anywhere() -> None:
                      render_readme.END)
     assert "### Does either model read longer than it trained?" in results
     assert "| x train |" in results
-    # The section's numbers are the JSON's, not the README's.
+    # The section's numbers are the JSON's, not the README's. Counted, because
+    # this loop is the whole assertion: an empty payload would make it pass
+    # without checking a single number, which is the failure mode a guard that
+    # reads a file it never confirmed is non-empty always has.
     payload = _json("length-extrapolation.json")
+    checked = 0
     for model in ("attention", "ssm"):
         for pairs, row in payload["extrapolated"][model].items():
             assert f"{row['mean']:.3f}" in results, (model, pairs)
+            checked += 1
+    assert checked >= 8, f"only {checked} extrapolated rows were checked"
 
 
-def test_the_results_command_refuses_to_delete_the_section(
-        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    """Without the extrapolation file the render fails instead of dropping it.
+def _results_argv(copy: pathlib.Path, *, omit: str | None = None,
+                  control: pathlib.Path | None = None) -> list[str]:
+    """The documented results command, optionally missing or over a file."""
+    pairs = [
+        ("--mqar", ROOT / "results.json"),
+        ("--scaling", ROOT / "scaling-final.json"),
+        ("--scaling", ROOT / "scaling-mask.json"),
+        ("--control", control or ROOT / "control-attention.json"),
+        ("--scan-inner", ROOT / "scan-inner.json"),
+        ("--length-extrapolation", ROOT / "length-extrapolation.json"),
+    ]
+    argv = ["render_readme.py"]
+    for flag, path in pairs:
+        if flag == omit:
+            continue
+        argv += [flag, str(path)]
+    return argv + ["--readme", str(copy)]
 
-    This is the bug that was found in the repository, reproduced as a test: the
-    documented results command is run against a copy of the README, and the copy
-    must come back byte-identical because the run refused.
+
+@pytest.mark.parametrize("omit", ["--scaling", "--control", "--scan-inner",
+                                  "--length-extrapolation"])
+def test_the_results_command_refuses_to_delete_any_of_its_sections(
+        omit: str, tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """The documented command refuses rather than dropping a section.
+
+    This was the bug found in the repository, and it was fixed for one file: the
+    guard covered `--length-extrapolation` only, while `--control` and
+    `--scan-inner` still exited 0 and replaced their tables with a placeholder.
+    One of those casualties is the control that falsifies the headline. Each of
+    the four is omitted in turn, against a copy of the README, and the copy must
+    come back byte-identical every time because the run refused.
     """
     copy = tmp_path / "README.md"
     original = README.read_text()
     copy.write_text(original)
 
-    monkeypatch.setattr(sys, "argv", [
-        "render_readme.py",
-        "--mqar", str(ROOT / "results.json"),
-        "--scaling", str(ROOT / "scaling-final.json"),
-        "--scaling", str(ROOT / "scaling-mask.json"),
-        "--control", str(ROOT / "control-attention.json"),
-        "--scan-inner", str(ROOT / "scan-inner.json"),
-        "--readme", str(copy),
-    ])
-    assert render_readme.main() == 1
+    monkeypatch.setattr(sys, "argv", _results_argv(copy, omit=omit))
+    assert render_readme.main() == 1, f"{omit} was not required"
     assert copy.read_text() == original, "a refused render must not write"
     assert ("### Does either model read longer than it trained?"
             in copy.read_text())
@@ -162,19 +185,33 @@ def test_the_results_render_with_the_file_still_produces_the_block(
         tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
     copy = tmp_path / "README.md"
     copy.write_text(README.read_text())
-    monkeypatch.setattr(sys, "argv", [
-        "render_readme.py",
-        "--mqar", str(ROOT / "results.json"),
-        "--scaling", str(ROOT / "scaling-final.json"),
-        "--scaling", str(ROOT / "scaling-mask.json"),
-        "--control", str(ROOT / "control-attention.json"),
-        "--scan-inner", str(ROOT / "scan-inner.json"),
-        "--length-extrapolation", str(ROOT / "length-extrapolation.json"),
-        "--readme", str(copy),
-    ])
+    monkeypatch.setattr(sys, "argv", _results_argv(copy))
     assert render_readme.main() == 0
     assert copy.read_text() == README.read_text(), \
         "the documented results command must reproduce the committed README"
+
+
+@pytest.mark.parametrize("body", ['{"mqar": {}}', "{}"])
+def test_the_results_render_refuses_a_payload_it_cannot_render(
+        body: str, tmp_path: pathlib.Path,
+        monkeypatch: pytest.MonkeyPatch) -> None:
+    """A file that is present but unusable is a refusal, not an empty table.
+
+    The flag check catches a *missing* file. This catches the two ways a file can
+    be there and still not render -- a payload whose rows are empty, which would
+    otherwise be published as "_control: not run_", and a payload that is not the
+    shape the renderer reads, which would otherwise be a traceback. Both are
+    passed as the control file, and the copy must come back byte-identical.
+    """
+    bad = tmp_path / "control-attention.json"
+    bad.write_text(body)
+
+    copy = tmp_path / "README.md"
+    original = README.read_text()
+    copy.write_text(original)
+    monkeypatch.setattr(sys, "argv", _results_argv(copy, control=bad))
+    assert render_readme.main() == 1
+    assert copy.read_text() == original, "a refused render must not write"
 
 
 def test_the_gate_command_refuses_to_delete_the_straight_through_subsection(

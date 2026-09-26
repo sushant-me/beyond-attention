@@ -19,10 +19,12 @@ claims that would be easy to make from the main table, and are all false:
   The main table says exactly that — and the control falsifies it.
 * *"It is faster because it is linear."* Asymptotically yes, and **not against a
   good baseline.** Against attention written with the fused kernel this
-  implementation is ~2.6× slower and ~2.8× lighter-is-worse at every length up to
-  32,768 tokens. Against attention written with an explicit causal mask it does
-  cross over. Both are measured and both are in [Results](#results), because
-  reporting one of them would be choosing the answer.
+  implementation is slower at every length measured, and the gap narrows without
+  closing: **59× at 256 tokens and 2.6× at 32,768**, carrying 2.7–4.7× the
+  activation memory throughout. Against attention written with an explicit causal
+  mask it does cross over. Both are measured and both are in
+  [Results](#results), because reporting one of them would be choosing the
+  answer.
 * *"It is a new model."* It is S6, written out longhand so it can be tested.
 
 ## The recurrence
@@ -77,7 +79,7 @@ agreement cannot catch them:
 Every test was mutation-checked. Breaking the monoid, dropping the carry between
 chunks, reversing the chunk scan, removing the convolution's causal padding and
 removing the attention mask each fail a *different, specific* test — five
-mutations, five distinct failures. 56 tests, all green.
+mutations, five distinct failures, all green.
 
 ## Results
 
@@ -383,12 +385,20 @@ python -u experiments/stream_memory.py --out stream-memory.json
 python experiments/scan_inner.py --lengths 1024 2048 4096 8192 --chunks 64 256 \
     --out scan-inner-scaling.json
 
+# the single-length inner-scan comparison the results block renders, which is a
+# different file from the sweep above: two configurations at one length, with the
+# agreement checksum that says both paths computed the same thing
+python experiments/scan_inner.py --chunks 64 256 --out scan-inner.json
+
 # both scaling baselines, same measurement method
 python experiments/run.py --skip-sweep --causal-mode sdpa \
     --lengths 256 1024 4096 8192 16384 32768 --out scaling-final.json
 python experiments/run.py --skip-sweep --causal-mode mask \
     --lengths 8192 16384 32768 --out scaling-mask.json
 
+# all five files are required together: the results block has a section from each,
+# and the render refuses without one rather than replace it with a placeholder.
+# It has deleted a published section that way once, before the refusal existed.
 python experiments/render_readme.py --mqar results.json \
     --scaling scaling-final.json --scaling scaling-mask.json \
     --control control-attention.json --scan-inner scan-inner.json \
@@ -399,7 +409,8 @@ python experiments/render_readme.py --mqar results.json \
 python experiments/voice_affect.py --out voice-affect.json
 python experiments/render_readme.py --voice voice-affect.json --readme README.md
 
-# the trained classifier: 200 synthesised utterances, ~3 min on CPU
+# the trained classifier: 200 synthesised utterances, ~2 min on CPU (133 s in
+# the committed run)
 python -u experiments/emotion_classifier.py --out emotion-classifier.json
 python experiments/render_readme.py --emotion emotion-classifier.json \
     --readme README.md
@@ -412,7 +423,8 @@ python experiments/render_readme.py --agent agent-loop.json --readme README.md
 python experiments/long_memory.py --out long-memory.json
 python experiments/render_readme.py --memory long-memory.json --readme README.md
 
-# the learned gate: can the selective family's write gate be learned? (~85 s)
+# the learned gate: can the selective family's write gate be learned? (~2 min on
+# CPU; 131 s in the committed run)
 python experiments/learned_gate.py --out learned-gate.json
 
 # the straight-through attempt, which is the 0.160 in the gate section: a hard
@@ -1276,7 +1288,7 @@ Agreement check: `agent.py` 1.000, this experiment's hand-set row 1.000, the age
   right, which is why the control is bounded rather than asserted to be zero, and
   why the argument span it drew from is recorded in the results file.
 * **A one-step agent cannot solve the suite.** At a budget of one decision the
-  agent scores **0.200**, and every task it solves is from `literal`. That is the
+  agent scores **0.167**, and every task it solves is from `literal`. That is the
   task-difficulty control, and it is also the honest bound on the whole block:
   one family is trivial by construction, because it has to be for the no-memory
   contrast to have a surviving arm at all.
