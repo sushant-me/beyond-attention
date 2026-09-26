@@ -42,6 +42,14 @@ reason — a renderer that cannot produce a section the README contains must
 refuse, not quietly drop it. `tests/test_render_readme.py` re-renders every block
 from its JSON and fails if any of them differs from the committed README, which
 is what keeps hand-written content out of a generated region.
+
+`--straight-through` is the same guard for the gate block: the straight-through
+subsection is rendered from `straight-through.json` and lives inside the
+`LEARNED-GATE` block, so `--learned-gate` requires it.
+
+    python experiments/learned_gate_straight_through.py --out straight-through.json
+    python experiments/render_readme.py --learned-gate learned-gate.json \
+        --straight-through straight-through.json --readme README.md
 """
 
 from __future__ import annotations
@@ -195,6 +203,47 @@ def scan_inner_table(payload: dict | None) -> str:
                 f"| {inner} | {chunk} | {config.get('length', 0) // chunk} | "
                 f"{row['seconds']:.2f} | {row['peak_rss_kb'] / 1024:.1f} | {agree} |"
             )
+    return "\n".join(lines)
+
+
+def straight_through_table(payload: dict | None) -> str:
+    """The straight-through hard gate, with the harness control rows above it.
+
+    Rendered from `straight-through.json` rather than typed in, for the same
+    reason as every other table here -- and the control rows are not padding.
+    0.420 and 1.000 have to come out of the *same* training loop before the 0.160
+    is a statement about the hard forward pass rather than about the harness that
+    measured it, and a table showing only the 0.160 would leave the reader no way
+    to tell those apart.
+    """
+    if payload is None:
+        return "_straight-through attempt: missing_"
+    conditions = payload.get("conditions", {})
+    if not conditions:
+        return "_straight-through attempt: no rows_"
+
+    # The hand-set row is the reference the soft gate falls short of, so it is
+    # bold; the two soft-gate rows are the harness control and are not. The same
+    # split applies below: the trained straight-through row is the result and the
+    # untrained one is its control, so only the first is bold.
+    lines = ["| condition | solve rate |", "|---|---:|"]
+    lines.append(f"| hand-set gate | **{conditions['hand_set_gate']['rate']:.3f}** |")
+    for label, key in (("soft gate, same loop, raw (control)", "soft_gate_raw"),
+                       ("soft gate, same loop, sharpened (control)",
+                        "soft_gate_sharpened")):
+        lines.append(f"| {label} | {conditions[key]['rate']:.3f} |")
+    for bold, label, key in ((True, "straight-through, trained",
+                              "straight_through_trained"),
+                             (False, "straight-through, untrained (control)",
+                              "straight_through_untrained")):
+        spread = conditions[key]["spread"]
+        detail = (f"(min {spread['min']:.3f}, max {spread['max']:.3f}, "
+                  f"sd {spread['stdev']:.3f}, {len(spread['rates'])} seeds)")
+        mean = f"{spread['mean']:.3f}"
+        if bold:
+            lines.append(f"| **{label}** | **{mean}** {detail} |")
+        else:
+            lines.append(f"| {label} | {mean} {detail} |")
     return "\n".join(lines)
 
 
@@ -1593,7 +1642,7 @@ def memory_section(payload: dict) -> str:
     return "\n".join(lines)
 
 
-def learned_gate_section(payload: dict) -> str:
+def learned_gate_section(payload: dict, straight_through: dict | None = None) -> str:
     """The learnability section, rendered from `learned-gate.json`.
 
     The question is the README's own strongest self-criticism -- that the
@@ -1603,6 +1652,12 @@ def learned_gate_section(payload: dict) -> str:
     sigmoid to 0/1, so the hardness that makes a hold exact comes from an
     evaluation-time temperature. Both halves are rendered, because the flattering
     half alone would be the overclaim this repository exists to avoid.
+
+    `straight_through` is the second measurement and is required, not optional:
+    it is `straight-through.json`, and the subsection it renders is *inside* this
+    block. Rendering the block without it would replace a published subsection
+    with a missing-file note -- the same way the length-extrapolation section was
+    once deleted by the documented results command.
     """
     conditions = payload["conditions"]
     sharp = payload["sharpness"]["temperature_1_0"]
@@ -1736,18 +1791,80 @@ def learned_gate_section(payload: dict) -> str:
         "question, not because either supplied something the gradient missed. What "
         "is miscalibrated is the soft **values** used as write weights — a 0.9 write "
         "is not a 1.0 write under `exp(-800·w)`. "
-        "A straight-through hard forward pass was also tried and is *worse*: 0.160 "
-        "against 0.420, converging to an all-ones gate that writes to every slot on "
-        "all five seeds. "
         "And nothing here tests other shapes, other objectives, or the model's own "
         "learned `delta`.",
         "",
+    ]
+
+    lines += _straight_through_subsection(straight_through)
+
+    lines += [
         f"Agreement check: `agent.py` {reference['agent_py_rate']:.3f}, this "
         f"experiment's hand-set row {reference['experiment_hand_set_rate']:.3f}, "
         f"the agent-loop run {reference['agent_loop_json_rate']}.",
         "",
     ]
     return "\n".join(lines)
+
+
+def _straight_through_subsection(payload: dict | None) -> list[str]:
+    """The repair that did not work, as its own subsection.
+
+    It was a correction sentence in the paragraph above until the attempt had its
+    own committed data; a measurement with a payload is a section, and a clause
+    inside a paragraph about something else is how a result stays unreadable.
+    """
+    if payload is None:
+        return ["### The straight-through hard gate, and why it is not the fix",
+                "",
+                straight_through_table(payload),
+                ""]
+
+    trained = payload["conditions"]["straight_through_trained"]["spread"]
+    losses = [row["final_loss"] for row in payload.get("seeds", [])]
+    if losses and min(losses) == max(losses):
+        loss_text = f"Final loss {max(losses):.2f} on every seed"
+    elif losses:
+        loss_text = f"Final loss {min(losses):.2f}–{max(losses):.2f} across seeds"
+    else:
+        loss_text = "The final loss is in the payload"
+
+    return [
+        "### The straight-through hard gate, and why it is not the fix",
+        "",
+        "The gate above learns the **addressing** exactly — its 0.5-threshold equals "
+        "the hand-set gate on every eval event — but not the **hardness**: raw it "
+        "scores "
+        f"{payload['conditions']['soft_gate_raw']['rate']:.3f}, and reaching "
+        f"{payload['conditions']['hand_set_gate']['rate']:.3f} needs a temperature "
+        "chosen at evaluation time. The obvious repair is to make the forward pass "
+        "hard instead, so that nothing has to be chosen afterwards. It was tried: a "
+        "hard 0/1 forward pass with the sigmoid's gradient passed straight through "
+        "it, `hard + (p - p.detach())`.",
+        "",
+        straight_through_table(payload),
+        "",
+        f"{loss_text}, and the gate converges to all-ones: it writes to every slot. "
+        "A hard forward pass does not recover the hardness — it destroys the "
+        "addressing the soft gate had already got right.",
+        "",
+        "That closes the approach without needing to run it again, and it sharpens "
+        "what the correction above actually says: the discrete decision was never "
+        "the problem, because hardening is a **no-op on the discrete answer**. What "
+        "is miscalibrated is the soft **values** used as write weights, where a 0.9 "
+        "write is not a 1.0 write under `exp(-800·w)`.",
+        "",
+        "The script prints the soft-gate control first, so the harness has to "
+        "reproduce "
+        f"{payload['conditions']['soft_gate_raw']['rate']:.3f} and "
+        f"{payload['conditions']['soft_gate_sharpened']['rate']:.3f} before the "
+        f"{trained['mean']:.3f} means anything, and it takes about ten seconds on "
+        "this machine:",
+        "",
+        "    python experiments/learned_gate_straight_through.py "
+        "--out straight-through.json",
+        "",
+    ]
 
 
 def main() -> int:
@@ -1769,6 +1886,10 @@ def main() -> int:
     parser.add_argument("--learned-gate",
                         help="learned-gate.json, which renders the gate-"
                              "learnability block")
+    parser.add_argument("--straight-through",
+                        help="straight-through.json, which renders the "
+                             "straight-through subsection of the gate-"
+                             "learnability block (required with --learned-gate)")
     parser.add_argument("--length-extrapolation",
                         help="length-extrapolation.json, which renders the "
                              "length-extrapolation section of the results "
@@ -1933,6 +2054,19 @@ def main() -> int:
         gate = _load(args.learned_gate, "the learned-gate run")
         if gate is None:
             return 1
+        if not args.straight_through:
+            # Refuse rather than delete, for the same reason the results block
+            # refuses without the extrapolation file: the straight-through
+            # subsection lives inside this block, so rendering without its data
+            # would replace a published result with a missing-file note.
+            print("refusing to write the learned-gate block without "
+                  "--straight-through: the straight-through subsection is part "
+                  "of it, and rendering without it would delete that subsection "
+                  "rather than reproduce it", file=sys.stderr)
+            return 1
+        straight = _load(args.straight_through, "the straight-through attempt")
+        if straight is None:
+            return 1
         if LEARNED_GATE_BEGIN not in text or LEARNED_GATE_END not in text:
             print(f"{args.readme} has no {LEARNED_GATE_BEGIN} / "
                   f"{LEARNED_GATE_END} block", file=sys.stderr)
@@ -1940,9 +2074,11 @@ def main() -> int:
         head, rest = text.split(LEARNED_GATE_BEGIN, 1)
         _, tail = rest.split(LEARNED_GATE_END, 1)
 
-        rendered = learned_gate_section(gate)
+        rendered = learned_gate_section(gate, straight)
         for marker in ("| condition |", "| sigmoid temperature |",
-                       "| feature map |", "### Is the gate learnable"):
+                       "| feature map |", "### Is the gate learnable",
+                       "### The straight-through hard gate",
+                       "straight-through, trained"):
             if marker not in rendered:
                 print(f"refusing to write: {marker!r} missing from the learned-"
                       f"gate render", file=sys.stderr)

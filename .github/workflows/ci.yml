@@ -159,6 +159,62 @@ jobs:
         if: matrix.python-version == '3.11'
         run: python experiments/learned_gate.py --verify
 
+      - name: The straight-through attempt is still worse, and its control still reproduces
+        # The gate section's honesty rests on two numbers at once, and the second
+        # is what makes the first readable: the harness has to reproduce the
+        # published soft-gate control (0.420 raw, 1.000 sharpened) from its own
+        # training loop, AND the hard forward pass has to come out worse than the
+        # gate it was meant to repair. Asserting only the second would pass for a
+        # drifted harness, because a broken loop produces any number at all; and
+        # asserting only the control would pass for an experiment that had
+        # stopped measuring anything.
+        #
+        # Run on every interpreter, not pinned to 3.11 like the exact-match check
+        # above: the annealed row is the numerically sensitive one and these rows
+        # are not, which is a claim this step is the evidence for.
+        run: |
+          python experiments/learned_gate_straight_through.py \
+            --out /tmp/straight-through.json
+          cp README.md /tmp/README.gate.md
+          python experiments/render_readme.py \
+            --learned-gate learned-gate.json \
+            --straight-through /tmp/straight-through.json \
+            --readme /tmp/README.gate.md
+          python - <<'PY'
+          import json, pathlib
+          straight = json.loads(pathlib.Path("/tmp/straight-through.json").read_text())
+          gate = json.loads(pathlib.Path("learned-gate.json").read_text())
+          c = straight["conditions"]
+
+          # The control, against the committed results file rather than against
+          # itself: this run's loop has to land on the published numbers.
+          assert c["hand_set_gate"]["rate"] == 1.0, c["hand_set_gate"]
+          for mine, published in (("soft_gate_raw", "learned_gate_trained_raw"),
+                                  ("soft_gate_sharpened",
+                                   "learned_gate_trained_sharpened")):
+              want = gate["conditions"][published]["spread"]["mean"]
+              got = c[mine]["rate"]
+              assert got == want, (mine, got, want, "the harness drifted")
+
+          trained = c["straight_through_trained"]["spread"]
+          untrained = c["straight_through_untrained"]["spread"]
+          raw = c["soft_gate_raw"]["rate"]
+          assert trained["mean"] < raw, \
+              f"the hard gate was not worse: {trained['mean']} vs {raw}"
+          assert untrained["mean"] == 0.0, untrained
+          losses = {row["final_loss"] for row in straight["seeds"]}
+          assert len(losses) == 1, f"the loss moved across seeds: {losses}"
+
+          rendered = pathlib.Path("/tmp/README.gate.md").read_text()
+          for marker in ("### The straight-through hard gate",
+                         "straight-through, trained"):
+              assert marker in rendered, f"the gate render lost {marker!r}"
+          print(f"straight-through ok: control {raw:.3f} / "
+                f"{c['soft_gate_sharpened']['rate']:.3f} reproduced, hard gate "
+                f"{trained['mean']:.3f} against {raw:.3f}, loss "
+                f"{losses.pop():.2f} on every seed")
+          PY
+
       - name: The agent loop carries state, and the gate is what the state is for
         # The no-memory contrast is asserted here rather than only in the tests
         # because it is the number the agent block's honesty rests on: without

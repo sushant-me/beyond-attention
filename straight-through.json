@@ -1,0 +1,102 @@
+{
+  "config": {
+    "keys": 4,
+    "state_width": 4,
+    "train_tasks": 64,
+    "eval_tasks": 50,
+    "steps": 2000,
+    "lr": 0.05,
+    "seeds": [
+      0,
+      1,
+      2,
+      3,
+      4
+    ],
+    "sharp_temperature": 0.05
+  },
+  "conditions": {
+    "hand_set_gate": {
+      "source": "the gate the selective family ships, from agent.py",
+      "rate": 1.0,
+      "tasks": 50
+    },
+    "soft_gate_raw": {
+      "source": "the same training loop, evaluated at temperature 1.0",
+      "rate": 0.42,
+      "tasks": 50
+    },
+    "soft_gate_sharpened": {
+      "source": "the same training loop, evaluated at temperature 0.05",
+      "rate": 1.0,
+      "tasks": 50
+    },
+    "straight_through_trained": {
+      "source": "hard 0/1 forward, sigmoid gradient passed through, trained",
+      "spread": {
+        "rates": [
+          0.16,
+          0.16,
+          0.16,
+          0.16,
+          0.16
+        ],
+        "mean": 0.16,
+        "min": 0.16,
+        "max": 0.16,
+        "stdev": 0.0,
+        "tasks": 50
+      }
+    },
+    "straight_through_untrained": {
+      "source": "the same hard forward pass, at initialisation",
+      "spread": {
+        "rates": [
+          0.0,
+          0.0,
+          0.0,
+          0.0,
+          0.0
+        ],
+        "mean": 0.0,
+        "min": 0.0,
+        "max": 0.0,
+        "stdev": 0.0,
+        "tasks": 50
+      }
+    }
+  },
+  "seeds": [
+    {
+      "seed": 0,
+      "trained": 0.16,
+      "untrained": 0.0,
+      "final_loss": 29.185938
+    },
+    {
+      "seed": 1,
+      "trained": 0.16,
+      "untrained": 0.0,
+      "final_loss": 29.185938
+    },
+    {
+      "seed": 2,
+      "trained": 0.16,
+      "untrained": 0.0,
+      "final_loss": 29.185938
+    },
+    {
+      "seed": 3,
+      "trained": 0.16,
+      "untrained": 0.0,
+      "final_loss": 29.185938
+    },
+    {
+      "seed": 4,
+      "trained": 0.16,
+      "untrained": 0.0,
+      "final_loss": 29.185938
+    }
+  ],
+  "wall_seconds": 9.0
+}

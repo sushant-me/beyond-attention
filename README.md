@@ -414,14 +414,17 @@ python experiments/render_readme.py --memory long-memory.json --readme README.md
 
 # the learned gate: can the selective family's write gate be learned? (~85 s)
 python experiments/learned_gate.py --out learned-gate.json
-python experiments/render_readme.py --learned-gate learned-gate.json \
-    --readme README.md
 
-# the straight-through attempt, which is the 0.160 quoted above: a hard forward
-# pass with the sigmoid gradient passed through. Prints the soft-gate control
-# first, so a reader can see the harness reproduce 0.420 / 1.000 before trusting
-# the 0.160. Not part of the suite -- it takes about two minutes.
-python experiments/learned_gate_straight_through.py
+# the straight-through attempt, which is the 0.160 in the gate section: a hard
+# forward pass with the sigmoid gradient passed through, and worse than the soft
+# gate it was meant to repair. Prints the soft-gate control first, so a reader can
+# see the harness reproduce 0.420 / 1.000 before trusting the 0.160 (~10 s).
+python experiments/learned_gate_straight_through.py --out straight-through.json
+
+# both files are needed, and the render refuses without the second rather than
+# delete the subsection: the straight-through result lives inside the gate block.
+python experiments/render_readme.py --learned-gate learned-gate.json \
+    --straight-through straight-through.json --readme README.md
 
 # the results file is committed, so check that it still matches the code instead
 # of trusting that it does: re-runs the experiment and diffs every number. This
@@ -1207,7 +1210,27 @@ So a temperature choice supplies the hardness gradient descent did not: sharpene
 
 The per-key map memorises: a held-out key's weight row is still at its initialisation, so nothing is written and the rate is zero. Sharing weights between keys that address the same slot generalises fully. The failure therefore belongs to the prescribed feature map rather than to the mechanism — but the map that works is a different map, and the hand-set gate scores 1.000 on both.
 
-**Three things this does not establish.** Only the gate is trained: `A` is still `A_HOLD` and the reader is unchanged, so a Python dict in `evaluate_plan` still computes every answer and the *"no model is needed"* half of the objection stands. **A later measurement corrects the reading above**, and the correction matters more than the original claim: evaluated at the *same* trained parameters, the hard gate (`w > 0.5`) produces an exactly correct state — loss **0.00** — and its rounded gate equals the hand-set one-hot on **every** eval event, which the committed results recorded all along as a rounded one-hot fraction of 1.000. So the discrete decision gradient descent learned is not approximately right, it is exactly right, and hardening is a **no-op on the discrete answer**: a 0.5 threshold or a temperature of 0.05 recovers 1.000 because the rounding was never in question, not because either supplied something the gradient missed. What is miscalibrated is the soft **values** used as write weights — a 0.9 write is not a 1.0 write under `exp(-800·w)`. A straight-through hard forward pass was also tried and is *worse*: 0.160 against 0.420, converging to an all-ones gate that writes to every slot on all five seeds. And nothing here tests other shapes, other objectives, or the model's own learned `delta`.
+**Three things this does not establish.** Only the gate is trained: `A` is still `A_HOLD` and the reader is unchanged, so a Python dict in `evaluate_plan` still computes every answer and the *"no model is needed"* half of the objection stands. **A later measurement corrects the reading above**, and the correction matters more than the original claim: evaluated at the *same* trained parameters, the hard gate (`w > 0.5`) produces an exactly correct state — loss **0.00** — and its rounded gate equals the hand-set one-hot on **every** eval event, which the committed results recorded all along as a rounded one-hot fraction of 1.000. So the discrete decision gradient descent learned is not approximately right, it is exactly right, and hardening is a **no-op on the discrete answer**: a 0.5 threshold or a temperature of 0.05 recovers 1.000 because the rounding was never in question, not because either supplied something the gradient missed. What is miscalibrated is the soft **values** used as write weights — a 0.9 write is not a 1.0 write under `exp(-800·w)`. And nothing here tests other shapes, other objectives, or the model's own learned `delta`.
+
+### The straight-through hard gate, and why it is not the fix
+
+The gate above learns the **addressing** exactly — its 0.5-threshold equals the hand-set gate on every eval event — but not the **hardness**: raw it scores 0.420, and reaching 1.000 needs a temperature chosen at evaluation time. The obvious repair is to make the forward pass hard instead, so that nothing has to be chosen afterwards. It was tried: a hard 0/1 forward pass with the sigmoid's gradient passed straight through it, `hard + (p - p.detach())`.
+
+| condition | solve rate |
+|---|---:|
+| hand-set gate | **1.000** |
+| soft gate, same loop, raw (control) | 0.420 |
+| soft gate, same loop, sharpened (control) | 1.000 |
+| **straight-through, trained** | **0.160** (min 0.160, max 0.160, sd 0.000, 5 seeds) |
+| straight-through, untrained (control) | 0.000 (min 0.000, max 0.000, sd 0.000, 5 seeds) |
+
+Final loss 29.19 on every seed, and the gate converges to all-ones: it writes to every slot. A hard forward pass does not recover the hardness — it destroys the addressing the soft gate had already got right.
+
+That closes the approach without needing to run it again, and it sharpens what the correction above actually says: the discrete decision was never the problem, because hardening is a **no-op on the discrete answer**. What is miscalibrated is the soft **values** used as write weights, where a 0.9 write is not a 1.0 write under `exp(-800·w)`.
+
+The script prints the soft-gate control first, so the harness has to reproduce 0.420 and 1.000 before the 0.160 means anything, and it takes about ten seconds on this machine:
+
+    python experiments/learned_gate_straight_through.py --out straight-through.json
 
 Agreement check: `agent.py` 1.000, this experiment's hand-set row 1.000, the agent-loop run 1.0.
 

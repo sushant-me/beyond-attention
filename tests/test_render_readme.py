@@ -14,9 +14,16 @@ So the check here is not "the README mentions the right numbers". It is:
   renderer produces from the committed JSON, which fails the moment hand-written
   text sits inside a rendered region;
 * rendering is deterministic back to back, so the comparison means what it says;
-* and the results render **refuses** to write the block when the
-  length-extrapolation file is not given, rather than silently dropping the
-  section -- the specific bug, tested as the specific bug.
+* and both blocks that contain a section the renderer can only produce from a
+  second file -- the results block and the gate block -- **refuse** to write when
+  that file is not given, rather than silently dropping the section. The
+  length-extrapolation bug and the straight-through subsection are the same bug,
+  tested as the specific bug in each place it can recur.
+
+`BLOCKS` is every `BEGIN`/`END` pair in the README. It was not: the gate block
+was missing from it, so the guarantee above was false for one of the regions it
+is stated over, and a hand-written edit inside that region would have survived
+until someone re-rendered it.
 """
 
 from __future__ import annotations
@@ -75,6 +82,14 @@ BLOCKS = (
      lambda: render_readme.memory_section(_json("long-memory.json"))),
     ("emotion", render_readme.EMOTION_BEGIN, render_readme.EMOTION_END,
      lambda: render_readme.emotion_section(_json("emotion-classifier.json"))),
+    # The gate block was the one rendered region this tuple did not cover, so
+    # the file's own headline guarantee -- "each BEGIN/END region is
+    # byte-identical to the renderer's output" -- was false for it, and an edit
+    # inside it would have survived until someone re-rendered.
+    ("learned-gate", render_readme.LEARNED_GATE_BEGIN,
+     render_readme.LEARNED_GATE_END,
+     lambda: render_readme.learned_gate_section(
+         _json("learned-gate.json"), _json("straight-through.json"))),
 )
 
 
@@ -160,3 +175,91 @@ def test_the_results_render_with_the_file_still_produces_the_block(
     assert render_readme.main() == 0
     assert copy.read_text() == README.read_text(), \
         "the documented results command must reproduce the committed README"
+
+
+def test_the_gate_command_refuses_to_delete_the_straight_through_subsection(
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The same bug, in the other block that can have it.
+
+    The straight-through subsection is rendered into the gate block, so a
+    `--learned-gate` render without `--straight-through` would replace a
+    published result with a missing-file note. The command is run against a copy
+    and the copy must come back byte-identical, because the run refused.
+    """
+    copy = tmp_path / "README.md"
+    original = README.read_text()
+    copy.write_text(original)
+
+    monkeypatch.setattr(sys, "argv", [
+        "render_readme.py",
+        "--learned-gate", str(ROOT / "learned-gate.json"),
+        "--readme", str(copy),
+    ])
+    assert render_readme.main() == 1
+    assert copy.read_text() == original, "a refused render must not write"
+    assert "### The straight-through hard gate" in copy.read_text()
+
+
+def test_the_gate_render_with_the_file_produces_the_block(
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    copy = tmp_path / "README.md"
+    copy.write_text(README.read_text())
+    monkeypatch.setattr(sys, "argv", [
+        "render_readme.py",
+        "--learned-gate", str(ROOT / "learned-gate.json"),
+        "--straight-through", str(ROOT / "straight-through.json"),
+        "--readme", str(copy),
+    ])
+    assert render_readme.main() == 0
+    assert copy.read_text() == README.read_text(), \
+        "the documented gate command must reproduce the committed README"
+
+
+def test_the_straight_through_rows_are_the_jsons_not_the_readmes() -> None:
+    """The subsection's numbers come from `straight-through.json`.
+
+    Three of them, because they are the argument: the harness control that has to
+    reproduce before the result is readable, the result itself, and the untrained
+    control that says the hard forward pass does nothing without training.
+    """
+    text = README.read_text()
+    _, rest = text.split(render_readme.LEARNED_GATE_BEGIN, 1)
+    block, _ = rest.split(render_readme.LEARNED_GATE_END, 1)
+
+    payload = _json("straight-through.json")
+    conditions = payload["conditions"]
+    assert f"{conditions['soft_gate_raw']['rate']:.3f}" in block
+    assert f"{conditions['soft_gate_sharpened']['rate']:.3f}" in block
+    trained = conditions["straight_through_trained"]["spread"]
+    assert f"**{trained['mean']:.3f}**" in block, trained
+    for field in ("min", "max", "stdev"):
+        assert f"{trained[field]:.3f}" in block, (field, trained)
+    assert f"{len(trained['rates'])} seeds" in block, trained
+
+    # The result is the loss on every seed, and the payload is where it comes
+    # from: a renderer that hard-coded 29.19 would pass the assertions above.
+    losses = {row["final_loss"] for row in payload["seeds"]}
+    assert len(losses) == 1, losses
+    assert f"{losses.pop():.2f}" in block
+    assert "writes to every slot" in block
+
+
+def test_the_straight_through_table_refuses_a_payload_that_cannot_argue() -> None:
+    """No controls, no table -- the row it is there to earn is missing.
+
+    The claim the table makes is not "the hard gate scored 0.160"; it is "0.420
+    and 1.000 came out of the same loop, and the hard gate scored 0.160 anyway".
+    A payload with only the straight-through rows cannot make that claim, and the
+    KeyError is the intended outcome rather than a fallback rendering zeroes.
+    """
+    payload = _json("straight-through.json")
+    stripped = {"config": payload["config"],
+                "conditions": {"straight_through_trained":
+                               payload["conditions"]["straight_through_trained"]}}
+    with pytest.raises(KeyError):
+        render_readme.straight_through_table(stripped)
+
+    assert render_readme.straight_through_table(None) == \
+        "_straight-through attempt: missing_"
+    assert render_readme.straight_through_table({}) == \
+        "_straight-through attempt: no rows_"
