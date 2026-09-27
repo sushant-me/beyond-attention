@@ -1729,8 +1729,17 @@ The store is a data structure and the family is synthetic. Specifically:
   ±0.011) and 5,000 (0.199 ±0.009). Quadrupling attention's budget past the
   reference moved it to 0.185, so the ceiling looks real there; the SSM has never
   been given a budget in that range at this length, and the claim about it is
-  about the two budgets it has. Running `--blocks ssm` at 20,000 steps would
-  settle it in about an hour of CPU.
+  about the two budgets it has.
+* **Closing that gap is a different experiment, not this one run longer.** The
+  SSM at 16 pairs, 20,000 steps, three seeds was stopped after **153 minutes
+  without finishing its first seed**. The attention control at the same length and
+  budget, three seeds, took 671 seconds — for that row *and* a second pair count.
+  The inner scan is a Python loop and its cost per step is what separates the two:
+  the same measurement costs a few minutes for one architecture and most of a day
+  for the other, which is why the 20,000-step comparison exists for attention and
+  not for the SSM. An earlier draft of this bullet said the run "would settle it
+  in about an hour of CPU"; that was an extrapolation from the 3,000-step rows and
+  it is wrong by more than an order of magnitude.
 * **Streaming inference is measured, but on CPU with an unoptimised loop**, so
   its numbers are about state size, not speed. The state figures are now
   measured resident memory rather than arithmetic (see above), but still CPU
