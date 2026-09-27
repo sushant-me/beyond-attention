@@ -1722,6 +1722,15 @@ The store is a data structure and the family is synthetic. Specifically:
   "Which inner scan to use" for the measured scaling. That cost is why the
   reference is reported at the two lengths that bound the interpretation rather
   than at all four.
+* **The 20,000-step control is attention-only, so "neither solves 16 pairs on any
+  budget tried" rests on different budgets for the two.** Trained at 16 pairs,
+  attention was measured at 3,000 steps (0.197 ±0.008), 5,000 (0.196 ±0.009, the
+  extrapolation reference) and 20,000 (0.185 ±0.013); the SSM at 3,000 (0.195
+  ±0.011) and 5,000 (0.199 ±0.009). Quadrupling attention's budget past the
+  reference moved it to 0.185, so the ceiling looks real there; the SSM has never
+  been given a budget in that range at this length, and the claim about it is
+  about the two budgets it has. Running `--blocks ssm` at 20,000 steps would
+  settle it in about an hour of CPU.
 * **Streaming inference is measured, but on CPU with an unoptimised loop**, so
   its numbers are about state size, not speed. The state figures are now
   measured resident memory rather than arithmetic (see above), but still CPU
