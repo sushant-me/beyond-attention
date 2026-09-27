@@ -173,6 +173,41 @@ def test_the_reference_column_reports_its_own_spread() -> None:
     assert "The reference is 1 seed, so a gap smaller than the spread" in weaker
 
 
+def test_the_reference_attribution_follows_the_sign_of_the_gap() -> None:
+    """Which model lost ground is the interpretation, so it is derived.
+
+    A model scoring below one trained at that length lost something to
+    extrapolation; one scoring above it did not. The sentence used to attribute
+    every larger gap to "part extrapolation", which was true while both models
+    lost ground and is false for whichever one did not -- and the committed run
+    is the case where one of each occurs.
+    """
+    payload = _json("length-extrapolation.json")
+    mixed = render_readme.extrapolation_section(payload)
+    assert "the two gaps run opposite ways" in mixed, mixed
+    assert "ssm (0.018) scores below" in mixed, mixed
+    assert "attention (0.044) scores above it" in mixed, mixed
+
+    # Both references far above the extrapolated rows: both lost ground.
+    both_cost = copy.deepcopy(payload)
+    for model in both_cost["reference"].values():
+        for row in model.values():
+            row["mean"] = 0.9
+    costs = render_readme.extrapolation_section(both_cost)
+    assert "run opposite ways" not in costs
+    assert "part extrapolation and part how hard MQAR" in costs
+
+    # Both below: neither lost ground, so neither gap is an extrapolation cost.
+    neither = copy.deepcopy(payload)
+    for model in neither["reference"].values():
+        for row in model.values():
+            row["mean"] = 0.02
+    free = render_readme.extrapolation_section(neither)
+    assert "run opposite ways" not in free
+    assert "task difficulty rather than extrapolation" in free
+    assert "part extrapolation" not in free, free
+
+
 def _results_argv(copy: pathlib.Path, *, omit: str | None = None,
                   control: pathlib.Path | None = None,
                   scan_inner: pathlib.Path | None = None) -> list[str]:

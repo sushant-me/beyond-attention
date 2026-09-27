@@ -677,9 +677,9 @@ def extrapolation_section(payload: dict | None, mqar: dict | None = None) -> str
         # The reference is the column that stops the curve being read as a
         # generalisation result, so it is reported with its gap and with both
         # spreads rather than with an adjective. Where the gap is smaller than
-        # the spread it is not a difference; where it is larger, the decay is
-        # part extrapolation and part task difficulty, and no column here
-        # separates the two.
+        # the spread it is not a difference; where it is larger its *direction*
+        # says which model lost ground, and that is what decides whether the
+        # decay at that length is extrapolation or just task difficulty.
         #
         # Both spreads are printed now. The reference was one seed for as long as
         # this section has existed, and the sentence could compare the gap
@@ -709,26 +709,59 @@ def extrapolation_section(payload: dict | None, mqar: dict | None = None) -> str
             # The reference's own seed count, not the extrapolated column's.
             seed_count = max(reference_counts)
             seeds_note = f"{seed_count} seed" + ("s" if seed_count != 1 else "")
-            if seed_count == 1:
-                comparison = (
-                    "so a gap smaller than the spread is not a difference and a "
-                    "larger one is part extrapolation"
+            spread_word = "the spread" if seed_count == 1 else "either spread"
+
+            # The *sign* of the gap is the interpretation, and it is the reason
+            # the reference column exists: a model that scores below one trained
+            # at that length lost ground, and a model that scores above it did
+            # not. Read at the longest length, which is what the section is
+            # about. The sentence below used to attribute every larger gap to
+            # "part extrapolation", which was true while both models lost ground
+            # and is false for whichever one did not.
+            longest_here = max(longer)
+            costs: list[tuple[str, float]] = []
+            freebies: list[tuple[str, float]] = []
+            for model in blocks:
+                row = reference.get(model, {}).get(str(longest_here))
+                if row is None or longest_here not in means[model]:
+                    continue
+                where = (costs if row["mean"] > means[model][longest_here]
+                         else freebies)
+                where.append((model, abs(means[model][longest_here] - row["mean"])))
+            if costs and freebies:
+                below = ", ".join(f"{m} ({g:.3f})" for m, g in costs)
+                above = ", ".join(f"{m} ({g:.3f})" for m, g in freebies)
+                attribution = (
+                    f"a larger one is a real difference, and at {longest_here} "
+                    f"pairs the two gaps run opposite ways: {below} scores below the "
+                    f"model trained there and is the part attributable to "
+                    f"extrapolation, while {above} scores above it, so its decay "
+                    f"at that length is task difficulty rather than a failure to "
+                    f"generalise"
+                )
+            elif freebies:
+                above = ", ".join(f"{m} ({g:.3f})" for m, g in freebies)
+                attribution = (
+                    f"a larger one is task difficulty rather than extrapolation: "
+                    f"at {longest_here} pairs {above} scores above a model trained "
+                    f"at that length, so training at {train_pairs} pairs cost it "
+                    f"nothing there"
                 )
             else:
-                comparison = (
-                    "so a gap smaller than either spread is not a difference and "
-                    "a larger one is part extrapolation"
+                attribution = (
+                    f"a larger one is part extrapolation and part how hard MQAR "
+                    f"is at that length for a two-layer, "
+                    f"`d_model`-{config.get('d_model')} model — which no column "
+                    f"here separates"
                 )
             lines.append(
                 f"* **Part of the decay is task difficulty, and the reference "
                 f"column is what says so.** A model trained from scratch at the "
                 f"longest length reaches "
                 + "; ".join(reference_notes)
-                + f". The reference is {seeds_note}, {comparison} and part how "
-                f"hard MQAR is at that length for a two-layer, "
-                f"`d_model`-{config.get('d_model')} model — which no column here "
-                f"separates. Without it the curve looks like a generalisation "
-                f"result and is not one."
+                + f". The reference is {seeds_note}, so a gap smaller than "
+                f"{spread_word} is not a difference and {attribution}. Without it "
+                f"the curve looks like a generalisation result and is not one."
             )
 
     rows = (mqar or {}).get("mqar", {})
