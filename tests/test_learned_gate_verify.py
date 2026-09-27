@@ -141,6 +141,24 @@ def test_the_annealed_rows_are_excluded_from_the_exact_comparison() -> None:
             report["final_loss"] = 1234.5678
             report["final_state_loss"] = 0.0
     fresh["conditions"]["learned_gate_trained_annealed"]["spread"]["mean"] = 0.9
+    # Every one of these was a real difference on the 3.11 runner: the *list*
+    # elements and the min/max of a spread, which the first version of
+    # `normalise` did not blank because it only looked at scalars held directly
+    # in a dictionary. The gate stayed red with the fix in place, which is how
+    # the gap was found.
+    fresh["conditions"]["learned_gate_trained_annealed"]["spread"]["rates"] = (
+        [0.9, 1.0, 0.92, 0.94, 0.9])
+    fresh["conditions"]["learned_gate_trained_annealed"]["spread"]["stdev"] = 0.99
+    for variant in fresh["training_variants"]:
+        if variant.get("anneal_to"):
+            # Values change; the *lengths* are left alone, because a list of a
+            # different length is a shape change and has to stay a difference.
+            variant["final_losses"] = [v + 100.0 for v in variant["final_losses"]]
+            variant["raw"]["rates"] = [v + 0.1 for v in variant["raw"]["rates"]]
+            variant["raw"]["min"] = variant["raw"]["min"] + 0.1
+            variant["raw"]["max"] = variant["raw"]["max"] + 0.1
+            variant["sharpened"]["rates"] = [v + 0.1
+                                             for v in variant["sharpened"]["rates"]]
     fresh = _scrub(fresh)
 
     assert learned_gate.differ(learned_gate.normalise(_scrubbed()),
@@ -157,6 +175,12 @@ def test_the_annealed_rows_are_excluded_from_the_exact_comparison() -> None:
     broken = _scrub(copy.deepcopy(fresh))
     broken["conditions"]["learned_gate_trained_annealed"]["spread"]["mean"] = 1.0
     assert learned_gate.annealed_problems(broken)
+
+    # A list element outside an unstable subtree is still compared.
+    elsewhere = copy.deepcopy(fresh)
+    elsewhere["training_variants"][3]["raw"]["rates"] = [0.0, 0.0]
+    assert learned_gate.differ(learned_gate.normalise(_scrubbed()),
+                               learned_gate.normalise(_scrub(elsewhere)))
 
     # A changed anneal temperature is a difference, not a blanked value.
     retuned = copy.deepcopy(fresh)

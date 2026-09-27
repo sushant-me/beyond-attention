@@ -266,23 +266,32 @@ def normalise(payload: dict) -> dict:
     than by where they sit: a training report with `anneal_to` set, and the
     `conditions` entry built from those runs. `anneal_to` itself is kept, so a
     change in the temperature that was annealed to is still a difference.
+
+    "Blanked" means every numeric leaf under a non-reproducible subtree, at any
+    depth, **including the ones inside lists**. The first version of this blanked
+    only the scalars sitting directly in a dictionary, so a list like `rates`,
+    `final_losses` or a spread's `min`/`max` was still compared and the CI gate
+    went red on the 3.11 runner anyway -- which is how the gap was found. The
+    test covers a list element for that reason.
     """
-    def walk(node, path: str = ""):
+    def walk(node, path: str = "", unstable: bool = False):
         if isinstance(node, dict):
-            unstable = (node.get("anneal_to") not in (None,)
+            unstable = (unstable
+                        or node.get("anneal_to") not in (None,)
                         or UNSTABLE_PATH in path)
             built = {}
             for key, value in node.items():
-                if (unstable and key != "anneal_to"
-                        and isinstance(value, (int, float))
-                        and not isinstance(value, bool)):
-                    built[key] = None
+                if key == "anneal_to":
+                    built[key] = value  # a retuned temperature is a difference
                 else:
-                    built[key] = walk(value, f"{path}/{key}")
+                    built[key] = walk(value, f"{path}/{key}", unstable)
             return built
         if isinstance(node, list):
-            return [walk(item, f"{path}[{index}]")
+            return [walk(item, f"{path}[{index}]", unstable)
                     for index, item in enumerate(node)]
+        if unstable and isinstance(node, (int, float)) \
+                and not isinstance(node, bool):
+            return None
         return node
 
     return walk(payload)
