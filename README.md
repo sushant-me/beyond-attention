@@ -467,7 +467,9 @@ python experiments/render_readme.py --learned-gate learned-gate.json \
 # block and nothing noticed, since the tests only check the file against itself.
 python experiments/learned_gate.py --verify
 
-# the dashboard, from the committed results (deterministic, no clock)
+# the dashboard: a self-contained page of the same results, drawn from these two
+# files and checked against them by tests/test_dashboard.py. It is committed, so
+# it opens without running anything.
 python experiments/render_dashboard.py --voice voice-affect.json \
     --agent agent-loop.json --out dashboard.html
 ```
