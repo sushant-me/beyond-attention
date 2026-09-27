@@ -537,7 +537,15 @@ def extrapolation_section(payload: dict | None, mqar: dict | None = None) -> str
 
     def ref(model: str, n_pairs: int) -> str:
         row = reference.get(model, {}).get(str(n_pairs))
-        return "—" if row is None else f"{row['mean']:.3f}"
+        if row is None:
+            return "—"
+        text = f"{row['mean']:.3f}"
+        # The reference carries its own spread once it has more than one seed.
+        # While it was a single model there was nothing to print, and the bullet
+        # below could only compare the gap against the extrapolated spread.
+        if len(row.get("per_seed") or []) > 1:
+            text += f" ±{row['spread']:.3f}"
+        return text
 
     # The default key space the main sweep's "unseen size" column was built
     # with: `mqar_batch` uses `max(n_pairs, 8)` when `n_keys` is not given.
@@ -667,38 +675,60 @@ def extrapolation_section(payload: dict | None, mqar: dict | None = None) -> str
 
     if longer:
         # The reference is the column that stops the curve being read as a
-        # generalisation result, so it is reported with its gap and its spread
-        # rather than with an adjective. Where the gap is smaller than the
-        # three-seed spread it is not a difference; where it is larger, the
-        # decay is part extrapolation and part task difficulty, and no column
-        # here separates the two.
+        # generalisation result, so it is reported with its gap and with both
+        # spreads rather than with an adjective. Where the gap is smaller than
+        # the spread it is not a difference; where it is larger, the decay is
+        # part extrapolation and part task difficulty, and no column here
+        # separates the two.
+        #
+        # Both spreads are printed now. The reference was one seed for as long as
+        # this section has existed, and the sentence could compare the gap
+        # against the extrapolated spread because that was the only one measured;
+        # with a three-seed reference it has a spread of its own and the weaker
+        # wording would be a claim about a number that is no longer on screen.
+        extrap_multi = len(seeds) > 1
         reference_notes = []
-        reference_seeds = set()
+        reference_counts = set()
         for model in blocks:
             for p in longer:
                 row = reference.get(model, {}).get(str(p))
                 if row is None or p not in means[model]:
                     continue
-                reference_seeds.add(len(row.get("per_seed") or []))
+                reference_counts.add(len(row.get("per_seed") or []))
                 gap = abs(means[model][p] - row["mean"])
+                extrap_text = f"{means[model][p]:.3f}"
+                if extrap_multi:
+                    extrap_text += f" ±{spreads[model][p]:.3f}"
+                ref_text = f"{row['mean']:.3f}"
+                if len(row.get("per_seed") or []) > 1:
+                    ref_text += f" ±{row['spread']:.3f}"
                 reference_notes.append(
-                    f"{model} {means[model][p]:.3f} against {row['mean']:.3f} "
-                    f"(gap {gap:.3f}, three-seed spread ±{spreads[model][p]:.3f})"
+                    f"{model} {extrap_text} against {ref_text} (gap {gap:.3f})"
                 )
         if reference_notes:
-            seeds_note = (f"{max(reference_seeds)} seed"
-                          f"{'s' if max(reference_seeds) != 1 else ''}")
+            # The reference's own seed count, not the extrapolated column's.
+            seed_count = max(reference_counts)
+            seeds_note = f"{seed_count} seed" + ("s" if seed_count != 1 else "")
+            if seed_count == 1:
+                comparison = (
+                    "so a gap smaller than the spread is not a difference and a "
+                    "larger one is part extrapolation"
+                )
+            else:
+                comparison = (
+                    "so a gap smaller than either spread is not a difference and "
+                    "a larger one is part extrapolation"
+                )
             lines.append(
                 f"* **Part of the decay is task difficulty, and the reference "
                 f"column is what says so.** A model trained from scratch at the "
                 f"longest length reaches "
                 + "; ".join(reference_notes)
-                + f". The reference is {seeds_note}, so a gap smaller than the "
-                f"spread is not a difference and a larger one is part "
-                f"extrapolation and part how hard MQAR is at that length for a "
-                f"two-layer, `d_model`-{config.get('d_model')} model — which no "
-                f"column here separates. Without it the curve looks like a "
-                f"generalisation result and is not one."
+                + f". The reference is {seeds_note}, {comparison} and part how "
+                f"hard MQAR is at that length for a two-layer, "
+                f"`d_model`-{config.get('d_model')} model — which no column here "
+                f"separates. Without it the curve looks like a generalisation "
+                f"result and is not one."
             )
 
     rows = (mqar or {}).get("mqar", {})

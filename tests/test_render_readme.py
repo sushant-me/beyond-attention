@@ -28,6 +28,7 @@ until someone re-rendered it.
 
 from __future__ import annotations
 
+import copy
 import importlib.util
 import json
 import pathlib
@@ -139,6 +140,37 @@ def test_the_results_block_is_not_hand_written_anywhere() -> None:
             assert f"{row['mean']:.3f}" in results, (model, pairs)
             checked += 1
     assert checked >= 8, f"only {checked} extrapolated rows were checked"
+
+
+def test_the_reference_column_reports_its_own_spread() -> None:
+    """The reference column was one model, and the sentence said so.
+
+    With a single reference model the only spread on screen was the extrapolated
+    column's, and the bullet compared the gap against that -- the right
+    comparison only while the reference is one draw. The reference runs three
+    seeds now, so it carries a spread of its own and the sentence has to be about
+    both. Left as a branch rather than a rewrite: a run with `--reference-seeds 0`
+    is still possible and must not claim a spread it does not have.
+    """
+    payload = _json("length-extrapolation.json")
+    section = render_readme.extrapolation_section(payload)
+    assert "either spread" in section, section
+    checked = 0
+    for model in ("attention", "ssm"):
+        for pairs, row in payload["reference"][model].items():
+            assert len(row["per_seed"]) > 1, (model, pairs)
+            assert f"{row['mean']:.3f} ±{row['spread']:.3f}" in section, (model, pairs)
+            checked += 1
+    assert checked >= 4, f"only {checked} reference cells were checked"
+
+    single = copy.deepcopy(payload)
+    for model in single["reference"].values():
+        for row in model.values():
+            row["per_seed"] = row["per_seed"][:1]
+            row["spread"] = 0.0
+    weaker = render_readme.extrapolation_section(single)
+    assert "either spread" not in weaker
+    assert "The reference is 1 seed, so a gap smaller than the spread" in weaker
 
 
 def _results_argv(copy: pathlib.Path, *, omit: str | None = None,

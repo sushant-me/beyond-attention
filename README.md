@@ -137,10 +137,10 @@ Holding the key space fixed so the vocabulary is identical at every length chang
 
 | pairs | tokens | x train | attention | ssm | chance | a model trained at that length: attention | ssm |
 |---:|---:|---:|---:|---:|---:|---:|---:|
-| 2 | 6 | 1.0x | 1.000 ±0.000 | 1.000 ±0.000 | 1/16 | 1.000 | 1.000 |
+| 2 | 6 | 1.0x | 1.000 ±0.000 | 1.000 ±0.000 | 1/16 | 1.000 ±0.000 | 1.000 ±0.000 |
 | 4 | 10 | 1.7x | 0.783 ±0.026 | 0.536 ±0.008 | 1/16 | — | — |
 | 8 | 18 | 3.0x | 0.458 ±0.022 | 0.298 ±0.015 | 1/16 | — | — |
-| 16 | 34 | 5.7x | 0.240 ±0.013 | 0.181 ±0.013 | 1/16 | 0.205 | 0.198 |
+| 16 | 34 | 5.7x | 0.240 ±0.013 | 0.181 ±0.013 | 1/16 | 0.196 ±0.009 | 0.199 ±0.009 |
 
 Three seeds, spread shown, nothing retrained between rows.
 
@@ -148,7 +148,7 @@ What this says, including the parts that are unflattering:
 
 * **Neither architecture extrapolates here.** Both are perfect at the length they trained on (2 pairs) and both fall below 1.000 at every longer length — attention to 0.783 and the SSM to 0.536 at 4 pairs, the shortest step past training.
 * **Attention decays more slowly than the SSM** at every step — 0.783 against 0.536 at 4 pairs, 0.458 against 0.298 at 8 pairs, 0.240 against 0.181 at 16 pairs. On this task the state-space model is the weaker of the two past its training length, which is the opposite of what the architecture's reputation would predict.
-* **Part of the decay is task difficulty, and the reference column is what says so.** A model trained from scratch at the longest length reaches attention 0.240 against 0.205 (gap 0.035, three-seed spread ±0.013); ssm 0.181 against 0.198 (gap 0.017, three-seed spread ±0.013). The reference is 1 seed, so a gap smaller than the spread is not a difference and a larger one is part extrapolation and part how hard MQAR is at that length for a two-layer, `d_model`-64 model — which no column here separates. Without it the curve looks like a generalisation result and is not one.
+* **Part of the decay is task difficulty, and the reference column is what says so.** A model trained from scratch at the longest length reaches attention 0.240 ±0.013 against 0.196 ±0.009 (gap 0.044); ssm 0.181 ±0.013 against 0.199 ±0.009 (gap 0.018). The reference is 3 seeds, so a gap smaller than either spread is not a difference and a larger one is part extrapolation and part how hard MQAR is at that length for a two-layer, `d_model`-64 model — which no column here separates. Without it the curve looks like a generalisation result and is not one.
 * The SSM does fit *longer training lengths* better than attention: in the main sweep it reaches 1.000 at 8 pairs where attention reaches 0.326. So "fits long sequences when trained on them" and "generalises to longer ones when trained short" are separate properties, and the two architectures sit on opposite sides of them.
 
 One training length, one task, one model size. This measures MQAR at 2 pairs, 6 tokens, d_model=64, 2 layers, on three seeds.
@@ -416,7 +416,10 @@ python experiments/run.py --pairs 8 16 --steps 20000 --blocks attention \
 # length extrapolation: train at 2 pairs, evaluate frozen weights out to 5.7x.
 # The reference models cost most of the runtime; --no-reference skips them, at
 # the price of no longer being able to attribute the decay to anything.
-python experiments/length_extrapolation.py --out length-extrapolation.json
+# Three reference seeds, so the reference column carries a spread of its own
+# instead of being one draw that the gaps are measured against.
+python experiments/length_extrapolation.py --reference-seeds 0 1 2 \
+    --out length-extrapolation.json   # 2662 s in the committed run, CPU
 
 # streamed memory: real RSS over a million tokens, with a positive control
 # --length matters: the default is 262,144 tokens and this table is about a
@@ -1703,14 +1706,17 @@ The store is a data structure and the family is synthetic. Specifically:
   re-runs the experiment and compares rather than writing — it records the
   configuration it was produced by, and no section of this README reads it, so
   nothing in it has been interpreted.
-* **The extrapolation reference is one seed.** The extrapolated rows are three
-  seeds with a spread column; the trained-at-that-length reference is a single
-  seed, so a difference between them smaller than the spread is not a
-  difference. At 16 pairs both gaps clear that bar — attention's extrapolated
-  0.240 ±0.013 against a reference of 0.205, the SSM's 0.181 ±0.013 against
-  0.198 — but the reference has no spread of its own, so the part of each gap
-  that the table attributes to extrapolation is an upper bound rather than a
-  measurement.
+* **The extrapolation reference is three seeds now, which changed what the gap
+  measures.** It was one, so the gap between an extrapolated row and a model
+  trained at that length was compared against the extrapolated spread — the only
+  one measured — and the part of each gap attributed to extrapolation was an
+  upper bound. With three reference seeds the 16-pair gaps are attention 0.044
+  and the SSM 0.018, both larger than either spread (±0.013 and ±0.009), and they
+  point in opposite directions: the SSM does slightly *worse* at 5.7x its
+  training length than trained there, while attention does *better*, so
+  attention's decay at that length is task difficulty rather than extrapolation.
+  The reference's ± is three draws, with the same caveat as the sweep tables —
+  a range, not an interval.
 * **Training the reference at 16 pairs is expensive on CPU.** The SSM's inner
   scan is a Python loop, and training at longer sequences costs real time — see
   "Which inner scan to use" for the measured scaling. That cost is why the

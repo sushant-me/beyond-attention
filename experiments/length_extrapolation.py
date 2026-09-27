@@ -163,6 +163,12 @@ def main() -> int:
             "steps": args.steps, "batch_size": args.batch_size, "lr": args.lr,
             "d_model": args.d_model, "n_layers": args.n_layers,
             "seeds": args.seeds,
+            # Recorded because it is an input the run depends on and it is not
+            # the default: the reference column's spread is rendered from it, and
+            # a config that omitted it could not say whether the reference was
+            # one seed or three. The lengths the reference trained at are not
+            # repeated here -- they are the keys of the `reference` block below.
+            "reference_seeds": args.reference_seeds,
         },
         "extrapolated": {},
         "reference": {},
