@@ -107,27 +107,27 @@ and *position-invariant*, so a Transformer with no positional encoding is a fair
 baseline rather than a crippled one.
 
 <!-- RESULTS:BEGIN -->
-**Main sweep** — d_model=64, layers=2, steps=3000, seeds=[0], batch=32, lr=0.005
+**Main sweep** — d_model=64, layers=2, steps=3000, seeds=[0, 1, 2], batch=32, lr=0.005
 
 | pairs in context | model | parameters | accuracy (exact match) | chance | best accuracy at an unseen size |
 |---|---|---|---|---|---|
-| 2 | attention | 67,968 | 1.000 | 0.500 | 0.728 (at 4) |
-| 2 | ssm | 67,584 | 1.000 | 0.500 | 0.548 (at 4) |
-| 4 | attention | 67,968 | 0.413 | 0.250 | 0.554 (at 2) |
-| 4 | ssm | 67,584 | 1.000 | 0.250 | 1.000 (at 2) |
-| 8 | attention | 67,968 | 0.312 | 0.125 | 0.568 (at 2) |
-| 8 | ssm | 67,584 | 1.000 | 0.125 | 0.975 (at 4) |
-| 16 | attention | 67,968 | 0.203 | 0.062 | 0.000 (at 2) |
-| 16 | ssm | 67,584 | 0.186 | 0.062 | 0.000 (at 2) |
+| 2 | attention | 67,968 | 1.000 ± 0.000 | 0.500 | 0.743 (at 4) |
+| 2 | ssm | 67,584 | 1.000 ± 0.000 | 0.500 | 0.568 (at 4) |
+| 4 | attention | 67,968 | 0.594 ± 0.292 | 0.250 | 0.710 (at 2) |
+| 4 | ssm | 67,584 | 1.000 ± 0.000 | 0.250 | 1.000 (at 2) |
+| 8 | attention | 67,968 | 0.326 ± 0.013 | 0.125 | 0.572 (at 2) |
+| 8 | ssm | 67,584 | 1.000 ± 0.000 | 0.125 | 0.990 (at 4) |
+| 16 | attention | 67,968 | 0.197 ± 0.008 | 0.062 | 0.000 (at 2) |
+| 16 | ssm | 67,584 | 0.195 ± 0.011 | 0.062 | 0.000 (at 2) |
 
 The control below is the same architecture at the same size, with the step budget raised and nothing else changed.
 
-**Control: attention, 20,000 steps** — d_model=64, layers=2, steps=20000, seeds=[0], batch=32, lr=0.005
+**Control: attention, 20,000 steps** — d_model=64, layers=2, steps=20000, seeds=[0, 1, 2], batch=32, lr=0.005
 
 | pairs in context | model | parameters | accuracy (exact match) | chance | best accuracy at an unseen size |
 |---|---|---|---|---|---|
-| 8 | attention | 67,968 | 1.000 | 0.125 | 0.000 (at 16) |
-| 16 | attention | 67,968 | 0.175 | 0.062 | 0.000 (at 8) |
+| 8 | attention | 67,968 | 1.000 ± 0.000 | 0.125 | 0.000 (at 16) |
+| 16 | attention | 67,968 | 0.185 ± 0.013 | 0.062 | 0.000 (at 8) |
 
 ### Does either model read longer than it trained?
 
@@ -149,7 +149,7 @@ What this says, including the parts that are unflattering:
 * **Neither architecture extrapolates here.** Both are perfect at the length they trained on (2 pairs) and both fall below 1.000 at every longer length — attention to 0.783 and the SSM to 0.536 at 4 pairs, the shortest step past training.
 * **Attention decays more slowly than the SSM** at every step — 0.783 against 0.536 at 4 pairs, 0.458 against 0.298 at 8 pairs, 0.240 against 0.181 at 16 pairs. On this task the state-space model is the weaker of the two past its training length, which is the opposite of what the architecture's reputation would predict.
 * **Part of the decay is task difficulty, and the reference column is what says so.** A model trained from scratch at the longest length reaches attention 0.240 against 0.205 (gap 0.035, three-seed spread ±0.013); ssm 0.181 against 0.198 (gap 0.017, three-seed spread ±0.013). The reference is 1 seed, so a gap smaller than the spread is not a difference and a larger one is part extrapolation and part how hard MQAR is at that length for a two-layer, `d_model`-64 model — which no column here separates. Without it the curve looks like a generalisation result and is not one.
-* The SSM does fit *longer training lengths* better than attention: in the main sweep it reaches 1.000 at 8 pairs where attention reaches 0.312. So "fits long sequences when trained on them" and "generalises to longer ones when trained short" are separate properties, and the two architectures sit on opposite sides of them.
+* The SSM does fit *longer training lengths* better than attention: in the main sweep it reaches 1.000 at 8 pairs where attention reaches 0.326. So "fits long sequences when trained on them" and "generalises to longer ones when trained short" are separate properties, and the two architectures sit on opposite sides of them.
 
 One training length, one task, one model size. This measures MQAR at 2 pairs, 6 tokens, d_model=64, 2 layers, on three seeds.
 
@@ -200,8 +200,8 @@ length=8192, batch=4, d_inner=128, d_state=16, threads=4
 
 ```
 parameter check at the sweep vocabulary: ssm=67,584 vs attention=67,968
-main sweep wall time: 997.0s
-control wall time: 339.2s
+main sweep wall time: 2205.6s
+control wall time: 671.4s
 ```
 <!-- RESULTS:END -->
 
@@ -281,15 +281,22 @@ grows at **0.61** and is nowhere near quadratic. The old figure was wrong.
 ## The result, and why the obvious reading of it is wrong
 
 At the matched 3,000-step budget the state-space model is clearly ahead: it
-reaches 1.000 up to 8 pairs in context, while the Transformer degrades from 1.000
-at 2 pairs to 0.203 at 16. The natural headline is *"a selective state-space model
+reaches exactly 1.000 at 2, 4 and 8 pairs in context and shows no seed-to-seed
+variation at all, while the Transformer is 1.000 at 2 pairs and then 0.594, 0.326
+and 0.197 at 4, 8 and 16. The natural headline is *"a selective state-space model
 recalls associations better than a Transformer"*, and this repository's main
 table supports it.
 
+The 4-pair row is the one that needed more than a single seed. 0.594 is a mean
+over runs of 0.413, 0.976 and 0.393: on one seed in three the Transformer nearly
+solves 4 pairs at the matched budget and on the other two it does not, so that
+row is not a smooth degradation but a switch that sometimes flips inside 3,000
+steps. The SSM's rows are 1.000 ± 0.000.
+
 **That headline is false, and the control shows it.** The same Transformer, at
 the same size and with nothing changed but the step budget raised to 20,000,
-reaches **1.000** at 8 pairs. Nothing about the architecture changed; it simply
-needed longer to get there.
+reaches **1.000 ± 0.000** at 8 pairs — every seed. Nothing about the architecture
+changed; it simply needed longer to get there.
 
 This is a known effect rather than a surprise: associative recall in a
 Transformer is implemented by an *induction head*, a two-layer circuit that takes
@@ -397,12 +404,14 @@ uv pip install -e . pytest
 
 python -m pytest tests/ -q                     # the correctness suite
 
-python experiments/run.py --pairs 2 4 8 16 --steps 3000 --seeds 0 \
+# three seeds for both: the headline tables are what the argument rests on, and a
+# single seed cannot show whether a row is stable. The ± column is half the range.
+python experiments/run.py --pairs 2 4 8 16 --steps 3000 --seeds 0 1 2 \
     --lengths 256 512 1024 2048 --scaling-batch 4 \
-    --out results.json            # main sweep    (997 s in the committed run, CPU)
+    --out results.json            # main sweep    (2206 s in the committed run, CPU)
 python experiments/run.py --pairs 8 16 --steps 20000 --blocks attention \
-    --lengths 128 --scaling-batch 2 \
-    --out control-attention.json  # the control   (339 s in the committed run)
+    --seeds 0 1 2 --lengths 128 --scaling-batch 2 \
+    --out control-attention.json  # the control   (671 s in the committed run)
 
 # length extrapolation: train at 2 pairs, evaluate frozen weights out to 5.7x.
 # The reference models cost most of the runtime; --no-reference skips them, at
@@ -1653,16 +1662,24 @@ The store is a data structure and the family is synthetic. Specifically:
 * **Two layers and `d_model = 64`.** Far too small to separate "cannot" from
   "needs more capacity", so a low number means *this* model at *this* size did
   not learn it.
-* **One seed in the sweep.** The spread is therefore unreported; the runner
-  supports `--seeds` and the table grows a ± column when it is used.
+* **Three seeds, and half the range is not a confidence interval.** The main
+  sweep and the control both run seeds 0, 1 and 2, and the tables print half the
+  distance between the best and worst of the three. Nothing here estimates the
+  variation a fourth seed would add, and with three points one of them can carry
+  most of the range — the Transformer's 4-pair row is 0.594 ± 0.292 because two
+  seeds failed and one nearly solved the task, which the two-decimal mean would
+  hide if the runs were not in the file. This replaced a single seed, which could
+  not show whether a row was stable at all.
 * **Until this round the seeds did not describe the initial weights.** `run.py`
   and `length_extrapolation.py` built a model and then handed it to `train`,
   which is where the seed is set — so the initialisation came from whatever the
   global generator happened to hold, not from the recorded seed. It was caught by
   re-running the documented main sweep: all eight in-distribution accuracies and
   all eight parameter counts came back bit-identical, and one off-size cell moved
-  from 0.769 to 0.728. In `length_extrapolation.py` the effect was worse than one
-  lost cell. Training draws from a generator of its own (`train` makes one with
+  from 0.769 to 0.728. Those are the single-seed values the table carried at the
+  time; the same cell reads 0.743 in the three-seed table now, which is a
+  different mean and not a second correction. In `length_extrapolation.py` the
+  effect was worse than one lost cell. Training draws from a generator of its own (`train` makes one with
   `manual_seed(seed + 1)`), so a step consumes nothing from the global stream and
   the state a `train` call leaves behind is exactly the state its own seed
   started from. Each seed's model therefore took the initialisation belonging to

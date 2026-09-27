@@ -6,7 +6,9 @@
     ],
     "steps": 20000,
     "seeds": [
-      0
+      0,
+      1,
+      2
     ],
     "d_model": 64,
     "n_layers": 2,
@@ -36,6 +38,8 @@
       "parameters": 67968,
       "accuracy_mean": 1.0,
       "accuracy_runs": [
+        1.0,
+        1.0,
         1.0
       ],
       "chance": 0.125,
@@ -47,9 +51,11 @@
       "block": "attention",
       "n_pairs": 16,
       "parameters": 67968,
-      "accuracy_mean": 0.1748046875,
+      "accuracy_mean": 0.18522135416666666,
       "accuracy_runs": [
-        0.1748046875
+        0.1748046875,
+        0.2001953125,
+        0.1806640625
       ],
       "chance": 0.0625,
       "off_size_accuracy": {
@@ -67,8 +73,8 @@
       "length": 128,
       "batch": 2,
       "parameters": 82240,
-      "seconds": 0.007,
-      "activation_rss_kb": 19280,
+      "seconds": 0.0055,
+      "activation_rss_kb": 19284,
       "finite": true
     },
     "ssm@128": {
@@ -80,10 +86,10 @@
       "length": 128,
       "batch": 2,
       "parameters": 81856,
-      "seconds": 0.7142,
-      "activation_rss_kb": 104524,
+      "seconds": 0.5855,
+      "activation_rss_kb": 104540,
       "finite": true
     }
   },
-  "wall_seconds": 339.2
+  "wall_seconds": 671.4
 }

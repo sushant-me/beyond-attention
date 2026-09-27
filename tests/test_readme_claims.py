@@ -22,6 +22,10 @@ The README reserves interpretation for hand-written text and says so. So these
 tables stay hand-written, and this module is what stops them drifting: each
 figure is recomputed from the JSON and compared. It counts what it checked, so a
 parse that silently matched nothing cannot pass.
+
+One test here is not about a table at all: the seed count behind the headline
+argument, which the prose states in words ("on three seeds") and which no
+renderer can see.
 """
 
 from __future__ import annotations
@@ -272,3 +276,30 @@ def test_the_parallel_forward_wall_is_the_committed_one() -> None:
             checked += 2
 
     assert checked == 6, checked
+
+
+def test_the_headline_sweeps_are_more_than_one_seed() -> None:
+    """The README's central argument is stated over three seeds.
+
+    "That headline is false, and the control shows it" is the claim the whole
+    repository turns on: at the matched 3,000-step budget the Transformer
+    degrades where the state-space model does not, and the same Transformer given
+    20,000 steps reaches 1.000 at 8 pairs. Both were one seed until this was
+    changed. A single seed cannot show whether a row is stable, and a
+    regeneration with `--seeds 0` would drop the ± column while the prose went on
+    making a claim about three seeds -- a mismatch no other test here can see,
+    because the rendered table would agree with whatever file it was given.
+
+    The run count is read from the rows as well as the config, so a file whose
+    config claims three seeds while its rows carry one fails too.
+    """
+    for name in ("results.json", "control-attention.json"):
+        payload = _json(name)
+        seeds = payload["config"]["seeds"]
+        assert len(seeds) >= 3, (
+            f"{name} records seeds={seeds}; the README's headline result is "
+            f"stated over three seeds and its spread column is rendered from them")
+        counts = {len(row["accuracy_runs"]) for row in payload["mqar"].values()}
+        assert counts == {len(seeds)}, (
+            f"{name}: config says {len(seeds)} seeds but the rows carry "
+            f"{sorted(counts)} runs each")
