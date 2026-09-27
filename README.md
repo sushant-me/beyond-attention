@@ -14,10 +14,14 @@ plus a measurement of it. Every table inside a rendered region below — the
 reproduces it; `tests/test_render_readme.py` fails if any region stops matching
 its file. Everything outside those markers is written by hand from the same
 committed files, and `tests/test_readme_claims.py` recomputes the four
-measurement tables that sit outside them — the training-variant losses, the
-carried-state table, the measured RSS table and the parallel-forward wall — and
-fails if a figure in any of them drifts from its JSON. Where a figure comes from
-a test or a probe rather than from a results file, it names the source.
+measurement tables that sit outside them and carry figures from a results file —
+the training-variant losses, the carried-state table, the measured RSS table and
+the parallel-forward wall — and fails if a figure in any of them drifts from its
+JSON. A fifth hand-written table is the streaming-versus-materialising memory
+comparison, whose figures come from a test rather than from a results file;
+`tests/test_scan.py` asserts that one's magnitudes, and the table names the test.
+Where a figure comes from a test or a probe rather than from a results file, it
+names the source.
 
 **It is not** a new architecture, and not a replacement for attention. Three
 claims that would be easy to make from the main table, and are all false:
@@ -78,10 +82,11 @@ agreement cannot catch them:
   three implementations, so the chunked path — the one that can leak across a
   chunk boundary — was never tested by it, and a deliberately reversed chunk scan
   passed. The parametrisation was the bug.
-* **Long-range propagation** — the depthwise convolution has a kernel of 2, so
-  position 0 reaches positions 0 and 1 and nothing else. A test changes only
-  position 0 and requires the output at position 11 to move; if it does not, the
-  block is a local filter wearing a state-space model's name.
+* **Long-range propagation** — the depthwise convolution is local, so its reach
+  is the kernel: the model ships with a kernel of 4, and the test builds its
+  block with a kernel of 2 so that the convolution's reach is a single step. It
+  changes only position 0 and requires the output at position 11 to move, so a
+  local filter cannot wear a state-space model's name.
 
 Every test was mutation-checked. Breaking the monoid, dropping the carry between
 chunks, reversing the chunk scan, removing the convolution's causal padding and
@@ -126,7 +131,7 @@ The control below is the same architecture at the same size, with the step budge
 
 ### Does either model read longer than it trained?
 
-The "unseen size" column above is not a clean measure of that, and it took building the experiment below to see why. `mqar_batch` sizes its key space from the pair count by default: trained at 2 pairs a model meets keys 1–8 and values 9–16, while a 16-pair batch hands it keys 1–16 and values 17–32 — token ids it has never seen, in roles it has never seen them in. Every `0.000` in that column is an evaluation at a *longer* length than training, which is precisely the case the column was meant to measure. Those zeros are a vocabulary mismatch, not a failure to generalise.
+The "unseen size" column above is not a clean measure of that, and it took building the experiment below to see why. `mqar_batch` sizes its key space from the pair count by default: trained at 2 pairs a model meets keys 1–8 and values 9–16, while a 16-pair batch hands it keys 1–16 and values 17–32: in one direction ids past the end of its embedding, in the other the ids it does know in swapped roles. Every `0.000` in it is a *shorter* evaluation than the row was trained on: the 16-pair rows, scored at 2, 4, 8. The roles swap in that direction — a value id at 16 pairs is a key id at 2 — so those zeros are the same vocabulary mismatch, not a failure to generalise.
 
 Holding the key space fixed so the vocabulary is identical at every length changes the picture completely. Both models are trained at **2 pairs (6 tokens)** — the longest length at which *both* solve the task outright — then evaluated with frozen weights at the lengths below (up to **5.7x**):
 
@@ -255,8 +260,10 @@ Those two tables are separate runs of the same four configurations at 8,192
 tokens, and they do not agree exactly. `loop` at chunk 256 measured 16.09 s in the
 single-length run and 14.93 s here; `vectorized` at chunk 256 measured 8.56 s and
 8.91 s, so the chunk effect at that length reads **1.9×** in one table and
-**1.7×** in the other. The per-figure difference runs from 0.3% to 7.9%, which is
-the run-to-run variance the limitations quote rather than anything about the code
+**1.7×** in the other. The per-figure difference runs from 0.07% to 7.9% across the
+eight figures the two tables publish for these four configurations -- smallest in
+a peak-memory cell, largest in the `loop` at chunk 64 timing -- which is the
+run-to-run variance the limitations quote rather than anything about the code
 — both runs put `loop` at chunk 64 fastest and `loop` at chunk 256 slowest, so no
 conclusion here depends on which table you read.
 
@@ -311,7 +318,8 @@ way to write it, and what `nn.MultiheadAttention` needs for a causal mask), the
 state-space model **crosses over**. At 32,768 tokens it is marginally faster
 (55.9 s vs 57.6 s) and about **2× lighter** (4,652 MB vs 9,122 MB). The explicit
 mask materialises the `L × L` score matrix, and its memory per token climbs from
-0.030 to 0.070 MB across the range while the SSM's stays flat at 0.036.
+0.030 to 0.070 MB across the range while the SSM's does not: 0.0375, 0.0267 and
+0.0355 MB at 8,192, 16,384 and 32,768.
 
 **Against attention written with the fused kernel** — `F.scaled_dot_product_attention`
 with `is_causal=True`, which never materialises that matrix — **there is no
@@ -500,8 +508,11 @@ anywhere from `6e-17` to `2.8` on seed alone. Annealing the temperature to 0.05
 saturates the sigmoid, so which of those a run lands on is decided in the last
 bits of the arithmetic rather than by the code — on the 3.11 runner the same
 command returned `3.96e-24` for a loss this file records as `0.65`. The raw rows
-are not bit-identical across platforms either: they differ by one unit in the last
-place, `14.443256952904889` against `14.443256952904886`.
+are not bit-identical across platforms either: `final_state_loss` for seed 1 came
+back as `14.443256952904889` on one and `14.443256952904886` on the other, two
+units in the last place apart. (The table above quotes `final_loss`, which is a
+different field -- it is the quantity the sentence about five significant figures
+is about.)
 
 It is also the row the conclusion rejects: annealing reaches 0.928 where training
 soft and thresholding reaches 1.000. So **every row the conclusion rests on
@@ -511,16 +522,17 @@ results argue against. Accuracy, stability across seeds, and the fact that the o
 unstable row is the one the argument rejects, all point the same way.
 
 `experiments/learned_gate.py --verify` re-runs the experiment and compares it
-against the committed file. Every field is compared exactly except two: numeric
-leaves are compared to a relative `1e-9`, which absorbs the last unit in the last
-place between platforms and nothing else — a stale file, the failure this check
-exists to catch, moves figures by percent or by orders of magnitude — and the
-annealed rows are excluded from the comparison altogether and checked instead for
-the claim they carry, that annealing does worse than training soft and
-thresholding. Running it as a CI gate on one interpreter is what `tests/test_learned_gate_verify.py`
-exercises: an identical payload passes, a one-ULP difference passes, a 1%
-difference fails, a missing key fails, and an annealed row that stopped being
-worse than the sharpened gate fails.
+against the committed file. Three fields are not compared for equality, and each
+for a stated reason: `wall_seconds` is a property of the machine rather than of
+the result; numeric leaves are compared to a relative `1e-9`, which absorbs the
+last unit in the last place between platforms and nothing else — a stale file, the
+failure this check exists to catch, moves figures by percent or by orders of
+magnitude — and the annealed rows are excluded from the comparison altogether and
+checked instead for the claim they carry, that annealing does worse than training
+soft and thresholding. Running it as a CI gate on one interpreter is what
+`tests/test_learned_gate_verify.py` exercises: an identical payload passes, a
+one-ULP difference passes, a 1% difference fails, a missing key fails, and an
+annealed row that stopped being worse than the sharpened gate fails.
 
 The voice, emotion, agent, memory, learned-gate and inner-scan-sweep blocks render
 on their own (`--voice`, `--emotion`, `--agent`, `--memory`, `--learned-gate`,
@@ -536,7 +548,7 @@ for byte.
 ## Use it from code
 
 Two of the things here are usable without reading a module: measuring prosody,
-and running the agent. `pip install -e .` from the reproduction block below puts
+and running the agent. `pip install -e .` from the reproduction block above puts
 a small importable surface on top of both.
 
     >>> import numpy as np
@@ -599,8 +611,9 @@ same 4,864 elements at 256 tokens and at 1,048,576. That is `2 layers x
 and a test asserts the count does not move.
 
 The rows to 65,536 come from `experiments/stream_cost.py`. The last two come from
-`experiments/long_context.py`, which streams a million tokens and re-checks at
-every single step that the carried state has not moved. Across a **64x range of
+`experiments/long_context.py`, which streams a million tokens and then compares
+the carried state's element count against the count taken before the loop — a
+constant-size claim, not a per-step trace. Across a **64x range of
 lengths** the per-token cost varies by **1.14x** — flat, as a fixed-size
 recurrence should be, and slow only because the loop is plain Python.
 
@@ -639,9 +652,11 @@ Two things worth stating plainly rather than leaving to be inferred:
   Reuse cannot hide an accumulation, which is exactly the property this claim
   needs. The measured cache column above lands on the arithmetic one to the
   megabyte, which is the cross-check that both are measuring the same thing.
-* **The model's state is constant; the outputs are not.** `stream_step` discards
-  each step's logits, which is what makes the loop bounded. `stream_sequence`
-  appends them and returns a stacked `(B, L, vocab)` tensor — **132 MB** at a
+* **The model's state is constant; the outputs are not.** `stream_step` returns
+  one step's logits alongside the new state, and the loops that measure memory —
+  `stream_cost.py` and `long_context.py` — throw the logits away, which is what
+  makes their loop bounded. `stream_sequence` keeps them and returns a stacked
+  `(B, L, vocab)` tensor — **132 MB** at a
   million tokens. That is the caller's choice rather than a property of the
   model, but a reader who conflated the two would be wrong in a direction that
   flatters the architecture, so both are measured.
@@ -821,15 +836,20 @@ measures the four prosodic axes it claims to, on signals where those axes are
 known because they were set by hand.
 
 The tests were mutation-checked the same way the scan's were, because a test
-that passes is not evidence until something that should break it does. Ten
+that passes is not evidence until something that should break it does. Nine
 deliberate faults in `voice.py` — accepting every frame as voiced, removing the
 energy gate, swapping the frame and hop, giving the encoder a bias, collapsing
 the voiced-frame energy spread back onto all frames, counting voiced frames
 instead of runs, letting jitter span the pauses, moving the rolloff threshold to
 5% of the power, and weighting the spectral centroid by power instead of
-magnitude — each fail a specific test, and seven of the ten fail exactly one.
-The voicing fault is caught by the white-noise control, which is the reason that
-control exists: it is the fault a pure-tone test cannot see.
+magnitude — are each caught by a specific test. Re-measured against the suite as
+it stands, four of the nine fail exactly one test (the energy gate, the encoder
+bias, the speaking-rate proxy and the centroid weighting) and the rest fail
+between two and twenty-three, the widest being the frame/hop swap, which moves
+every descriptor at once. An earlier version of this sentence said ten faults and
+seven single-test failures; the list was nine, and the counts were remembered
+rather than run. The voicing fault is caught by the white-noise control, which is
+the reason that control exists: it is the fault a pure-tone test cannot see.
 
 ### The trained classifier: what this is, and what it is not
 
@@ -1299,7 +1319,7 @@ So a temperature choice supplies the hardness gradient descent did not: sharpene
 
 The per-key map memorises: a held-out key's weight row is still at its initialisation, so nothing is written and the rate is zero. Sharing weights between keys that address the same slot generalises fully. The failure therefore belongs to the prescribed feature map rather than to the mechanism — but the map that works is a different map, and the hand-set gate scores 1.000 on both.
 
-**Three things this does not establish.** Only the gate is trained: `A` is still `A_HOLD` and the reader is unchanged, so a Python dict in `evaluate_plan` still computes every answer and the *"no model is needed"* half of the objection stands. **A later measurement corrects the reading above**, and the correction matters more than the original claim: evaluated at the *same* trained parameters, the hard gate (`w > 0.5`) produces an exactly correct state — loss **0.00** — and its rounded gate equals the hand-set one-hot on **every** eval event, which the committed results recorded all along as a rounded one-hot fraction of 1.000. So the discrete decision gradient descent learned is not approximately right, it is exactly right, and hardening is a **no-op on the discrete answer**: a 0.5 threshold or a temperature of 0.05 recovers 1.000 because the rounding was never in question, not because either supplied something the gradient missed. What is miscalibrated is the soft **values** used as write weights — a 0.9 write is not a 1.0 write under `exp(-800·w)`. And nothing here tests other shapes, other objectives, or the model's own learned `delta`.
+**Three things this does not establish.** Only the gate is trained: `A` is still `A_HOLD` and the reader is unchanged, so a Python dict in `evaluate_plan` still computes every answer and the *"no model is needed"* half of the objection stands. **A later measurement corrects the reading above**, and the correction matters more than the original claim: evaluated at the *same* trained parameters, the hard gate (`w > 0.5`) rounds to the hand-set one-hot on **every** eval event -- a rounded one-hot fraction of 1.000 in the committed file -- so its state is exactly correct and its loss is zero. So the discrete decision gradient descent learned is not approximately right, it is exactly right, and hardening is a **no-op on the discrete answer**: a 0.5 threshold or a temperature of 0.05 recovers 1.000 because the rounding was never in question, not because either supplied something the gradient missed. What is miscalibrated is the soft **values** used as write weights — a 0.9 write is not a 1.0 write under `exp(-800·w)`. And nothing here tests other shapes, other objectives, or the model's own learned `delta`.
 
 ### The straight-through hard gate, and why it is not the fix
 
@@ -1663,10 +1683,15 @@ The store is a data structure and the family is synthetic. Specifically:
   — `scaling-sdpa.json` is the run that was labelled fused and measured mask.
   `scaling-long.json` is a fifth kept run and **not** one of the broken ones: a
   sweep over 2,048–8,192 tokens from the same commit, with no `causal_mode`
-  recorded because the flag did not exist yet. Its 8,192-token rows agree with
-  `scaling-mask.json`'s to within 0.3%, which is why it reads as an earlier,
-  shorter mask run — and it is the only committed run with rows at 2,048 and
-  4,096, so those two lengths have no other source in the repository.
+  recorded because the flag did not exist yet. Its 8,192-token memory rows agree
+  with `scaling-mask.json`'s to within 0.3% (0.25% for attention, 0.08% for the
+  SSM), which is why it reads as an earlier, shorter mask run; the *timings* in
+  those same rows differ by more — 0.7% for attention and 5.0% for the SSM —
+  which is the run-to-run variance quoted below rather than a disagreement about
+  the memory. It is also the only committed file with **mask** rows at 2,048 and
+  4,096: the fused baseline covers 4,096 in `scaling-final.json`, and
+  `scaling.json` and `scaling-fused.json` cover 2,048, but no other file has the
+  mask baseline at either length.
 * **Run-to-run variance is a few percent.** The SSM at 8,192 tokens measured
   8.106 s in one run and 7.835 s in another with identical settings, so
   differences below ~5% in these tables are noise, not signal.

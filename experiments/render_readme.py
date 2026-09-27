@@ -523,6 +523,44 @@ def extrapolation_section(payload: dict | None, mqar: dict | None = None) -> str
     chance_text = f"1/{round(1 / chance)}" if chance else "—"
     ratio = tokens(longest) / tokens(int(train_pairs)) if train_pairs else 0.0
 
+    # Which of the main sweep's cells are empty, and which way each one faces
+    # relative to the length its row trained on. The paragraph below used to
+    # assert that every `0.000` in the column was a *longer* evaluation than
+    # training. The committed table's zeros are all *shorter* ones -- the
+    # 16-pair rows, scored at 2, 4 and 8 -- so the sentence was backwards, and
+    # nothing recomputed it because it is generated prose inside a rendered
+    # block. It is read out of the payload now, and it says which way round the
+    # zeros actually fall.
+    zeros_shorter: list[tuple[str, int, int]] = []
+    zeros_longer: list[tuple[str, int, int]] = []
+    for key, row in (mqar or {}).get("mqar", {}).items():
+        off_size = row.get("off_size_accuracy") or {}
+        if not off_size or max(off_size.values()) != 0.0:
+            continue  # only a row with no non-zero cell shows a 0.000 above
+        for size in off_size:
+            model, trained = key.split("@")
+            bucket = zeros_shorter if int(size) < int(trained) else zeros_longer
+            bucket.append((model, int(trained), int(size)))
+
+    if zeros_shorter and not zeros_longer:
+        sizes = sorted({size for _, _, size in zeros_shorter})
+        direction = (
+            f"Every `0.000` in it is a *shorter* evaluation than the row was "
+            f"trained on: the {longest}-pair rows, scored at "
+            f"{', '.join(str(size) for size in sizes)}. The roles swap in that "
+            f"direction — a value id at {longest} pairs is a key id at "
+            f"{sizes[0]} — so those zeros are the same vocabulary mismatch, not "
+            f"a failure to generalise.")
+    elif zeros_shorter or zeros_longer:
+        direction = (
+            f"The column's empty cells face both ways: "
+            f"{len(zeros_shorter)} at a shorter length than the row trained on "
+            f"and {len(zeros_longer)} at a longer one, so a zero in it is not "
+            f"evidence of anything on its own.")
+    else:
+        direction = ("No cell in that column is empty on this run, so it cannot "
+                     "be read either way.")
+
     lines = [
         "### Does either model read longer than it trained?",
         "",
@@ -531,11 +569,9 @@ def extrapolation_section(payload: dict | None, mqar: dict | None = None) -> str
         f"key space from the pair count by default: trained at {train_pairs} "
         f"pairs a model meets keys 1–{default_keys} and values "
         f"{default_keys + 1}–{2 * default_keys}, while a {longest}-pair batch "
-        f"hands it keys 1–{n_keys} and values {n_keys + 1}–{2 * n_keys} — token "
-        f"ids it has never seen, in roles it has never seen them in. Every "
-        f"`0.000` in that column is an evaluation at a *longer* length than "
-        f"training, which is precisely the case the column was meant to measure. "
-        f"Those zeros are a vocabulary mismatch, not a failure to generalise.",
+        f"hands it keys 1–{n_keys} and values {n_keys + 1}–{2 * n_keys}: in one "
+        f"direction ids past the end of its embedding, in the other the ids it "
+        f"does know in swapped roles. {direction}",
         "",
         f"Holding the key space fixed so the vocabulary is identical at every "
         f"length changes the picture completely. Both models are trained at "
@@ -1999,12 +2035,18 @@ def learned_gate_section(payload: dict, straight_through: dict | None = None) ->
         "still `A_HOLD` and the reader is unchanged, so a Python dict in "
         "`evaluate_plan` still computes every answer and the *\"no model is needed\"* "
         "half of the objection stands. "
+        # The loss figure used to be typed in as "loss **0.00**" with nothing
+        # committed behind it. The field that is committed is the rounded one-hot
+        # fraction, and an exact one-hot write is what makes the state exact, so
+        # the sentence reads the field and draws the consequence rather than
+        # quoting a number no file contains.
         "**A later measurement corrects the reading above**, and the correction "
         "matters more than the original claim: evaluated at the *same* trained "
-        "parameters, the hard gate (`w > 0.5`) produces an exactly correct state — "
-        "loss **0.00** — and its rounded gate equals the hand-set one-hot on "
-        "**every** eval event, which the committed results recorded all along as a "
-        "rounded one-hot fraction of 1.000. So the discrete decision gradient "
+        "parameters, the hard gate (`w > 0.5`) rounds to the hand-set one-hot on "
+        "**every** eval event -- a rounded one-hot fraction of "
+        f"{sharp['trained']['rounded_one_hot_fraction']:.3f} in the committed "
+        "file -- so its state is exactly correct and its loss is zero. So the "
+        "discrete decision gradient "
         "descent learned is not approximately right, it is exactly right, and "
         "hardening is a **no-op on the discrete answer**: a 0.5 threshold or a "
         "temperature of 0.05 recovers 1.000 because the rounding was never in "
