@@ -142,14 +142,15 @@ def test_the_results_block_is_not_hand_written_anywhere() -> None:
 
 
 def _results_argv(copy: pathlib.Path, *, omit: str | None = None,
-                  control: pathlib.Path | None = None) -> list[str]:
+                  control: pathlib.Path | None = None,
+                  scan_inner: pathlib.Path | None = None) -> list[str]:
     """The documented results command, optionally missing or over a file."""
     pairs = [
         ("--mqar", ROOT / "results.json"),
         ("--scaling", ROOT / "scaling-final.json"),
         ("--scaling", ROOT / "scaling-mask.json"),
         ("--control", control or ROOT / "control-attention.json"),
-        ("--scan-inner", ROOT / "scan-inner.json"),
+        ("--scan-inner", scan_inner or ROOT / "scan-inner.json"),
         ("--length-extrapolation", ROOT / "length-extrapolation.json"),
     ]
     argv = ["render_readme.py"]
@@ -575,3 +576,51 @@ def test_the_sweep_block_accepts_the_single_chunk_run_it_used_to_refuse(
     block = _block(copy.read_text(), render_readme.INNER_SWEEP_BEGIN,
                    render_readme.INNER_SWEEP_END)
     assert "| **loop @ chunk 64** |" in block
+
+
+def test_the_inner_scan_table_reads_both_key_shapes() -> None:
+    """`scan_inner.py` renamed its result keys and this renderer did not notice.
+
+    The committed `scan-inner.json` was produced before `5497438` added the
+    `@L{length}` suffix, so it holds `loop@64`; a run of the script as it stands
+    holds `loop@64@L8192`. The renderer read only the first, so regenerating the
+    file -- which the README's own reproduction procedure does -- produced a
+    table with a header and no rows, and the command exited 0.
+    """
+    committed = _json("scan-inner.json")
+    rendered = render_readme.scan_inner_table(committed)
+    rows = [line for line in rendered.splitlines() if line.startswith("| loop")]
+    assert len(rows) == 2, rendered
+
+    # The same run, in the shape the script writes today.
+    current = {"config": dict(committed["config"], length=8192),
+               "results": {f"{key}@L8192": row
+                           for key, row in committed["results"].items()}}
+    rendered = render_readme.scan_inner_table(current)
+    rows = [line for line in rendered.splitlines() if line.startswith("| loop")]
+    assert len(rows) == 2, rendered
+    # And the two shapes render the same table, not two different ones.
+    assert rendered == render_readme.scan_inner_table(committed)
+
+
+def test_an_inner_scan_file_with_no_readable_row_is_refused(
+        tmp_path: pathlib.Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """The failure the guard could not see, because it checked a header.
+
+    `| inner scan |` is emitted whenever the section renders at all, so it is
+    present in a table with nothing under it. The refusal now also requires a
+    row, which is what makes this fail instead of quietly replacing four
+    published rows with an empty table.
+    """
+    payload = _json("scan-inner.json")
+    payload["results"] = {"loop_64": payload["results"]["loop@64"]}
+    unreadable = tmp_path / "scan-inner.json"
+    unreadable.write_text(json.dumps(payload))
+
+    copy = tmp_path / "README.md"
+    original = README.read_text()
+    copy.write_text(original)
+    monkeypatch.setattr(sys, "argv", _results_argv(copy, scan_inner=unreadable))
+    assert render_readme.main() == 1
+    assert copy.read_text() == original, "a refused render must not write"
+    assert "| loop | 64 |" in copy.read_text()

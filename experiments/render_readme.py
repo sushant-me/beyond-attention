@@ -214,6 +214,25 @@ def scan_inner_table(payload: dict | None) -> str:
     if not rows:
         return "_inner-scan comparison: no rows_"
     config = payload.get("config", {})
+
+    def cell(inner: str, chunk: int) -> dict | None:
+        """The row for one configuration, under either key shape.
+
+        `scan_inner.py` wrote `loop@64` when the comparison was one length, and
+        `loop@64@L8192` once it swept several. The committed `scan-inner.json`
+        predates that change, so this renderer was written against the old shape
+        and read nothing at all from a current run -- the table came out with its
+        header and no rows, `main` exited 0, and the guard below could not see it
+        because the header is a string this function always emits.
+        """
+        length = config.get("length")
+        for key in (f"{inner}@{chunk}@L{length}", f"{inner}@{chunk}"):
+            found = rows.get(key)
+            if isinstance(found, dict):
+                return found
+        return None
+
+    chunks = sorted({v["chunk"] for v in rows.values() if isinstance(v, dict)})
     lines = [
         f"length={config.get('length')}, batch={config.get('batch')}, "
         f"d_inner={config.get('dim')}, d_state={config.get('state')}, "
@@ -222,13 +241,13 @@ def scan_inner_table(payload: dict | None) -> str:
         "| inner scan | chunk | chunks | seconds | peak MB | agrees with loop |",
         "|---|---|---|---|---|---|",
     ]
-    for chunk in sorted({v["chunk"] for v in rows.values()}):
+    for chunk in chunks:
         for inner in ("loop", "vectorized"):
-            row = rows.get(f"{inner}@{chunk}")
+            row = cell(inner, chunk)
             if row is None:
                 continue
-            loop = rows.get(f"loop@{chunk}")
-            vec = rows.get(f"vectorized@{chunk}")
+            loop = cell("loop", chunk)
+            vec = cell("vectorized", chunk)
             agree = "—"
             if loop and vec:
                 worst = max(
@@ -240,6 +259,11 @@ def scan_inner_table(payload: dict | None) -> str:
                 f"| {inner} | {chunk} | {config.get('length', 0) // chunk} | "
                 f"{row['seconds']:.2f} | {row['peak_rss_kb'] / 1024:.1f} | {agree} |"
             )
+    if len(lines) == 4:  # the four header lines and nothing under them
+        # A header with nothing under it is not a table, and publishing one is
+        # how a section disappears while the command still exits 0.
+        return ("_inner-scan comparison: no rows_ (no configuration in this file "
+                "has a row this renderer can read)")
     return "\n".join(lines)
 
 
@@ -2241,7 +2265,13 @@ def main() -> int:
         # write instead of being published as "_control: not run_".
         for marker in ("| pairs in context |", "| sequence length |",
                        "### Does either model read longer than it trained?",
-                       "| x train |", "| inner scan |", "| agrees with loop |"):
+                       "| x train |", "| inner scan |", "| agrees with loop |",
+                       # A *row*, not the header. The header above is emitted
+                       # whenever the section renders at all, so it is present in
+                       # a table with nothing under it -- which is what a
+                       # scan-inner file in a key shape this renderer did not read
+                       # produced, with the command exiting 0.
+                       "\n| loop | "):
             if marker not in rendered:
                 print(f"refusing to write: {marker!r} missing from the render",
                       file=sys.stderr)

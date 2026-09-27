@@ -408,7 +408,9 @@ python experiments/run.py --pairs 8 16 --steps 20000 --blocks attention \
 python experiments/length_extrapolation.py --out length-extrapolation.json
 
 # streamed memory: real RSS over a million tokens, with a positive control
-python -u experiments/stream_memory.py --out stream-memory.json
+# --length matters: the default is 262,144 tokens and this table is about a
+# million, so the command without it reproduces a different measurement
+python -u experiments/stream_memory.py --length 1048576 --out stream-memory.json
 
 # inner scan and chunk size across lengths (each child address-space capped)
 python experiments/scan_inner.py --lengths 1024 2048 4096 8192 --chunks 64 256 \
@@ -640,9 +642,12 @@ what the state *should* cost rather than what the process does.
 
 The control is what makes the flat line mean anything. A flat line is only
 evidence if the instrument can see growth, so the identical loop is run a second
-time with the attention cache growing underneath it, and it rises by 193 MB.
-Without that, "RSS did not move" is indistinguishable from "RSS was never
-looked at".
+time with the attention cache growing underneath it, and it rises by 193 MB in
+the committed run — 165 MB on a re-run, because the figure is how much of a
+256 MB allocation the allocator had not already reserved, and that is the one
+number here that moves by more than a few percent. What the control has to do is
+register growth, and it does: without it, "RSS did not move" is
+indistinguishable from "RSS was never looked at".
 
 Two things worth stating plainly rather than leaving to be inferred:
 
@@ -1692,6 +1697,14 @@ The store is a data structure and the family is synthetic. Specifically:
   4,096: the fused baseline covers 4,096 in `scaling-final.json`, and
   `scaling.json` and `scaling-fused.json` cover 2,048, but no other file has the
   mask baseline at either length.
+* **`scan-inner.json` predates the key shape the script writes now.** It was
+  committed before `5497438` added the `@L{length}` suffix to the sweep's result
+  keys, so it holds `loop@64` where a run today holds `loop@64@L8192`. The
+  renderer reads both shapes — it read only the old one until this was checked,
+  and the failure that produced was silent: a current run rendered the inner-scan
+  table with its header and no rows, and the command exited 0. Regenerating the
+  file renames the keys and moves the timings by a few percent, because that is a
+  new measurement rather than a re-render of the old one.
 * **Run-to-run variance is a few percent.** The SSM at 8,192 tokens measured
   8.106 s in one run and 7.835 s in another with identical settings, so
   differences below ~5% in these tables are noise, not signal.

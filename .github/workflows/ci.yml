@@ -128,6 +128,39 @@ jobs:
                 % longest)
           PY
 
+      - name: The streamed state is flat, and the instrument can still see growth
+        # The "measured, not just arithmetic" table rests on two numbers that pull
+        # against each other: the SSM's RSS must not move over a long stream, and
+        # the *same* instrument must register movement when there is something to
+        # see. A probe that reads nothing satisfies the first and fails the
+        # second, which is why they are asserted together -- and why the script
+        # refuses on its own when they are not. The configuration here is a short
+        # one, seconds rather than the three minutes the README's full run takes;
+        # the published figures are pinned to the committed file by
+        # tests/test_readme_claims.py, and this is what checks the code still
+        # produces the shape they describe.
+        run: |
+          python -u experiments/stream_memory.py --length 8192 \
+            --control-length 262144 --cache-lengths 4096 \
+            --out /tmp/stream-memory.json
+          python - <<'PY'
+          import json, pathlib
+          data = json.loads(pathlib.Path("/tmp/stream-memory.json").read_text())
+          state, control = data["ssm_stream"], data["cache_growth_control"]
+          assert state["state_constant"], state
+          assert state["state_elements_start"] == state["state_elements_max"], state
+          assert state["rss_after_warmup_growth_fraction"] < 0.01, state
+          grown_mb = control["rss_after_warmup_growth_bytes"] / 1024 ** 2
+          assert grown_mb > 50, (
+              f"the positive control grew {grown_mb:.1f} MB, so the instrument is "
+              f"not demonstrably able to see growth and the flat result is not "
+              f"evidence")
+          print(f"streamed state ok: {state['state_elements_start']} elements over "
+                f"{state['length']:,} tokens with RSS growth "
+                f"{state['rss_after_warmup_growth_fraction']:.2e}; the control "
+                f"registered +{grown_mb:.1f} MB")
+          PY
+
       - name: Every rendered block is the renderer's output
         # The README claims every published number is generated, and that claim
         # was false in one place until this test existed: a hand-written section
