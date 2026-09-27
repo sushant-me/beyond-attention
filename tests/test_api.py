@@ -253,3 +253,60 @@ def test_the_api_is_exported_from_the_package() -> None:
                  "AFFECT_FRAMING", "run_task", "trace_lines"):
         assert name in beyond_attention.__all__, name
         assert hasattr(beyond_attention, name), name
+
+
+# --------------------------------------------------------------------------
+# The example, which is also the documentation
+# --------------------------------------------------------------------------
+
+def test_the_module_example_runs_and_still_produces_what_it_claims() -> None:
+    """The usage example is executed rather than only written down.
+
+    It carries expected output, and one line of it was wrong: it showed
+    `summary.reading.split(".")[0]` producing the first sentence, which that
+    expression cannot do, because the sentence contains "1.2 Hz" and the split
+    lands inside the decimal. Nothing ran the example, so nothing noticed --
+    the same failure this repository records for its published figures, one
+    level down.
+
+    Only this module is doctested. `voice.py` has a `>>>` block too, but it is a
+    usage sketch rather than an example: it calls
+    `waveform_to_model_input(wave, ...)` with the *caller's* `wave`, so eight of
+    its ten lines raise `NameError` before reaching any claim, and making them
+    runnable would mean inventing the caller's input inside a docstring.
+    """
+    import doctest
+
+    from beyond_attention import api
+
+    result = doctest.testmod(api, verbose=False)
+    assert result.attempted >= 8, (
+        f"only {result.attempted} examples ran, so the example block has been "
+        f"removed or stopped being collected")
+    assert result.failed == 0, f"{result.failed} of the examples fail"
+
+
+def test_the_readme_shows_the_example_that_actually_runs() -> None:
+    """One home for the example; the README quotes it rather than paraphrasing.
+
+    The README has no `>>>` block it executes, so its copy of this example is
+    checked against the docstring's instead of trusted. Together with the test
+    above that is the whole chain: the docstring runs, and the README quotes the
+    docstring.
+    """
+    import inspect
+    import pathlib
+
+    from beyond_attention import api
+
+    readme = (pathlib.Path(__file__).resolve().parents[1] / "README.md").read_text()
+    # `getdoc` dedents against the *whole* docstring, which starts at column 0,
+    # so the example keeps its four-space indent here. Strip it, and compare as
+    # a substring: the README indents the same lines inside a code block.
+    example = [line.strip() for line in inspect.getdoc(api).splitlines()
+               if line.strip().startswith(">>>")]
+    assert len(example) >= 6, example
+    missing = [line for line in example if line not in readme]
+    assert not missing, (
+        f"the README does not quote these example lines, so a reader is shown "
+        f"something other than what the code runs: {missing}")

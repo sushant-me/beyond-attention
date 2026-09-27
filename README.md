@@ -531,6 +531,44 @@ described in the limitations, and `tests/test_render_readme.py` holds it in plac
 by re-rendering every block from its JSON and comparing it with the README byte
 for byte.
 
+## Use it from code
+
+Two of the things here are usable without reading a module: measuring prosody,
+and running the agent. `pip install -e .` from the reproduction block below puts
+a small importable surface on top of both.
+
+    >>> import numpy as np
+    >>> from beyond_attention import affect_summary, run_task
+    >>> t = np.arange(16_000) / 16_000
+    >>> summary = affect_summary(0.5 * np.sin(2 * np.pi * 220 * t), 16_000)
+    >>> round(summary.descriptors["f0_mean"], 1)
+    221.6
+    >>> summary.reading.split(". ")[0]
+    'Pitch is high, centred on 222 Hz and almost level (spread 1.2 Hz) across 100% of frames'
+    >>> run = run_task()                       # the example task, start to finish
+    >>> [(step.action.tool, step.result.value) for step in run.steps]
+    [('add', 3), ('add', 7), ('mul', 35), ('lookup', 7), ('finish', 7)]
+
+`affect_summary` returns the descriptors **and** a reading generated *from* them,
+so the words and the numbers cannot drift apart. `run_task` returns the whole
+trace — every step, with the registers the policy read and the observation it got
+— and `trace_lines(run)` renders it as text. `prosody_reading` and `AffectSummary`
+are the two pieces of the first call, if they are wanted separately.
+
+Neither function adds a number of its own, and `api.py` states what neither is:
+the first is not an emotion judgement — nothing in that path was trained on
+labelled affect data, and the reading says so in its own last sentence — and the
+second is not a general agent, it is one hand-written controller over a closed
+task family and a closed tool set.
+
+Those examples are executed. `tests/test_api.py` runs the module's doctests, which
+is how a wrong line in them was caught: an earlier version read
+`summary.reading.split(".")[0]` and showed the whole first sentence underneath it,
+which that expression cannot produce, because the sentence contains `1.2 Hz` and
+the split lands inside the decimal. The README quotes the docstring's example
+verbatim and a test compares the two, so a reader is never shown output the code
+does not produce.
+
 ## Streaming: what it costs to keep reading
 
 Everything above compares the two models on a fixed-length sequence, where both
@@ -1621,6 +1659,12 @@ The store is a data structure and the family is synthetic. Specifically:
   `scaling-fused.json`, `scaling-sdpa.json` and `scaling-crossover.json` are kept
   in the repository as the record of the two broken measurements described above
   — `scaling-sdpa.json` is the run that was labelled fused and measured mask.
+  `scaling-long.json` is a fifth kept run and **not** one of the broken ones: a
+  sweep over 2,048–8,192 tokens from the same commit, with no `causal_mode`
+  recorded because the flag did not exist yet. Its 8,192-token rows agree with
+  `scaling-mask.json`'s to within 0.3%, which is why it reads as an earlier,
+  shorter mask run — and it is the only committed run with rows at 2,048 and
+  4,096, so those two lengths have no other source in the repository.
 * **Run-to-run variance is a few percent.** The SSM at 8,192 tokens measured
   8.106 s in one run and 7.835 s in another with identical settings, so
   differences below ~5% in these tables are noise, not signal.

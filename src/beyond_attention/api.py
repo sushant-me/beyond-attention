@@ -11,7 +11,7 @@ importable surface on top:
     >>> summary = affect_summary(0.5 * np.sin(2 * np.pi * 220 * t), 16_000)
     >>> round(summary.descriptors["f0_mean"], 1)
     221.6
-    >>> summary.reading.split(".")[0]
+    >>> summary.reading.split(". ")[0]
     'Pitch is high, centred on 222 Hz and almost level (spread 1.2 Hz) across 100% of frames'
     >>> run = run_task()                       # the example task, start to finish
     >>> [(step.action.tool, step.result.value) for step in run.steps]
