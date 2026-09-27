@@ -28,13 +28,29 @@ What this does not establish: that either architecture tracks state in general.
 It is one synthetic task, two layers, `d_model = 64`.
 
 Usage:
-    python -u experiments/state_tracking.py --out state-tracking.json
+    python -u experiments/state_tracking.py --steps 1500 --control-steps 3000 \\
+        --out state-tracking.json
+
+The committed file was produced by exactly that command. It is deterministic for
+a fixed configuration -- model construction seeds the global RNG before the model
+exists, and `--threads` is pinned -- so the file can be checked rather than
+trusted:
+
+    python -u experiments/state_tracking.py --steps 1500 --control-steps 3000 \\
+        --verify --out state-tracking.json
+
+`--verify` re-runs the experiment and compares instead of writing. It takes about
+two hours on four threads -- most of it the reference, which trains at four times
+the training length -- so unlike `experiments/learned_gate.py --verify` it is not a
+CI gate; `tests/test_state_tracking.py` covers the part that is cheap to check,
+that two builds at the same seed agree and two builds at different seeds do not.
 """
 
 from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 
 import torch
@@ -63,10 +79,50 @@ def sampler(length: int):
     return sample
 
 
-def build(block: str, d_model: int, n_layers: int) -> LanguageModel:
+def build(block: str, d_model: int, n_layers: int, seed: int) -> LanguageModel:
+    """A fresh model, with the global RNG seeded before its initialisation.
+
+    The seed is set here and not only inside `train`, because `train` seeds when
+    it starts -- by which point the model already exists. Constructing a model
+    from an unseeded process is what made this experiment unreproducible: every
+    run drew different initial weights, so two runs at identical flags disagreed
+    on accuracy while both reported the same `seeds`, and the committed results
+    file could not be reproduced by any configuration.
+    """
+    torch.manual_seed(seed)
     return LanguageModel(
         REGISTER_VOCAB, d_model, n_layers, block, **BLOCK_KWARGS[block]
     )
+
+
+def config_payload(args: argparse.Namespace, chance: float) -> dict:
+    """Everything needed to reproduce this run, recorded alongside the results.
+
+    Four of these were missing until they were added, which made the committed
+    file unreproducible: `steps` was recorded but the learning rate and batch
+    size it was trained at were not, the control's budget was visible only inside
+    an arm name, and nothing said whether the reference had run at all. A fresh
+    run at the script's defaults did not reproduce the committed numbers, and with
+    the configuration incomplete there was no way to tell whether that was a
+    different setting or something else.
+
+    A function rather than a literal inside `main`, so that
+    `tests/test_state_tracking.py` can assert the fields are recorded without
+    running the experiment -- which is the only way a check on this survives,
+    given that a real run takes two hours.
+    """
+    return {
+        "task": "register", "train_length": args.train_length,
+        "eval_lengths": args.eval_lengths, "steps": args.steps,
+        "queries_per_sequence": QUERIES_PER_SEQUENCE,
+        "d_model": args.d_model, "n_layers": args.n_layers,
+        "seeds": args.seeds, "chance": chance,
+        "batch_size": args.batch_size, "lr": args.lr,
+        "control_steps": args.control_steps,
+        "reference_seeds": args.reference_seeds,
+        "reference_run": not args.no_reference,
+        "threads": args.threads,
+    }
 
 
 def mean(xs: list[float]) -> float:
@@ -75,6 +131,45 @@ def mean(xs: list[float]) -> float:
 
 def spread(xs: list[float]) -> float:
     return (max(xs) - min(xs)) / 2 if len(xs) > 1 else 0.0
+
+
+def verify_against(path: Path, payload: dict) -> int:
+    """Compare a fresh run against the committed results file, and do not write.
+
+    The same gap `learned_gate.py --verify` exists to close, and it was wider
+    here: until this was added the payload did not record the batch size, the
+    learning rate, the control's step budget or whether the reference had run,
+    so a reader could not tell a stale file from a differently-configured one.
+    A fresh run at the script's defaults does not reproduce the numbers that were
+    committed, which is exactly the ambiguity the missing fields created.
+
+    The experiment is deterministic for a fixed configuration -- two runs at the
+    same settings produce byte-identical payloads -- so an exact comparison is
+    the right instrument rather than a tolerance.
+    """
+    if not path.exists():
+        print(f"{path} does not exist; nothing to verify against", file=sys.stderr)
+        return 1
+
+    committed = json.loads(path.read_text())
+    if committed == payload:
+        print(f"{path} matches a fresh run")
+        return 0
+
+    print(f"{path} does NOT match a fresh run:", file=sys.stderr)
+    for section in ("config", "matched_budget", "control", "reference"):
+        if committed.get(section) != payload.get(section):
+            # stderr, like the lines around them: a caller that captures only
+            # stderr would otherwise see a bare failure with no detail, which is
+            # how this was written the first time.
+            print(f"  {section}:", file=sys.stderr)
+            print(f"    committed: {json.dumps(committed.get(section))[:200]}",
+                  file=sys.stderr)
+            print(f"    fresh:     {json.dumps(payload.get(section))[:200]}",
+                  file=sys.stderr)
+    print("\nregenerate it with: python experiments/state_tracking.py "
+          "--steps 1500 --control-steps 3000", file=sys.stderr)
+    return 1
 
 
 def main() -> int:
@@ -89,6 +184,11 @@ def main() -> int:
                          "the budget rather than the architecture")
     ap.add_argument("--batch-size", type=int, default=32)
     ap.add_argument("--lr", type=float, default=5e-3)
+    ap.add_argument("--threads", type=int, default=4,
+                    help="pinned, because an unpinned torch uses every core and "
+                         "the reduction order changes with the machine's load: "
+                         "two runs at identical flags produced different "
+                         "accuracies until this was set")
     ap.add_argument("--d-model", type=int, default=64)
     ap.add_argument("--n-layers", type=int, default=2)
     ap.add_argument("--seeds", type=int, nargs="+", default=[0, 1])
@@ -96,12 +196,19 @@ def main() -> int:
                     help="seeds for the reference; defaults to --seeds")
     ap.add_argument("--no-reference", action="store_true",
                     help="skip the trained-at-the-longest-length reference")
+    ap.add_argument("--verify", action="store_true",
+                    help="compare a fresh run against the file at --out "
+                         "instead of writing it")
     args = ap.parse_args()
 
     if args.reference_seeds is None:
         args.reference_seeds = list(args.seeds)
     if args.train_length not in args.eval_lengths:
         raise SystemExit("--train-length should be one of --eval-lengths")
+    # Before the threads are pinned. Every other experiment here does this --
+    # `run.py`, `scaling.py` and `scan_inner.py` -- and this one did not, which is
+    # why its committed numbers could not be reproduced.
+    torch.set_num_threads(args.threads)
 
     chance = register_chance()
     print("=" * 78)
@@ -122,13 +229,7 @@ def main() -> int:
     print()
 
     results: dict = {
-        "config": {
-            "task": "register", "train_length": args.train_length,
-            "eval_lengths": args.eval_lengths, "steps": args.steps,
-            "queries_per_sequence": QUERIES_PER_SEQUENCE,
-            "d_model": args.d_model, "n_layers": args.n_layers,
-            "seeds": args.seeds, "chance": chance,
-        },
+        "config": config_payload(args, chance),
         "matched_budget": {},
         "control": {},
         "reference": {},
@@ -137,7 +238,10 @@ def main() -> int:
     out_path = Path(args.out)
 
     def save() -> None:
-        out_path.write_text(json.dumps(results, indent=2) + "\n")
+        # The incremental writes are progress checkpoints; --verify compares
+        # instead of writing, so it must not touch the committed file as it goes.
+        if not args.verify:
+            out_path.write_text(json.dumps(results, indent=2) + "\n")
 
     models: dict[str, list[LanguageModel]] = {b: [] for b in BLOCKS}
     per_length: dict[str, dict[int, list[float]]] = {
@@ -146,7 +250,7 @@ def main() -> int:
 
     for block in BLOCKS:
         for seed in args.seeds:
-            model = build(block, args.d_model, args.n_layers)
+            model = build(block, args.d_model, args.n_layers, seed)
             results["parameters"][block] = count_parameters(model)
             trained = train(
                 model, block, n_pairs=1, steps=args.steps,
@@ -181,7 +285,7 @@ def main() -> int:
         for block in BLOCKS:
             accs: dict[int, list[float]] = {n: [] for n in args.eval_lengths}
             for seed in args.seeds:
-                model = build(block, args.d_model, args.n_layers)
+                model = build(block, args.d_model, args.n_layers, seed)
                 train(model, block, n_pairs=1, steps=steps,
                       batch_size=args.batch_size, lr=args.lr, seed=seed,
                       sample_batch=sampler(args.train_length))
@@ -206,7 +310,7 @@ def main() -> int:
         for block in BLOCKS:
             accs: list[float] = []
             for seed in args.reference_seeds:
-                model = build(block, args.d_model, args.n_layers)
+                model = build(block, args.d_model, args.n_layers, seed)
                 train(model, block, n_pairs=1, steps=args.steps,
                       batch_size=args.batch_size, lr=args.lr, seed=seed,
                       sample_batch=sampler(longest))
@@ -275,10 +379,11 @@ def main() -> int:
         for v in block.values()
     ), "accuracy outside [0, 1]"
 
+    if args.verify:
+        return verify_against(out_path, results)
     save()
     print(f"\nwrote {args.out}")
     return 0
-
 
 if __name__ == "__main__":
     raise SystemExit(main())

@@ -1588,7 +1588,16 @@ The store is a data structure and the family is synthetic. Specifically:
   now measured on it (see above) and neither architecture extrapolates — but
   that is one synthetic task at one model size, and the reference columns show
   the decay is mostly task difficulty rather than a generalisation failure. It
-  is not a general statement about either architecture.
+  is not a general statement about either architecture. A second task is
+  measured: `register`, one bit toggled by some tokens and queried at random
+  positions, where a fixed-size state is sufficient by construction. It is in
+  `experiments/state_tracking.py` and its results are committed as
+  `state-tracking.json`, with a matched-budget comparison, a step-budget control
+  and a trained-at-that-length reference. **It is not written up here**, and that
+  is the limitation being stated: the file is reproducible — its `--verify`
+  re-runs the experiment and compares rather than writing — it records the
+  configuration it was produced by, and no section of this README reads it, so
+  nothing in it has been interpreted.
 * **The extrapolation reference is one seed.** The extrapolated rows are three
   seeds with a spread column; the trained-at-that-length reference is a single
   seed, so a difference between them smaller than the spread is not a
