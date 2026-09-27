@@ -9,6 +9,8 @@ all would make every comparison in the README a comparison of two failures.
 
 from __future__ import annotations
 
+import random
+
 import pytest
 import torch
 
@@ -26,7 +28,7 @@ from beyond_attention.tasks import (
     mqar_batch,
     vocabulary_for,
 )
-from beyond_attention.train import train
+from beyond_attention.train import set_seed, train
 
 BLOCK_KWARGS = {
     "ssm": {"d_state": 8, "expand": 2, "conv_kernel": 4},
@@ -295,3 +297,32 @@ def test_both_attention_modes_are_causal(causal_mode):
 def test_an_unknown_causal_mode_is_rejected():
     with pytest.raises(ValueError, match="causal_mode"):
         AttentionBlock(32, n_heads=4, causal_mode="nonsense")
+
+
+def test_an_unknown_scan_inner_is_rejected():
+    """The sibling of the guard above, and it had no test.
+
+    Deleting the check outright left the suite green. An unrecognised value is
+    not rejected by anything downstream -- it falls through to the sequential
+    loop -- so a caller who writes `vectorised` gets a different scan from the
+    one they asked for, and no error.
+    """
+    with pytest.raises(ValueError, match="scan_inner"):
+        SelectiveSSMBlock(d_model=8, d_state=4, scan_inner="vectorised")
+
+
+def test_set_seed_seeds_both_generators_it_claims_to():
+    """`train` calls this, and every reproducibility claim here rests on it.
+
+    Nothing pinned it, which a mutation found: changing `torch.manual_seed(seed)`
+    to `seed + 1` left the suite green, because the determinism tests compare two
+    runs at the *same* seed, and a shifted seed keeps them identical to each
+    other while changing every number they produce. The claim being tested is
+    not "training is self-consistent" but "seed `n` is seed `n`", so this
+    compares against the two primitives directly.
+    """
+    set_seed(11)
+    got = (torch.randn(3).tolist(), random.random())
+    torch.manual_seed(11)
+    random.seed(11)
+    assert got == (torch.randn(3).tolist(), random.random())

@@ -983,3 +983,20 @@ def test_the_state_width_and_the_decay_are_the_documented_ones() -> None:
     np.testing.assert_array_equal(wide[AGENT_DIM:], np.full(3, A_HOLD))
     with pytest.raises(ValueError):
         decay_vector(AGENT_DIM - 1)
+
+
+def test_a_negative_state_width_is_rejected_at_all_three_call_sites():
+    """The guard exists in three functions and no test used any of them.
+
+    Relaxing all three from `< 0` to `< -1` left the suite green (391 passed).
+    What a negative width produces is a wrong answer rather than a loud failure:
+    `new_state(-1)` builds a state one element shorter than `AGENT_DIM`, and
+    every later read of it is off by one.
+    """
+    task = example_task()
+    with pytest.raises(ValueError, match="state_width"):
+        new_state(-1)
+    with pytest.raises(ValueError, match="state_width"):
+        embed(instruction_event_of(OP_PUT, 3, 77), state_width=-1)
+    with pytest.raises(ValueError, match="state_width"):
+        run_agent(task, state_width=-1)

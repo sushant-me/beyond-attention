@@ -97,6 +97,26 @@ def test_values_never_overlap_keys() -> None:
     assert not (keys & values)
 
 
+def test_the_vocabulary_is_exactly_what_a_batch_uses() -> None:
+    """The size is a contract, not a bound above which nothing is generated.
+
+    Every other test here derives its expectation by *calling*
+    `vocabulary_size`, so an off-by-one is invisible to all of them: a
+    vocabulary one larger only wastes an embedding row, the layout is unchanged,
+    and the disjointness properties still hold. Changing `1 + 2 * n_keys` to
+    `2 + 2 * n_keys` left the whole suite green.
+
+    The layout is a separator, then a key and a value per pair, so the largest
+    token a batch emits has to be exactly the last id the vocabulary has.
+    """
+    for n_keys in (8, 16, 32):
+        batch = mqar_batch(4, n_keys, 1, _gen(), n_keys=n_keys)
+        assert batch.tokens.max().item() + 1 == vocabulary_size(n_keys), n_keys
+    # And the documented shape, as numbers rather than only as a formula.
+    assert vocabulary_size(8) == 17
+    assert vocabulary_size(32) == 65
+
+
 def test_a_model_trained_at_one_length_can_be_evaluated_beyond_it() -> None:
     """End to end: the whole point of the parameter.
 
