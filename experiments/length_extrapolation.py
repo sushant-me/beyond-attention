@@ -48,7 +48,7 @@ import torch
 
 from beyond_attention.model import LanguageModel, count_parameters
 from beyond_attention.tasks import vocabulary_size
-from beyond_attention.train import evaluate_mqar, train
+from beyond_attention.train import evaluate_mqar, set_seed, train
 
 BLOCK_KWARGS = {
     "ssm": {"d_state": 16, "expand": 2, "conv_kernel": 4},
@@ -76,7 +76,24 @@ def sequence_length(n_pairs: int, n_queries: int = 1) -> int:
     return 2 * n_pairs + 1 + n_queries
 
 
-def build(block: str, vocab: int, d_model: int, n_layers: int) -> LanguageModel:
+def build(
+    block: str, vocab: int, d_model: int, n_layers: int, seed: int
+) -> LanguageModel:
+    """A fresh model, with the global RNG seeded before its initialisation.
+
+    The seed is set here as well as inside `train`, because `train` seeds when
+    it starts -- by which point the model it is handed already exists. Without
+    this the initial weights came from process entropy, so every row of the
+    published table was one draw that `--seeds` did not describe: the three-seed
+    spread in the README captured seed-to-seed variation and not this one, which
+    is an independent source of the same size sitting on top of it.
+
+    This mirrors `experiments/state_tracking.py` and `experiments/run.py`, where
+    the same construction bug was fixed. In `run.py` it was caught by re-running
+    the documented command: every in-distribution accuracy matched and one
+    off-size cell moved by eight samples in 2,048.
+    """
+    set_seed(seed)
     return LanguageModel(
         vocab, d_model, n_layers, block, **BLOCK_KWARGS[block]
     )
@@ -158,7 +175,7 @@ def main() -> int:
     for block in BLOCKS:
         per_length: dict[int, list[float]] = {p: [] for p in args.eval_pairs}
         for seed in args.seeds:
-            model = build(block, vocab, args.d_model, args.n_layers)
+            model = build(block, vocab, args.d_model, args.n_layers, seed)
             results["parameters"][block] = count_parameters(model)
             trained = train(
                 model, block, n_pairs=args.train_pairs, steps=args.steps,
@@ -186,7 +203,7 @@ def main() -> int:
             ref: dict[int, list[float]] = {p: [] for p in args.reference_pairs}
             for seed in args.reference_seeds:
                 for p in args.reference_pairs:
-                    model = build(block, vocab, args.d_model, args.n_layers)
+                    model = build(block, vocab, args.d_model, args.n_layers, seed)
                     train(
                         model, block, n_pairs=p, steps=args.steps,
                         batch_size=args.batch_size, lr=args.lr, seed=seed,

@@ -17,6 +17,7 @@
       128
     ],
     "scaling_batch": 2,
+    "causal_mode": "mask",
     "blocks": [
       "attention"
     ],
@@ -59,26 +60,30 @@
   "scaling": {
     "attention@128": {
       "block": "attention",
+      "causal_mode": "mask",
+      "scan_inner": "loop",
+      "scan_chunk": 64,
+      "compiled": false,
       "length": 128,
       "batch": 2,
       "parameters": 82240,
-      "seconds": 0.0063,
-      "baseline_rss_kb": 370176,
-      "peak_rss_kb": 370176,
-      "activation_rss_kb": 0,
+      "seconds": 0.007,
+      "activation_rss_kb": 19280,
       "finite": true
     },
     "ssm@128": {
       "block": "ssm",
+      "causal_mode": "mask",
+      "scan_inner": "loop",
+      "scan_chunk": 64,
+      "compiled": false,
       "length": 128,
       "batch": 2,
       "parameters": 81856,
-      "seconds": 0.0845,
-      "baseline_rss_kb": 370176,
-      "peak_rss_kb": 370176,
-      "activation_rss_kb": 0,
+      "seconds": 0.7142,
+      "activation_rss_kb": 104524,
       "finite": true
     }
   },
-  "wall_seconds": 271.1
+  "wall_seconds": 339.2
 }

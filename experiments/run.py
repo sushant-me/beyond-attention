@@ -32,12 +32,35 @@ import torch
 
 from beyond_attention.model import LanguageModel, build_pair, count_parameters
 from beyond_attention.tasks import vocabulary_for
-from beyond_attention.train import _evaluate, train
+from beyond_attention.train import _evaluate, set_seed, train
 
 BLOCK_KWARGS = {
     "ssm": {"d_state": 16, "expand": 2, "conv_kernel": 4},
     "attention": {"n_heads": 4, "mlp_ratio": 2.0},
 }
+
+
+def build_model(
+    vocab: int, d_model: int, n_layers: int, block: str, seed: int
+) -> LanguageModel:
+    """A fresh model, with the global RNG seeded before its initialisation.
+
+    The seed is set here as well as inside `train`, because `train` seeds when
+    it starts -- by which point the model it is handed already exists. The first
+    row of every sweep was therefore initialised from process entropy and was
+    not reproducible: re-running the documented command at identical flags left
+    every in-distribution accuracy identical and moved that row's unsaturanted
+    off-size accuracy by eight samples in 2,048, while both runs reported
+    `seeds=[0]`. The later rows were reproducible, but only because the previous
+    `train` call had re-seeded the generator before them -- a property of the
+    evaluation order rather than of the recorded seed, and one that any change
+    to training-time sampling would have silently shifted.
+
+    This mirrors `experiments/state_tracking.py`, where the same construction
+    bug made that experiment unreproducible and its `--verify` gate impossible.
+    """
+    set_seed(seed)
+    return LanguageModel(vocab, d_model, n_layers, block, **BLOCK_KWARGS[block])
 
 
 def mqar_sweep(
@@ -65,9 +88,7 @@ def mqar_sweep(
             accs, params, off_by_size = [], 0, {}
             others = [p for p in pair_counts if p != n_pairs]
             for seed in seeds:
-                model = LanguageModel(
-                    vocab, d_model, n_layers, block, **BLOCK_KWARGS[block]
-                )
+                model = build_model(vocab, d_model, n_layers, block, seed)
                 params = count_parameters(model)
                 result = train(
                     model, block, n_pairs=n_pairs, steps=steps,
